@@ -1,7 +1,10 @@
 /* ─── AI Response Cache ────────────────────────────────
-   Caches AI responses in localStorage using a hash of the input.
-   Avoids redundant API calls for identical resume + JD combinations.
+   Caches AI responses in localStorage (sync fallback) and
+   IndexedDB (async, larger capacity). Avoids redundant
+   API calls for identical resume + JD combinations.
    ────────────────────────────────────────────────────── */
+
+import { idbGetCached, idbSetCache } from "./indexedDB";
 
 const CACHE_PREFIX = "ai_cache_";
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
@@ -33,6 +36,7 @@ export function getCacheKey(operation: string, ...inputs: string[]): string {
 
 /**
  * Get a cached response if it exists and hasn't expired.
+ * Checks localStorage (sync) first, then IndexedDB (async).
  */
 export function getCached<T>(key: string): T | null {
   try {
@@ -54,7 +58,27 @@ export function getCached<T>(key: string): T | null {
 }
 
 /**
- * Store a response in cache.
+ * Async version that also checks IndexedDB if localStorage misses.
+ */
+export async function getCachedAsync<T>(key: string): Promise<T | null> {
+  // Try localStorage first (fast, sync)
+  const syncResult = getCached<T>(key);
+  if (syncResult !== null) return syncResult;
+
+  // Fall back to IndexedDB
+  const idbResult = await idbGetCached<T>(key);
+  if (idbResult !== null) {
+    // Re-populate localStorage for faster future reads
+    try {
+      const entry: CacheEntry<T> = { data: idbResult, timestamp: Date.now() };
+      localStorage.setItem(key, JSON.stringify(entry));
+    } catch { /* ignore */ }
+  }
+  return idbResult;
+}
+
+/**
+ * Store a response in cache (localStorage + IndexedDB).
  */
 export function setCache<T>(key: string, data: T): void {
   try {
@@ -64,11 +88,14 @@ export function setCache<T>(key: string, data: T): void {
     };
     localStorage.setItem(key, JSON.stringify(entry));
 
-    // Evict old entries if we have too many
+    // Evict old entries
     evictOldEntries();
   } catch {
     // localStorage full or unavailable — silently ignore
   }
+
+  // Also persist to IndexedDB (async, fire-and-forget)
+  idbSetCache(key, data).catch(() => {});
 }
 
 /**

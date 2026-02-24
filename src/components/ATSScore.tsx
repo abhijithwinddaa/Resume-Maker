@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import type { ResumeData } from "../types/resume";
 import type { AISettings } from "../types/aiSettings";
 import type { ATSResult } from "../utils/aiService";
@@ -109,7 +109,7 @@ function BreakdownBar({
   );
 }
 
-export default function ATSScore({ resumeData, aiSettings }: ATSScoreProps) {
+const ATSScore = memo(function ATSScore({ resumeData, aiSettings }: ATSScoreProps) {
   const [jd, setJd] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -370,4 +370,6 @@ export default function ATSScore({ resumeData, aiSettings }: ATSScoreProps) {
       )}
     </div>
   );
-}
+});
+
+export default ATSScore;

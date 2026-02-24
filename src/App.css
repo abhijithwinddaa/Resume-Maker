@@ -959,3 +959,63 @@
   transform: none;
   box-shadow: none;
 }
+
+/* ─── Skeleton Shimmer Animation ─────────────────────── */
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ─── Error Boundary ─────────────────────────────────── */
+
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  min-height: 200px;
+}
+
+.error-boundary-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.error-boundary-content h3 {
+  margin: 16px 0 8px;
+  color: #1e293b;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.error-boundary-message {
+  color: #64748b;
+  font-size: 14px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.error-boundary-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: "Inter", sans-serif;
+  transition: background 0.2s;
+}
+
+.error-boundary-retry:hover {
+  background: #1d4ed8;
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Resume Maker",
+  "short_name": "Resume",
+  "description": "AI-powered resume builder with ATS optimization",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

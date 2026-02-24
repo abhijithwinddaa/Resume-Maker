@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, memo } from "react";
 import type { ResumeData } from "../types/resume";
 import type { AISettings } from "../types/aiSettings";
 import type { OptimizeProgress } from "../utils/aiService";
@@ -66,7 +66,7 @@ function MiniMeter({ score, size = 56 }: { score: number; size?: number }) {
   );
 }
 
-export default function AutoOptimize({
+const AutoOptimize = memo(function AutoOptimize({
   resumeData,
   aiSettings,
   onApply,
@@ -373,4 +373,6 @@ export default function AutoOptimize({
       )}
     </div>
   );
-}
+});
+
+export default AutoOptimize;

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, memo } from "react";
 import type { ResumeData, JDAnalysis } from "../types/resume";
 import { analyzeJD, suggestSkillAdditions } from "../utils/jdAnalyzer";
 import { Search, CheckCircle, AlertCircle, Zap, Plus } from "lucide-react";
@@ -11,7 +11,7 @@ interface JDAnalyzerProps {
   onAddToBullet: (projectIndex: number, keyword: string) => void;
 }
 
-const JDAnalyzer: React.FC<JDAnalyzerProps> = ({
+const JDAnalyzer: React.FC<JDAnalyzerProps> = memo(({
   resumeData,
   onKeywordsFound,
   onAddSkills,
@@ -245,6 +245,6 @@ const JDAnalyzer: React.FC<JDAnalyzerProps> = ({
       )}
     </div>
   );
-};
+});
 
 export default JDAnalyzer;

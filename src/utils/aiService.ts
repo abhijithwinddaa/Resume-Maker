@@ -310,14 +310,105 @@ async function callAI(
       const msg = err instanceof Error ? err.message : "";
       // If all GitHub tokens are rate limited, fall back to Gemini
       if (msg === "ALL_GITHUB_RATE_LIMITED" && settings.geminiApiKey) {
-        console.warn(
-          "All GitHub tokens rate limited — falling back to Gemini",
-        );
+        console.warn("All GitHub tokens rate limited — falling back to Gemini");
         return callGemini(settings, messages);
       }
       throw err;
     }
   });
+}
+
+/* ── Streaming AI caller (SSE) for progressive UI ────── */
+
+interface StreamDelta {
+  choices?: { delta?: { content?: string } }[];
+}
+
+export async function callAIStreaming(
+  settings: AISettings,
+  messages: ChatMessage[],
+  onChunk: (partialText: string) => void,
+): Promise<string> {
+  const tokens =
+    settings.githubTokens && settings.githubTokens.length > 0
+      ? settings.githubTokens
+      : settings.githubToken
+        ? [settings.githubToken]
+        : [];
+
+  if (tokens.length === 0) {
+    // Fall back to non-streaming
+    const result = await callAI(settings, messages);
+    onChunk(result);
+    return result;
+  }
+
+  const token = tokens[currentTokenIndex % tokens.length];
+
+  const response = await fetch(
+    "https://models.inference.ai.azure.com/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: settings.githubModel,
+        messages,
+        temperature: 0.3,
+        max_tokens: 16000,
+        stream: true,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    // Fall back to non-streaming on error
+    const result = await callAI(settings, messages);
+    onChunk(result);
+    return result;
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const result = await callAI(settings, messages);
+    onChunk(result);
+    return result;
+  }
+
+  const decoder = new TextDecoder();
+  let fullText = "";
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith("data: ")) continue;
+      const data = trimmed.slice(6);
+      if (data === "[DONE]") break;
+
+      try {
+        const parsed = JSON.parse(data) as StreamDelta;
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) {
+          fullText += content;
+          onChunk(fullText);
+        }
+      } catch {
+        // Skip malformed chunks
+      }
+    }
+  }
+
+  return fullText;
 }
 
 export async function generateAIResume(

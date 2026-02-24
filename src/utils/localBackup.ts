@@ -12,10 +12,7 @@ const BACKUP_TIMESTAMP_KEY = "resume_backup_ts";
 /**
  * Save resume data to localStorage backup.
  */
-export function saveLocalBackup(
-  resumeData: ResumeData,
-  jdText?: string,
-): void {
+export function saveLocalBackup(resumeData: ResumeData, jdText?: string): void {
   try {
     localStorage.setItem(BACKUP_KEY, JSON.stringify(resumeData));
     localStorage.setItem(BACKUP_TIMESTAMP_KEY, Date.now().toString());

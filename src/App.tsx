@@ -1,4 +1,13 @@
-import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  memo,
+  lazy,
+  Suspense,
+} from "react";
 import { useReactToPrint } from "react-to-print";
 import {
   useUser,
@@ -15,7 +24,7 @@ import {
   analyzeATSScore,
   optimizeResumeLoop,
 } from "./utils/aiService";
-import { extractTextFromPDF } from "./utils/pdfExtractor";
+import { extractTextFromPDF } from "./utils/pdfExtractorWorker";
 import { loadResume, saveResume } from "./services/resumeService";
 import {
   isRateLimited,
@@ -35,6 +44,13 @@ import {
   loadLocalBackup,
   formatBackupAge,
 } from "./utils/localBackup";
+import {
+  getRequestController,
+  clearRequestController,
+} from "./utils/requestDedup";
+import { useDebounce } from "./hooks/useDebounce";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { EditorSkeleton, PreviewSkeleton } from "./components/Skeleton";
 import {
   FileText,
   Upload,
@@ -65,7 +81,7 @@ type AppStep = "input" | "analyzing" | "score" | "editor";
 
 /* ─── Score Visualization Components ─────────────────── */
 
-function ScoreMeter({ score, size = 160 }: { score: number; size?: number }) {
+const ScoreMeter = memo(function ScoreMeter({ score, size = 160 }: { score: number; size?: number }) {
   const radius = (size - 16) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
@@ -104,9 +120,9 @@ function ScoreMeter({ score, size = 160 }: { score: number; size?: number }) {
       </div>
     </div>
   );
-}
+});
 
-function BreakdownBar({
+const BreakdownBar = memo(function BreakdownBar({
   label,
   score,
   weight,
@@ -132,7 +148,7 @@ function BreakdownBar({
       </div>
     </div>
   );
-}
+});
 
 /* ─── Main App ─────────────────────────────────────────── */
 
@@ -158,10 +174,9 @@ function App() {
   const [hasBackup, setHasBackup] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
-  const aiSettings = DEFAULT_AI_SETTINGS;
+  const aiSettings = useMemo(() => DEFAULT_AI_SETTINGS, []);
   const resumeRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* ── Cooldown timer tick ──────────────────────────── */
   useEffect(() => {
@@ -199,32 +214,34 @@ function App() {
       .finally(() => setIsDbLoading(false));
   }, [user?.id]);
 
-  /* ── Auto-save to Supabase on resumeData changes ── */
-  const autoSave = useCallback(
+  /* ── Debounced auto-save to Supabase (500ms) ────── */
+  const debouncedSupabaseSave = useDebounce(
     (data: ResumeData) => {
       if (!user?.id) return;
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => {
-        setIsSaving(true);
-        saveResume(user.id, data)
-          .then((ok) => {
-            if (!ok) console.warn("Supabase save returned false");
-          })
-          .catch((err) => {
-            console.error("Supabase save failed:", err);
-          })
-          .finally(() => setIsSaving(false));
-      }, 2000);
+      setIsSaving(true);
+      saveResume(user.id, data)
+        .then((ok) => {
+          if (!ok) console.warn("Supabase save returned false");
+        })
+        .catch((err) => {
+          console.error("Supabase save failed:", err);
+        })
+        .finally(() => setIsSaving(false));
     },
-    [user?.id],
+    500,
   );
 
-  const handleResumeChange = (data: ResumeData) => {
-    setResumeData(data);
-    autoSave(data);
-    // Also save to localStorage backup
-    saveLocalBackup(data, jdText);
-  };
+  const handleResumeChange = useCallback(
+    (data: ResumeData) => {
+      // Optimistic UI: update state immediately
+      setResumeData(data);
+      // Debounced Supabase save
+      debouncedSupabaseSave(data);
+      // Also save to localStorage backup
+      saveLocalBackup(data, jdText);
+    },
+    [debouncedSupabaseSave, jdText],
+  );
 
   const handlePrint = useReactToPrint({
     contentRef: resumeRef,
@@ -265,10 +282,10 @@ function App() {
     }
   };
 
-  const handleClearUpload = () => {
+  const handleClearUpload = useCallback(() => {
     setResumeText("");
     setUploadedFileName(null);
-  };
+  }, []);
 
   /* ── Step 1 → Analyzing ─────────────────────────────── */
 
@@ -301,11 +318,16 @@ function App() {
     setLoadingMessage("Parsing your resume with AI...");
     recordAction("analyze");
 
+    // Request deduplication — abort any previous analyze call
+    const controller = getRequestController("analyze");
+
     try {
+      if (controller.signal.aborted) return;
       const parsed = await parseResumeFromText(
         aiSettings,
         sanitizeText(resumeText),
       );
+      if (controller.signal.aborted) return;
       handleResumeChange(parsed);
 
       setLoadingMessage("Running ATS analysis...");
@@ -314,13 +336,17 @@ function App() {
         parsed,
         sanitizeText(jdText),
       );
+      if (controller.signal.aborted) return;
       setATSResult(ats);
       setOptimizeDone(false);
       setPreviousScore(null);
       setStep("score");
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Analysis failed");
       setStep("input");
+    } finally {
+      clearRequestController("analyze");
     }
   };
 
@@ -344,7 +370,8 @@ function App() {
     setError(null);
     recordAction("optimize");
 
-    const controller = new AbortController();
+    // Request deduplication — abort any previous optimize call
+    const controller = getRequestController("optimize");
     abortRef.current = controller;
 
     try {
@@ -358,6 +385,7 @@ function App() {
         controller.signal,
       );
 
+      if (controller.signal.aborted) return;
       if (result.finalResume) {
         handleResumeChange(result.finalResume);
         const newAts = await analyzeATSScore(
@@ -369,20 +397,22 @@ function App() {
       }
       setOptimizeDone(true);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Optimization failed");
     } finally {
       setIsOptimizing(false);
       abortRef.current = null;
+      clearRequestController("optimize");
     }
   };
 
-  const handleStopOptimize = () => {
+  const handleStopOptimize = useCallback(() => {
     abortRef.current?.abort();
-  };
+  }, []);
 
   /* ── Navigation ─────────────────────────────────────── */
 
-  const handleEdit = () => setStep("editor");
+  const handleEdit = useCallback(() => setStep("editor"), []);
 
   const handleReAnalyze = async () => {
     if (!resumeData) return;
@@ -402,7 +432,7 @@ function App() {
     }
   };
 
-  const handleStartOver = () => {
+  const handleStartOver = useCallback(() => {
     setStep("input");
     setResumeData(null);
     setATSResult(null);
@@ -414,11 +444,11 @@ function App() {
     setUploadedFileName(null);
     setJdText("");
     setResumeText("");
-  };
+  }, []);
 
   /* ── New JD (keep existing resume) ───────────────── */
 
-  const handleNewJD = () => {
+  const handleNewJD = useCallback(() => {
     setJdText("");
     setATSResult(null);
     setOptimizeProgress(null);
@@ -427,7 +457,7 @@ function App() {
     setOptimizeDone(false);
     setIsOptimizing(false);
     setStep("input");
-  };
+  }, []);
 
   const handleAnalyzeExisting = async () => {
     if (!resumeData || !jdText.trim()) return;
@@ -453,19 +483,26 @@ function App() {
     setLoadingMessage("Running ATS analysis against new JD...");
     recordAction("analyze");
 
+    // Request deduplication
+    const controller = getRequestController("analyze-existing");
+
     try {
       const ats = await analyzeATSScore(
         aiSettings,
         resumeData,
         sanitizeText(jdText),
       );
+      if (controller.signal.aborted) return;
       setATSResult(ats);
       setOptimizeDone(false);
       setPreviousScore(null);
       setStep("score");
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Analysis failed");
       setStep("input");
+    } finally {
+      clearRequestController("analyze-existing");
     }
   };
 
@@ -727,8 +764,7 @@ function App() {
                         className="analyze-btn"
                         onClick={handleAnalyzeExisting}
                         disabled={
-                          !jdText.trim() ||
-                          isRateLimited("analyze", 30000)
+                          !jdText.trim() || isRateLimited("analyze", 30000)
                         }
                       >
                         {isRateLimited("analyze", 30000) ? (
@@ -795,9 +831,7 @@ function App() {
                           Restore Local Backup
                           <small>
                             (
-                            {formatBackupAge(
-                              loadLocalBackup()?.timestamp || 0,
-                            )}
+                            {formatBackupAge(loadLocalBackup()?.timestamp || 0)}
                             )
                           </small>
                         </button>
@@ -970,9 +1004,7 @@ function App() {
                           ) : (
                             <>
                               <Zap size={18} />
-                              {optimizeDone
-                                ? "Re-Optimize"
-                                : "Optimize Resume"}
+                              {optimizeDone ? "Re-Optimize" : "Optimize Resume"}
                             </>
                           )}
                         </button>
@@ -986,16 +1018,11 @@ function App() {
 
                   <div className="score-right">
                     <div className="preview-container">
-                      <Suspense
-                        fallback={
-                          <div className="lazy-loading">
-                            <Loader2 size={24} className="spin" />
-                            Loading preview...
-                          </div>
-                        }
-                      >
-                        <ResumeTemplate ref={resumeRef} data={resumeData} />
-                      </Suspense>
+                      <ErrorBoundary>
+                        <Suspense fallback={<PreviewSkeleton />}>
+                          <ResumeTemplate ref={resumeRef} data={resumeData} />
+                        </Suspense>
+                      </ErrorBoundary>
                     </div>
                   </div>
                 </div>
@@ -1005,32 +1032,22 @@ function App() {
               {step === "editor" && resumeData && (
                 <div className="editor-step">
                   <div className="editor-left">
-                    <Suspense
-                      fallback={
-                        <div className="lazy-loading">
-                          <Loader2 size={24} className="spin" />
-                          Loading editor...
-                        </div>
-                      }
-                    >
-                      <ResumeEditor
-                        data={resumeData}
-                        onChange={handleResumeChange}
-                      />
-                    </Suspense>
+                    <ErrorBoundary>
+                      <Suspense fallback={<EditorSkeleton />}>
+                        <ResumeEditor
+                          data={resumeData}
+                          onChange={handleResumeChange}
+                        />
+                      </Suspense>
+                    </ErrorBoundary>
                   </div>
                   <div className="editor-right">
                     <div className="preview-container">
-                      <Suspense
-                        fallback={
-                          <div className="lazy-loading">
-                            <Loader2 size={24} className="spin" />
-                            Loading preview...
-                          </div>
-                        }
-                      >
-                        <ResumeTemplate ref={resumeRef} data={resumeData} />
-                      </Suspense>
+                      <ErrorBoundary>
+                        <Suspense fallback={<PreviewSkeleton />}>
+                          <ResumeTemplate ref={resumeRef} data={resumeData} />
+                        </Suspense>
+                      </ErrorBoundary>
                     </div>
                   </div>
                 </div>

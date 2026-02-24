@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, memo } from "react";
 import type { ResumeData } from "../types/resume";
 import type { AISettings } from "../types/aiSettings";
 import { generateAIResume } from "../utils/aiService";
@@ -28,7 +28,7 @@ interface DiffItem {
   accepted: boolean;
 }
 
-const AIRewrite: React.FC<AIRewriteProps> = ({
+const AIRewrite: React.FC<AIRewriteProps> = memo(({
   resumeData,
   aiSettings,
   onApply,
@@ -367,6 +367,6 @@ const AIRewrite: React.FC<AIRewriteProps> = ({
       )}
     </div>
   );
-};
+});
 
 export default AIRewrite;
