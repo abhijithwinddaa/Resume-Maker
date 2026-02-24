@@ -5,7 +5,8 @@
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background: #f0f2f5;
+  background: var(--bg-tertiary);
+  transition: background 0.3s;
 }
 
 /* ─── Header ─────────────────────────────────────────── */
@@ -15,9 +16,9 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 20px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
   z-index: 10;
   flex-shrink: 0;
 }
@@ -29,13 +30,13 @@
 }
 
 .logo-icon {
-  color: #2980b9;
+  color: var(--accent-color);
 }
 
 .app-title {
   font-size: 18px;
   font-weight: 700;
-  color: #1a5276;
+  color: var(--accent-dark);
   margin: 0;
 }
 
@@ -50,10 +51,10 @@
   align-items: center;
   gap: 5px;
   padding: 6px 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: white;
-  color: #475569;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -62,18 +63,18 @@
 }
 
 .header-btn:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
 }
 
 .header-btn.btn-primary {
-  background: #2980b9;
+  background: var(--accent-color);
   color: white;
-  border-color: #2980b9;
+  border-color: var(--accent-color);
 }
 
 .header-btn.btn-primary:hover {
-  background: #1a5276;
+  background: var(--accent-dark);
 }
 
 /* ─── Step Indicator ─────────────────────────────────── */
@@ -83,8 +84,8 @@
   align-items: center;
   justify-content: center;
   padding: 12px 20px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
   gap: 12px;
   flex-shrink: 0;
 }
@@ -107,19 +108,19 @@
   justify-content: center;
   font-size: 12px;
   font-weight: 600;
-  background: #f1f5f9;
-  border: 2px solid #e2e8f0;
-  color: #94a3b8;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  color: var(--text-muted);
 }
 
 .step-item.active .step-number {
-  background: #2980b9;
-  border-color: #2980b9;
+  background: var(--accent-color);
+  border-color: var(--accent-color);
   color: white;
 }
 
 .step-item.active {
-  color: #1a5276;
+  color: var(--accent-dark);
   font-weight: 600;
 }
 
@@ -162,12 +163,12 @@
 .input-hero h2 {
   font-size: 28px;
   font-weight: 700;
-  color: #1a5276;
+  color: var(--accent-dark);
   margin: 0 0 8px;
 }
 
 .input-hero p {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 15px;
   margin: 0;
 }
@@ -191,7 +192,7 @@
   gap: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: #334155;
+  color: var(--text-primary);
 }
 
 /* Resume input label row with upload button */
@@ -279,20 +280,21 @@
   flex: 1;
   min-height: 300px;
   padding: 14px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--border-color);
   border-radius: 10px;
   font-family: "Inter", sans-serif;
   font-size: 13px;
   line-height: 1.6;
   resize: none;
   transition: border-color 0.2s;
-  background: white;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .input-textarea:focus {
   outline: none;
-  border-color: #2980b9;
-  box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.1);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px var(--accent-light);
 }
 
 .input-textarea::placeholder {
@@ -308,7 +310,7 @@
   max-width: 280px;
   margin: 0 auto;
   padding: 14px 28px;
-  background: #2980b9;
+  background: var(--accent-color);
   color: white;
   border: none;
   border-radius: 10px;
@@ -320,7 +322,7 @@
 }
 
 .analyze-btn:hover {
-  background: #1a5276;
+  background: var(--accent-dark);
   transform: translateY(-1px);
 }
 
@@ -379,8 +381,8 @@
   min-width: 420px;
   overflow-y: auto;
   padding: 24px;
-  background: white;
-  border-right: 1px solid #e2e8f0;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border-color);
 }
 
 .score-right {
@@ -690,10 +692,10 @@
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--error-bg);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  color: #dc2626;
+  color: var(--error-text);
   font-size: 13px;
   margin-bottom: 16px;
 }
@@ -710,8 +712,8 @@
   width: 480px;
   min-width: 420px;
   overflow-y: auto;
-  background: white;
-  border-right: 1px solid #e2e8f0;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border-color);
 }
 
 .editor-right {
@@ -758,6 +760,7 @@
 
   .header-actions {
     gap: 4px;
+    flex-wrap: wrap;
   }
 
   .header-btn {
@@ -772,6 +775,44 @@
   .step-item span {
     display: none;
   }
+
+  .input-hero h2 {
+    font-size: 22px;
+  }
+
+  .input-hero p {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-header {
+    padding: 6px 12px;
+  }
+
+  .app-title {
+    font-size: 14px;
+  }
+
+  .header-btn span {
+    display: none;
+  }
+
+  .input-step {
+    padding: 20px 12px;
+  }
+
+  .input-textarea {
+    min-height: 200px;
+  }
+
+  .score-left {
+    padding: 16px;
+  }
+
+  .auth-card {
+    padding: 32px 20px;
+  }
 }
 
 /* ─── Auth Gate ───────────────────────────────────────── */
@@ -785,15 +826,15 @@
 
 .auth-card {
   text-align: center;
-  background: white;
+  background: var(--bg-primary);
   padding: 48px 40px;
   border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-md);
   max-width: 420px;
 }
 
 .auth-icon {
-  color: #2980b9;
+  color: var(--accent-color);
   margin-bottom: 16px;
 }
 
@@ -801,13 +842,13 @@
   margin: 0 0 8px 0;
   font-size: 22px;
   font-weight: 700;
-  color: #1a5276;
+  color: var(--accent-dark);
 }
 
 .auth-card p {
   margin: 0 0 24px 0;
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 

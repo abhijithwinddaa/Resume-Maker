@@ -1,0 +1,41 @@
+.dnd-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dnd-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-primary, white);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary, #1e293b);
+  user-select: none;
+}
+
+.dnd-item:hover {
+  border-color: var(--accent-color, #2980b9);
+}
+
+.dnd-grip {
+  cursor: grab;
+  color: var(--text-secondary, #94a3b8);
+  background: none;
+  border: none;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  touch-action: none;
+}
+
+.dnd-grip:active {
+  cursor: grabbing;
+}
+
+.dnd-label {
+  font-weight: 500;
+}

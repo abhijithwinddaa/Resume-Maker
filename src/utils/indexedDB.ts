@@ -101,8 +101,7 @@ export async function idbKeys(): Promise<string[]> {
       const tx = db.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
       const request = store.getAllKeys();
-      request.onsuccess = () =>
-        resolve(request.result.map((k) => String(k)));
+      request.onsuccess = () => resolve(request.result.map((k) => String(k)));
       request.onerror = () => resolve([]);
     });
   } catch {
@@ -188,10 +187,7 @@ async function idbEvictOldEntries(): Promise<void> {
     entries.sort((a, b) => a.timestamp - b.timestamp);
 
     // Delete oldest entries
-    const toDelete = entries.slice(
-      0,
-      entries.length - IDB_MAX_CACHE_ENTRIES,
-    );
+    const toDelete = entries.slice(0, entries.length - IDB_MAX_CACHE_ENTRIES);
     for (const { key } of toDelete) {
       await idbDelete(key);
     }

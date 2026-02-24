@@ -1,12 +1,11 @@
 import {
-  useState,
   useRef,
   useEffect,
   useCallback,
-  useMemo,
   memo,
   lazy,
   Suspense,
+  useState,
 } from "react";
 import { useReactToPrint } from "react-to-print";
 import {
@@ -16,9 +15,8 @@ import {
   SignInButton,
   UserButton,
 } from "@clerk/clerk-react";
-import { DEFAULT_AI_SETTINGS } from "./types/aiSettings";
+import { useAppStore } from "./store/appStore";
 import type { ResumeData } from "./types/resume";
-import type { ATSResult, OptimizeProgress } from "./utils/aiService";
 import {
   parseResumeFromText,
   analyzeATSScore,
@@ -49,8 +47,11 @@ import {
   clearRequestController,
 } from "./utils/requestDedup";
 import { useDebounce } from "./hooks/useDebounce";
+import { validateResumeData } from "./utils/zodSchemas";
+import { exportToDocx } from "./utils/docxExporter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { EditorSkeleton, PreviewSkeleton } from "./components/Skeleton";
+import ThemeToggle from "./components/ThemeToggle";
 import {
   FileText,
   Upload,
@@ -70,18 +71,31 @@ import {
   LogIn,
   Clock,
   HardDrive,
+  Undo2,
+  Redo2,
+  Palette,
+  Settings,
+  FileType,
+  Mail,
 } from "lucide-react";
 import "./App.css";
 
 /* ─── Lazy-loaded heavy components ─────────────────── */
 const ResumeTemplate = lazy(() => import("./components/ResumeTemplate"));
 const ResumeEditor = lazy(() => import("./components/ResumeEditor"));
-
-type AppStep = "input" | "analyzing" | "score" | "editor";
+const TemplatePicker = lazy(() => import("./components/TemplatePicker"));
+const CoverLetterPanel = lazy(() => import("./components/CoverLetter"));
+const AISettingsPanel = lazy(() => import("./components/AISettings"));
 
 /* ─── Score Visualization Components ─────────────────── */
 
-const ScoreMeter = memo(function ScoreMeter({ score, size = 160 }: { score: number; size?: number }) {
+const ScoreMeter = memo(function ScoreMeter({
+  score,
+  size = 160,
+}: {
+  score: number;
+  size?: number;
+}) {
   const radius = (size - 16) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
@@ -153,30 +167,75 @@ const BreakdownBar = memo(function BreakdownBar({
 /* ─── Main App ─────────────────────────────────────────── */
 
 function App() {
-  const { user, isLoaded: isUserLoaded } = useUser();
-  const [step, setStep] = useState<AppStep>("input");
-  const [resumeText, setResumeText] = useState("");
-  const [jdText, setJdText] = useState("");
-  const [resumeData, setResumeData] = useState<ResumeData | null>(null);
-  const [atsResult, setATSResult] = useState<ATSResult | null>(null);
-  const [isOptimizing, setIsOptimizing] = useState(false);
-  const [optimizeProgress, setOptimizeProgress] =
-    useState<OptimizeProgress | null>(null);
-  const [previousScore, setPreviousScore] = useState<number | null>(null);
-  const [loadingMessage, setLoadingMessage] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [optimizeDone, setOptimizeDone] = useState(false);
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
-  const [isPdfLoading, setIsPdfLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDbLoading, setIsDbLoading] = useState(false);
-  const [cooldownRemaining, setCooldownRemaining] = useState(0);
-  const [hasBackup, setHasBackup] = useState(false);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useUser();
 
-  const aiSettings = useMemo(() => DEFAULT_AI_SETTINGS, []);
+  // Zustand store
+  const step = useAppStore((s) => s.step);
+  const setStep = useAppStore((s) => s.setStep);
+  const resumeText = useAppStore((s) => s.resumeText);
+  const setResumeText = useAppStore((s) => s.setResumeText);
+  const jdText = useAppStore((s) => s.jdText);
+  const setJdText = useAppStore((s) => s.setJdText);
+  const resumeData = useAppStore((s) => s.resumeData);
+  const setResumeData = useAppStore((s) => s.setResumeData);
+  const atsResult = useAppStore((s) => s.atsResult);
+  const setATSResult = useAppStore((s) => s.setATSResult);
+  const isOptimizing = useAppStore((s) => s.isOptimizing);
+  const setIsOptimizing = useAppStore((s) => s.setIsOptimizing);
+  const optimizeProgress = useAppStore((s) => s.optimizeProgress);
+  const setOptimizeProgress = useAppStore((s) => s.setOptimizeProgress);
+  const previousScore = useAppStore((s) => s.previousScore);
+  const setPreviousScore = useAppStore((s) => s.setPreviousScore);
+  const loadingMessage = useAppStore((s) => s.loadingMessage);
+  const setLoadingMessage = useAppStore((s) => s.setLoadingMessage);
+  const error = useAppStore((s) => s.error);
+  const setError = useAppStore((s) => s.setError);
+  const optimizeDone = useAppStore((s) => s.optimizeDone);
+  const setOptimizeDone = useAppStore((s) => s.setOptimizeDone);
+  const uploadedFileName = useAppStore((s) => s.uploadedFileName);
+  const setUploadedFileName = useAppStore((s) => s.setUploadedFileName);
+  const isPdfLoading = useAppStore((s) => s.isPdfLoading);
+  const setIsPdfLoading = useAppStore((s) => s.setIsPdfLoading);
+  const isSaving = useAppStore((s) => s.isSaving);
+  const setIsSaving = useAppStore((s) => s.setIsSaving);
+  const isDbLoading = useAppStore((s) => s.isDbLoading);
+  const setIsDbLoading = useAppStore((s) => s.setIsDbLoading);
+  const setCooldownRemaining = useAppStore((s) => s.setCooldownRemaining);
+  const hasBackup = useAppStore((s) => s.hasBackup);
+  const setHasBackup = useAppStore((s) => s.setHasBackup);
+  const aiSettings = useAppStore((s) => s.aiSettings);
+  const startOver = useAppStore((s) => s.startOver);
+  const newJD = useAppStore((s) => s.newJD);
+  const undo = useAppStore((s) => s.undo);
+  const redo = useAppStore((s) => s.redo);
+  const canUndo = useAppStore((s) => s.canUndo);
+  const canRedo = useAppStore((s) => s.canRedo);
+
+  // Panel visibility
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [showCoverLetter, setShowCoverLetter] = useState(false);
+  const [showAISettings, setShowAISettings] = useState(false);
+
+  const pdfInputRef = useRef<HTMLInputElement>(null);
   const resumeRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  /* ── Keyboard shortcuts (Ctrl+Z / Ctrl+Y) ────────── */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "z" && !e.shiftKey) {
+          e.preventDefault();
+          undo();
+        } else if (e.key === "y" || (e.key === "z" && e.shiftKey)) {
+          e.preventDefault();
+          redo();
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [undo, redo]);
 
   /* ── Cooldown timer tick ──────────────────────────── */
   useEffect(() => {
@@ -186,13 +245,13 @@ function App() {
       setCooldownRemaining(Math.max(analyzeRemaining, optimizeRemaining));
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [setCooldownRemaining]);
 
   /* ── Check for local backup on mount ────────────── */
   useEffect(() => {
     const backup = loadLocalBackup();
     setHasBackup(!!backup);
-  }, []);
+  }, [setHasBackup]);
 
   /* ── Auto-load from Supabase when user signs in ──── */
   useEffect(() => {
@@ -201,7 +260,7 @@ function App() {
     loadResume(user.id)
       .then((saved) => {
         if (saved) {
-          setResumeData(saved);
+          setResumeData(saved, false);
           setStep("editor");
         }
       })
@@ -212,35 +271,29 @@ function App() {
         );
       })
       .finally(() => setIsDbLoading(false));
-  }, [user?.id]);
+  }, [user?.id, setIsDbLoading, setResumeData, setStep, setError]);
 
   /* ── Debounced auto-save to Supabase (500ms) ────── */
-  const debouncedSupabaseSave = useDebounce(
-    (data: ResumeData) => {
-      if (!user?.id) return;
-      setIsSaving(true);
-      saveResume(user.id, data)
-        .then((ok) => {
-          if (!ok) console.warn("Supabase save returned false");
-        })
-        .catch((err) => {
-          console.error("Supabase save failed:", err);
-        })
-        .finally(() => setIsSaving(false));
-    },
-    500,
-  );
+  const debouncedSupabaseSave = useDebounce((data: ResumeData) => {
+    if (!user?.id) return;
+    setIsSaving(true);
+    saveResume(user.id, data)
+      .then((ok) => {
+        if (!ok) console.warn("Supabase save returned false");
+      })
+      .catch((err) => {
+        console.error("Supabase save failed:", err);
+      })
+      .finally(() => setIsSaving(false));
+  }, 500);
 
   const handleResumeChange = useCallback(
     (data: ResumeData) => {
-      // Optimistic UI: update state immediately
       setResumeData(data);
-      // Debounced Supabase save
       debouncedSupabaseSave(data);
-      // Also save to localStorage backup
       saveLocalBackup(data, jdText);
     },
-    [debouncedSupabaseSave, jdText],
+    [setResumeData, debouncedSupabaseSave, jdText],
   );
 
   const handlePrint = useReactToPrint({
@@ -256,7 +309,6 @@ function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Input validation
     const validation = validatePDFFile(file);
     if (!validation.valid) {
       setError(validation.error || "Invalid file.");
@@ -285,14 +337,13 @@ function App() {
   const handleClearUpload = useCallback(() => {
     setResumeText("");
     setUploadedFileName(null);
-  }, []);
+  }, [setResumeText, setUploadedFileName]);
 
   /* ── Step 1 → Analyzing ─────────────────────────────── */
 
   const handleAnalyze = async () => {
     if (!resumeText.trim() || !jdText.trim()) return;
 
-    // Input validation
     const resumeValidation = validateResumeText(resumeText);
     if (!resumeValidation.valid) {
       setError(resumeValidation.error || "Invalid resume text.");
@@ -304,7 +355,6 @@ function App() {
       return;
     }
 
-    // Rate limiting
     if (isRateLimited("analyze", 30000)) {
       const remaining = getRateLimitRemaining("analyze", 30000);
       setError(
@@ -318,7 +368,6 @@ function App() {
     setLoadingMessage("Parsing your resume with AI...");
     recordAction("analyze");
 
-    // Request deduplication — abort any previous analyze call
     const controller = getRequestController("analyze");
 
     try {
@@ -350,12 +399,11 @@ function App() {
     }
   };
 
-  /* ── Optimize (in-place on score step) ──────────────── */
+  /* ── Optimize ──────────────────────────────────────── */
 
   const handleOptimize = async () => {
     if (!resumeData || !atsResult) return;
 
-    // Rate limiting
     if (isRateLimited("optimize", 30000)) {
       const remaining = getRateLimitRemaining("optimize", 30000);
       setError(
@@ -370,7 +418,6 @@ function App() {
     setError(null);
     recordAction("optimize");
 
-    // Request deduplication — abort any previous optimize call
     const controller = getRequestController("optimize");
     abortRef.current = controller;
 
@@ -412,7 +459,7 @@ function App() {
 
   /* ── Navigation ─────────────────────────────────────── */
 
-  const handleEdit = useCallback(() => setStep("editor"), []);
+  const handleEdit = useCallback(() => setStep("editor"), [setStep]);
 
   const handleReAnalyze = async () => {
     if (!resumeData) return;
@@ -432,44 +479,18 @@ function App() {
     }
   };
 
-  const handleStartOver = useCallback(() => {
-    setStep("input");
-    setResumeData(null);
-    setATSResult(null);
-    setOptimizeProgress(null);
-    setError(null);
-    setPreviousScore(null);
-    setOptimizeDone(false);
-    setIsOptimizing(false);
-    setUploadedFileName(null);
-    setJdText("");
-    setResumeText("");
-  }, []);
-
-  /* ── New JD (keep existing resume) ───────────────── */
-
-  const handleNewJD = useCallback(() => {
-    setJdText("");
-    setATSResult(null);
-    setOptimizeProgress(null);
-    setError(null);
-    setPreviousScore(null);
-    setOptimizeDone(false);
-    setIsOptimizing(false);
-    setStep("input");
-  }, []);
+  const handleNewJD = useCallback(() => newJD(), [newJD]);
+  const handleStartOver = useCallback(() => startOver(), [startOver]);
 
   const handleAnalyzeExisting = async () => {
     if (!resumeData || !jdText.trim()) return;
 
-    // Input validation
     const jdValidation = validateJDText(jdText);
     if (!jdValidation.valid) {
       setError(jdValidation.error || "Invalid job description.");
       return;
     }
 
-    // Rate limiting
     if (isRateLimited("analyze", 30000)) {
       const remaining = getRateLimitRemaining("analyze", 30000);
       setError(
@@ -483,7 +504,6 @@ function App() {
     setLoadingMessage("Running ATS analysis against new JD...");
     recordAction("analyze");
 
-    // Request deduplication
     const controller = getRequestController("analyze-existing");
 
     try {
@@ -529,11 +549,16 @@ function App() {
         const reader = new FileReader();
         reader.onload = (ev) => {
           try {
-            const data = JSON.parse(ev.target?.result as string) as ResumeData;
-            handleResumeChange(data);
+            const raw = JSON.parse(ev.target?.result as string);
+            const validation = validateResumeData(raw);
+            if (!validation.valid) {
+              setError(`Invalid resume JSON: ${validation.errors?.join(", ")}`);
+              return;
+            }
+            handleResumeChange(raw as ResumeData);
             setStep("editor");
           } catch {
-            alert("Invalid JSON file");
+            setError("Invalid JSON file. Please check the file format.");
           }
         };
         reader.readAsText(file);
@@ -542,60 +567,130 @@ function App() {
     input.click();
   };
 
+  const handleExportDocx = async () => {
+    if (!resumeData) return;
+    try {
+      await exportToDocx(resumeData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "DOCX export failed");
+    }
+  };
+
   /* ─── Render ─────────────────────────────────────────── */
 
   return (
     <div className="app">
       {/* Header */}
-      <header className="app-header">
+      <header className="app-header" role="banner">
         <div className="header-left">
           <FileText size={22} className="logo-icon" />
           <h1 className="app-title">Resume Maker</h1>
         </div>
         <div className="header-actions">
           {isSaving && <span className="save-indicator">Saving...</span>}
+
+          {/* Undo/Redo */}
+          {step === "editor" && (
+            <>
+              <button
+                className="header-btn"
+                onClick={undo}
+                disabled={!canUndo()}
+                title="Undo (Ctrl+Z)"
+                aria-label="Undo"
+              >
+                <Undo2 size={14} />
+              </button>
+              <button
+                className="header-btn"
+                onClick={redo}
+                disabled={!canRedo()}
+                title="Redo (Ctrl+Y)"
+                aria-label="Redo"
+              >
+                <Redo2 size={14} />
+              </button>
+            </>
+          )}
+
+          <ThemeToggle />
+
+          <button
+            className="header-btn"
+            onClick={() => setShowTemplatePicker(true)}
+            title="Template & Style"
+            aria-label="Template & Style"
+          >
+            <Palette size={14} />
+          </button>
+
+          <button
+            className="header-btn"
+            onClick={() => setShowAISettings(true)}
+            title="AI Settings"
+            aria-label="AI Settings"
+          >
+            <Settings size={14} />
+          </button>
+
           <SignedIn>
             <UserButton afterSignOutUrl="/" />
           </SignedIn>
+
           {step !== "input" && step !== "analyzing" && (
             <button className="header-btn" onClick={handleStartOver}>
               <RotateCcw size={14} />
-              Start Over
+              <span>Start Over</span>
             </button>
           )}
-          {step === "score" && (
-            <button
-              className="header-btn btn-primary"
-              onClick={() => handlePrint()}
-            >
-              <Download size={14} />
-              Export PDF
-            </button>
-          )}
-          {step === "editor" && (
+
+          {(step === "score" || step === "editor") && (
             <>
-              <button className="header-btn btn-accent" onClick={handleNewJD}>
-                <Target size={14} />
-                New JD
-              </button>
-              <button className="header-btn" onClick={handleLoadJSON}>
-                <Upload size={14} />
-                Load JSON
-              </button>
-              <button className="header-btn" onClick={handleSaveJSON}>
-                <Save size={14} />
-                Save JSON
-              </button>
-              <button className="header-btn" onClick={handleReAnalyze}>
-                <Search size={14} />
-                Re-Analyze
+              {step === "editor" && (
+                <>
+                  <button
+                    className="header-btn btn-accent"
+                    onClick={handleNewJD}
+                  >
+                    <Target size={14} />
+                    <span>New JD</span>
+                  </button>
+                  <button className="header-btn" onClick={handleLoadJSON}>
+                    <Upload size={14} />
+                    <span>Load JSON</span>
+                  </button>
+                  <button className="header-btn" onClick={handleSaveJSON}>
+                    <Save size={14} />
+                    <span>Save JSON</span>
+                  </button>
+                  <button className="header-btn" onClick={handleReAnalyze}>
+                    <Search size={14} />
+                    <span>Re-Analyze</span>
+                  </button>
+                  <button
+                    className="header-btn"
+                    onClick={() => setShowCoverLetter(true)}
+                    title="Generate Cover Letter"
+                  >
+                    <Mail size={14} />
+                    <span>Cover Letter</span>
+                  </button>
+                </>
+              )}
+              <button
+                className="header-btn"
+                onClick={handleExportDocx}
+                title="Export as DOCX"
+              >
+                <FileType size={14} />
+                <span>DOCX</span>
               </button>
               <button
                 className="header-btn btn-primary"
                 onClick={() => handlePrint()}
               >
                 <Download size={14} />
-                Export PDF
+                <span>Export PDF</span>
               </button>
             </>
           )}
@@ -604,7 +699,7 @@ function App() {
 
       {/* Step Indicator */}
       {step !== "analyzing" && (
-        <div className="step-indicator">
+        <nav className="step-indicator" aria-label="Progress">
           <div
             className={`step-item ${step === "input" ? "active" : "completed"}`}
           >
@@ -623,11 +718,11 @@ function App() {
             <div className="step-number">3</div>
             <span>Editor</span>
           </div>
-        </div>
+        </nav>
       )}
 
       {/* Main Content */}
-      <main className="app-main">
+      <main className="app-main" role="main">
         <SignedOut>
           <div className="auth-gate">
             <div className="auth-card">
@@ -691,6 +786,7 @@ function App() {
                                 <button
                                   className="clear-upload"
                                   onClick={handleClearUpload}
+                                  aria-label="Clear upload"
                                 >
                                   <X size={12} />
                                 </button>
@@ -705,6 +801,7 @@ function App() {
                                 accept=".pdf"
                                 onChange={handlePdfUpload}
                                 hidden
+                                aria-label="Upload PDF"
                               />
                             </label>
                           </div>
@@ -725,6 +822,7 @@ function App() {
                                 setResumeText(e.target.value);
                                 if (uploadedFileName) setUploadedFileName(null);
                               }}
+                              aria-label="Resume text"
                             />
                             <small className="char-count">
                               {resumeText.length.toLocaleString()} /{" "}
@@ -745,6 +843,7 @@ function App() {
                         value={jdText}
                         maxLength={LIMITS.MAX_JD_LENGTH}
                         onChange={(e) => setJdText(e.target.value)}
+                        aria-label="Job description"
                       />
                       <small className="char-count">
                         {jdText.length.toLocaleString()} /{" "}
@@ -753,7 +852,7 @@ function App() {
                     </div>
                   </div>
                   {error && (
-                    <div className="error-banner">
+                    <div className="error-banner" role="alert">
                       <AlertCircle size={16} />
                       {error}
                     </div>
@@ -821,7 +920,7 @@ function App() {
                           onClick={() => {
                             const backup = loadLocalBackup();
                             if (backup) {
-                              setResumeData(backup.resumeData);
+                              setResumeData(backup.resumeData, false);
                               if (backup.jdText) setJdText(backup.jdText);
                               setStep("editor");
                             }
@@ -843,7 +942,11 @@ function App() {
 
               {/* ═══ ANALYZING STEP ═══ */}
               {step === "analyzing" && (
-                <div className="analyzing-step">
+                <div
+                  className="analyzing-step"
+                  role="status"
+                  aria-live="polite"
+                >
                   <Loader2 size={48} className="spin" />
                   <h2>{loadingMessage}</h2>
                   <p>This may take a moment...</p>
@@ -854,7 +957,6 @@ function App() {
               {step === "score" && atsResult && resumeData && (
                 <div className="score-step">
                   <div className="score-left">
-                    {/* Score Header */}
                     <div className="score-header">
                       <ScoreMeter score={atsResult.overallScore} />
                       <div className="score-verdict">
@@ -870,7 +972,6 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Keywords */}
                     <div className="keywords-section">
                       <h4>Keywords Found</h4>
                       <div className="keyword-tags">
@@ -908,7 +1009,6 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Breakdown */}
                     <div className="breakdown-section">
                       <h4>Breakdown</h4>
                       <BreakdownBar
@@ -938,7 +1038,6 @@ function App() {
                       />
                     </div>
 
-                    {/* Suggestions */}
                     {atsResult.topSuggestions.length > 0 && (
                       <div className="suggestions-section">
                         <h4>Suggestions</h4>
@@ -950,15 +1049,13 @@ function App() {
                       </div>
                     )}
 
-                    {/* Error */}
                     {error && (
-                      <div className="error-banner">
+                      <div className="error-banner" role="alert">
                         <AlertCircle size={16} />
                         {error}
                       </div>
                     )}
 
-                    {/* Optimize Progress */}
                     {isOptimizing && optimizeProgress && (
                       <div className="optimize-progress">
                         <div className="optimize-header">
@@ -985,7 +1082,6 @@ function App() {
                       </div>
                     )}
 
-                    {/* Actions */}
                     {!isOptimizing && (
                       <div className="score-actions">
                         <button
@@ -1056,6 +1152,23 @@ function App() {
           )}
         </SignedIn>
       </main>
+
+      {/* Modals/Panels */}
+      {showTemplatePicker && (
+        <Suspense fallback={null}>
+          <TemplatePicker onClose={() => setShowTemplatePicker(false)} />
+        </Suspense>
+      )}
+      {showCoverLetter && (
+        <Suspense fallback={null}>
+          <CoverLetterPanel onClose={() => setShowCoverLetter(false)} />
+        </Suspense>
+      )}
+      {showAISettings && (
+        <Suspense fallback={null}>
+          <AISettingsPanel onClose={() => setShowAISettings(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

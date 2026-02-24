@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, lazy, Suspense } from "react";
 import type {
   ResumeData,
   Project,
@@ -18,11 +18,11 @@ import {
   ToggleLeft,
   ToggleRight,
   GripVertical,
-  ArrowUp,
-  ArrowDown,
   Layers,
 } from "lucide-react";
 import "./ResumeEditor.css";
+
+const DnDSectionOrder = lazy(() => import("./DnDSectionOrder"));
 
 interface ResumeEditorProps {
   data: ResumeData;
@@ -309,18 +309,8 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       ? data.sectionOrder
       : DEFAULT_SECTION_ORDER;
 
-  const moveSectionUp = (index: number) => {
-    if (index === 0) return;
-    const updated = [...sectionOrder];
-    [updated[index - 1], updated[index]] = [updated[index], updated[index - 1]];
-    onChange({ ...data, sectionOrder: updated });
-  };
-
-  const moveSectionDown = (index: number) => {
-    if (index >= sectionOrder.length - 1) return;
-    const updated = [...sectionOrder];
-    [updated[index], updated[index + 1]] = [updated[index + 1], updated[index]];
-    onChange({ ...data, sectionOrder: updated });
+  const handleSectionOrderChange = (newOrder: SectionKey[]) => {
+    onChange({ ...data, sectionOrder: newOrder });
   };
 
   const sectionLabels: Record<SectionKey, string> = {
@@ -374,32 +364,13 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
           )}
         </div>
         {expandedSections.has("sectionOrder") && (
-          <div className="editor-fields section-order-list">
-            {sectionOrder.map((key, i) => (
-              <div key={key} className="section-order-item">
-                <GripVertical size={14} className="grip-icon" />
-                <span className="section-order-number">{i + 1}</span>
-                <span className="section-order-label">
-                  {sectionLabels[key]}
-                </span>
-                <div className="section-order-actions">
-                  <button
-                    className="btn-icon btn-reorder"
-                    onClick={() => moveSectionUp(i)}
-                    disabled={i === 0}
-                  >
-                    <ArrowUp size={14} />
-                  </button>
-                  <button
-                    className="btn-icon btn-reorder"
-                    onClick={() => moveSectionDown(i)}
-                    disabled={i === sectionOrder.length - 1}
-                  >
-                    <ArrowDown size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="editor-fields">
+            <Suspense fallback={<div style={{ padding: 8 }}>Loading...</div>}>
+              <DnDSectionOrder
+                sectionOrder={sectionOrder}
+                onChange={handleSectionOrderChange}
+              />
+            </Suspense>
           </div>
         )}
       </div>

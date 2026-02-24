@@ -109,7 +109,10 @@ function BreakdownBar({
   );
 }
 
-const ATSScore = memo(function ATSScore({ resumeData, aiSettings }: ATSScoreProps) {
+const ATSScore = memo(function ATSScore({
+  resumeData,
+  aiSettings,
+}: ATSScoreProps) {
   const [jd, setJd] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

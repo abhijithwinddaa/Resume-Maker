@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import type { ResumeData, SectionKey } from "../types/resume";
+import { useAppStore } from "../store/appStore";
 import "./ResumeTemplate.css";
 
 interface ResumeTemplateProps {
@@ -7,8 +8,31 @@ interface ResumeTemplateProps {
   highlightKeywords?: string[];
 }
 
+const FONT_SIZE_MAP = {
+  small: "8.5pt",
+  medium: "9pt",
+  large: "9.5pt",
+} as const;
+const LINE_HEIGHT_MAP = { compact: 1.2, normal: 1.3, relaxed: 1.5 } as const;
+const SPACING_MAP = { tight: "2px", normal: "4px", spacious: "8px" } as const;
+
 const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
   ({ data, highlightKeywords = [] }, ref) => {
+    const templateId = useAppStore((s) => s.templateId);
+    const customization = useAppStore((s) => s.customization);
+
+    const rootStyle = useMemo(
+      () =>
+        ({
+          "--resume-primary": customization.primaryColor,
+          "--resume-secondary": customization.secondaryColor,
+          "--resume-font": `"${customization.fontFamily}", "Segoe UI", Arial, sans-serif`,
+          "--resume-font-size": FONT_SIZE_MAP[customization.fontSize],
+          "--resume-line-height": LINE_HEIGHT_MAP[customization.lineHeight],
+          "--resume-section-spacing": SPACING_MAP[customization.sectionSpacing],
+        }) as React.CSSProperties,
+      [customization],
+    );
     const highlightText = (text: string): React.ReactNode => {
       if (highlightKeywords.length === 0) return text;
 
@@ -239,7 +263,11 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
     };
 
     return (
-      <div className="resume-page" ref={ref}>
+      <div
+        className={`resume-page template-${templateId}`}
+        ref={ref}
+        style={rootStyle}
+      >
         {/* Header */}
         <div className="resume-header">
           <h1 className="resume-name">{data.contact.name}</h1>

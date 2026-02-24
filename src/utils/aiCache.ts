@@ -72,7 +72,9 @@ export async function getCachedAsync<T>(key: string): Promise<T | null> {
     try {
       const entry: CacheEntry<T> = { data: idbResult, timestamp: Date.now() };
       localStorage.setItem(key, JSON.stringify(entry));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
   return idbResult;
 }

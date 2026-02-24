@@ -299,7 +299,7 @@ async function withRetry<T>(
 
 /* ── Unified AI caller with fallback chain ───────────── */
 
-async function callAI(
+export async function callAI(
   settings: AISettings,
   messages: ChatMessage[],
 ): Promise<string> {

@@ -13,10 +13,7 @@ export default defineConfig({
           // Icons
           "vendor-icons": ["lucide-react"],
           // Auth + DB
-          "vendor-services": [
-            "@clerk/clerk-react",
-            "@supabase/supabase-js",
-          ],
+          "vendor-services": ["@clerk/clerk-react", "@supabase/supabase-js"],
         },
       },
     },
@@ -24,4 +21,3 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
   },
 });
-

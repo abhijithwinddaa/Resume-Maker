@@ -49,7 +49,8 @@ function VirtualListInner<T>(
     0,
     Math.floor(scrollTop / itemHeight) - bufferCount,
   );
-  const visibleCount = Math.ceil(containerHeight / itemHeight) + bufferCount * 2;
+  const visibleCount =
+    Math.ceil(containerHeight / itemHeight) + bufferCount * 2;
   const endIndex = Math.min(items.length, startIndex + visibleCount);
 
   const visibleItems = items.slice(startIndex, endIndex);
@@ -74,10 +75,7 @@ function VirtualListInner<T>(
           }}
         >
           {visibleItems.map((item, i) => (
-            <div
-              key={startIndex + i}
-              style={{ height: itemHeight }}
-            >
+            <div key={startIndex + i} style={{ height: itemHeight }}>
               {renderItem(item, startIndex + i)}
             </div>
           ))}

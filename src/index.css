@@ -1,3 +1,51 @@
+/* ─── CSS Variables (Light Theme) ────────────────── */
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f0f2f5;
+  --bg-hover: #f1f5f9;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border-color: #e2e8f0;
+  --accent-color: #2980b9;
+  --accent-dark: #1a5276;
+  --accent-light: rgba(41, 128, 185, 0.08);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.15);
+  --error-bg: #fef2f2;
+  --error-text: #dc2626;
+  --success-bg: #f0fdf4;
+  --success-text: #16a34a;
+  --warning-bg: #fffbeb;
+  --warning-text: #d97706;
+}
+
+/* ─── Dark Theme ─────────────────────────────────── */
+[data-theme="dark"] {
+  --bg-primary: #1e1e2e;
+  --bg-secondary: #181825;
+  --bg-tertiary: #11111b;
+  --bg-hover: #313244;
+  --text-primary: #cdd6f4;
+  --text-secondary: #a6adc8;
+  --text-muted: #6c7086;
+  --border-color: #313244;
+  --accent-color: #89b4fa;
+  --accent-dark: #74c7ec;
+  --accent-light: rgba(137, 180, 250, 0.1);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --error-bg: #302020;
+  --error-text: #f87171;
+  --success-bg: #1a2e1a;
+  --success-text: #4ade80;
+  --warning-bg: #2e2a1a;
+  --warning-text: #fbbf24;
+}
+
 /* Global Styles */
 *,
 *::before,
@@ -17,7 +65,11 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #f0f2f5;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  transition:
+    background 0.3s,
+    color 0.3s;
 }
 
 #root {

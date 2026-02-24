@@ -1,14 +1,21 @@
 /* Resume Template - Matching the exact screenshot layout */
 
 .resume-page {
+  --resume-primary: #2980b9;
+  --resume-secondary: #1a5276;
+  --resume-font: "Inter", "Segoe UI", Arial, sans-serif;
+  --resume-font-size: 9pt;
+  --resume-line-height: 1.3;
+  --resume-section-spacing: 3px;
+
   width: 210mm;
   min-height: 297mm;
   padding: 8mm 10mm;
   background: white;
   color: #1a1a1a;
-  font-family: "Inter", "Segoe UI", Arial, sans-serif;
-  font-size: 9pt;
-  line-height: 1.3;
+  font-family: var(--resume-font);
+  font-size: var(--resume-font-size);
+  line-height: var(--resume-line-height);
   box-sizing: border-box;
 }
 
@@ -37,7 +44,7 @@
 }
 
 .resume-contact a {
-  color: #2563eb;
+  color: var(--resume-primary);
   text-decoration: none;
 }
 
@@ -52,13 +59,13 @@
 
 /* Sections */
 .resume-section {
-  margin-bottom: 3px;
+  margin-bottom: var(--resume-section-spacing);
 }
 
 .section-title {
   font-size: 10pt;
   font-weight: 700;
-  color: #1a5276;
+  color: var(--resume-secondary);
   margin: 0;
   padding-bottom: 1px;
   text-transform: uppercase;
@@ -67,7 +74,7 @@
 
 .section-divider {
   height: 1.5px;
-  background: linear-gradient(to right, #2980b9, #85c1e9);
+  background: linear-gradient(to right, var(--resume-primary), #85c1e9);
   margin-bottom: 2px;
 }
 
@@ -267,6 +274,124 @@
   margin-bottom: 0;
   font-size: 8.8pt;
   line-height: 1.3;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Template Variants
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Modern: left-aligned name, bold dividers ── */
+.template-modern .resume-header {
+  text-align: left;
+  border-bottom: 3px solid var(--resume-primary);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+
+.template-modern .resume-name {
+  color: var(--resume-primary);
+  font-size: 20pt;
+}
+
+.template-modern .resume-contact {
+  justify-content: flex-start;
+}
+
+.template-modern .section-title {
+  color: var(--resume-primary);
+  font-size: 10.5pt;
+  border-bottom: 2px solid var(--resume-primary);
+  padding-bottom: 2px;
+  margin-bottom: 3px;
+}
+
+.template-modern .section-divider {
+  display: none;
+}
+
+/* ── Minimal: no dividers, subtle styling ── */
+.template-minimal .section-divider {
+  display: none;
+}
+
+.template-minimal .section-title {
+  color: #333;
+  font-weight: 600;
+  font-size: 10pt;
+  letter-spacing: 1.5px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 3px;
+}
+
+.template-minimal .resume-name {
+  font-weight: 400;
+  font-size: 22pt;
+  letter-spacing: 2px;
+}
+
+.template-minimal .resume-contact a {
+  color: #555;
+}
+
+/* ── Creative: accent sidebar effect, colorful ── */
+.template-creative {
+  border-left: 6px solid var(--resume-primary);
+  padding-left: 14mm;
+}
+
+.template-creative .resume-header {
+  text-align: left;
+}
+
+.template-creative .resume-name {
+  color: var(--resume-primary);
+  font-size: 20pt;
+}
+
+.template-creative .resume-contact {
+  justify-content: flex-start;
+}
+
+.template-creative .section-title {
+  color: var(--resume-primary);
+  background: color-mix(in srgb, var(--resume-primary) 8%, transparent);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.template-creative .section-divider {
+  display: none;
+}
+
+/* ── ATS: maximum parsability, no decorations ── */
+.template-ats .section-divider {
+  height: 1px;
+  background: #000;
+  margin-bottom: 2px;
+}
+
+.template-ats .section-title {
+  color: #000;
+  font-size: 10pt;
+}
+
+.template-ats .resume-name {
+  font-size: 16pt;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.template-ats .resume-contact a {
+  color: #000;
+  text-decoration: underline;
+}
+
+.template-ats .project-links a,
+.template-ats .github-badge,
+.template-ats .cert-link {
+  color: #000;
+  text-decoration: underline;
 }
 
 /* Print styles */
