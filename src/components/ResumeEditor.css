@@ -1,0 +1,388 @@
+/* Resume Editor Styles */
+
+.resume-editor {
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.editor-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a5276;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #2980b9;
+}
+
+/* Section */
+.editor-section {
+  margin-bottom: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.editor-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: #f1f5f9;
+  transition: background 0.15s;
+}
+
+.editor-section-header:hover {
+  background: #e2e8f0;
+}
+
+.editor-section-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.editor-fields {
+  padding: 12px 14px;
+}
+
+/* Fields */
+.field-group {
+  margin-bottom: 8px;
+  flex: 1;
+}
+
+.field-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.field-group input,
+.editor-fields textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: "Inter", sans-serif;
+  background: white;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.field-group input:focus,
+.editor-fields textarea:focus {
+  outline: none;
+  border-color: #2980b9;
+  box-shadow: 0 0 0 2px rgba(41, 128, 185, 0.15);
+}
+
+.field-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Cards */
+.editor-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.card-number {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2980b9;
+}
+
+/* Buttons */
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: transparent;
+}
+
+.btn-danger {
+  color: #ef4444;
+}
+
+.btn-danger:hover {
+  background: #fef2f2;
+}
+
+.btn-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px dashed #94a3b8;
+  border-radius: 6px;
+  background: transparent;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-add:hover {
+  border-color: #2980b9;
+  color: #2980b9;
+  background: #eff6ff;
+}
+
+.btn-small {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+/* Bullets section */
+.bullets-section {
+  margin-top: 4px;
+}
+
+.bullets-section > label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.bullet-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+  align-items: flex-start;
+}
+
+.bullet-row textarea {
+  flex: 1;
+}
+
+.bullet-row .btn-icon {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+/* Skills */
+.skill-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.skill-label-group {
+  flex: 0 0 160px;
+}
+
+.skill-value-group {
+  flex: 1;
+}
+
+.skill-row .btn-icon {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* Section header right side */
+.section-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Toggle button for certificates */
+.toggle-cert-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: "Inter", sans-serif;
+  transition: all 0.15s;
+}
+
+.toggle-cert-btn.on {
+  color: #16a34a;
+}
+
+.toggle-cert-btn.off {
+  color: #94a3b8;
+}
+
+.toggle-cert-btn:hover {
+  background: #f1f5f9;
+}
+
+.toggle-label-text {
+  font-size: 10px;
+}
+
+.toggle-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 4px 0 8px 0;
+}
+
+/* Certificate editor */
+.cert-editor-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.cert-fields {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+}
+
+.cert-name-input {
+  flex: 0 0 30%;
+}
+
+.cert-desc-input {
+  flex: 1;
+}
+
+.cert-link-input {
+  flex: 0 0 30%;
+}
+
+.cert-fields input {
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: "Inter", sans-serif;
+  background: white;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.cert-fields input:focus {
+  outline: none;
+  border-color: #2980b9;
+  box-shadow: 0 0 0 2px rgba(41, 128, 185, 0.15);
+}
+
+.cert-editor-row .btn-icon {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+/* Section Order */
+.section-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.section-order-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.section-order-item:hover {
+  background: #f1f5f9;
+}
+
+.grip-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.section-order-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #2980b9;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.section-order-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.section-order-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.btn-reorder {
+  padding: 4px !important;
+  background: transparent !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 4px !important;
+  color: #64748b !important;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-reorder:hover:not(:disabled) {
+  background: #e2e8f0 !important;
+  color: #1a5276 !important;
+}
+
+.btn-reorder:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}

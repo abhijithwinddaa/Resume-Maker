@@ -1,0 +1,297 @@
+/* Resume Template - Matching the exact screenshot layout */
+
+.resume-page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 8mm 10mm;
+  background: white;
+  color: #1a1a1a;
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  font-size: 9pt;
+  line-height: 1.3;
+  box-sizing: border-box;
+}
+
+/* Header */
+.resume-header {
+  text-align: center;
+  margin-bottom: 2px;
+}
+
+.resume-name {
+  font-size: 18pt;
+  font-weight: 700;
+  color: #000;
+  margin: 0 0 2px 0;
+  letter-spacing: 0.5px;
+}
+
+.resume-contact {
+  font-size: 8.5pt;
+  color: #333;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.resume-contact a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.resume-contact a:hover {
+  text-decoration: underline;
+}
+
+.resume-contact .separator {
+  color: #666;
+  margin: 0 2px;
+}
+
+/* Sections */
+.resume-section {
+  margin-bottom: 3px;
+}
+
+.section-title {
+  font-size: 10pt;
+  font-weight: 700;
+  color: #1a5276;
+  margin: 0;
+  padding-bottom: 1px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.section-divider {
+  height: 1.5px;
+  background: linear-gradient(to right, #2980b9, #85c1e9);
+  margin-bottom: 2px;
+}
+
+/* Summary */
+.summary-text {
+  margin: 0;
+  text-align: justify;
+  font-size: 9pt;
+  line-height: 1.3;
+}
+
+/* Education */
+.education-item {
+  margin-bottom: 2px;
+}
+
+.education-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.education-row strong {
+  font-size: 9.5pt;
+}
+
+.education-year {
+  font-weight: 600;
+  font-size: 9pt;
+}
+
+.education-degree {
+  font-style: normal;
+  font-size: 9pt;
+}
+
+.education-cgpa {
+  font-size: 9pt;
+}
+
+/* Projects */
+.project-item {
+  margin-bottom: 4px;
+}
+
+.project-header {
+  margin-bottom: 1px;
+}
+
+.project-title {
+  font-weight: 700;
+  font-size: 9.5pt;
+  color: #1a1a1a;
+}
+
+.project-links a {
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 9pt;
+}
+
+.project-links a:hover {
+  text-decoration: underline;
+}
+
+.project-tech {
+  font-size: 9pt;
+  margin-bottom: 2px;
+  color: #333;
+}
+
+.project-bullets {
+  margin: 1px 0 0 0;
+  padding-left: 16px;
+  list-style-type: disc;
+}
+
+.project-bullets li {
+  margin-bottom: 1px;
+  font-size: 8.8pt;
+  line-height: 1.3;
+  text-align: justify;
+}
+
+/* Skills */
+.skills-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style-type: disc;
+}
+
+.skills-list li {
+  margin-bottom: 0;
+  font-size: 8.8pt;
+  line-height: 1.3;
+}
+
+.skills-list li strong {
+  color: #1a1a1a;
+}
+
+/* Achievements */
+.achievements-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style-type: disc;
+}
+
+.achievements-list li {
+  margin-bottom: 1px;
+  font-size: 8.8pt;
+  line-height: 1.3;
+  text-align: justify;
+}
+
+.github-badge {
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 8.8pt;
+  font-weight: 500;
+  vertical-align: baseline;
+  margin-left: 3px;
+}
+
+.github-badge:hover {
+  text-decoration: underline;
+}
+
+/* Keyword highlight */
+.keyword-highlight {
+  background: #fef08a;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+/* Certificates */
+.certificates-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style-type: disc;
+}
+
+.certificate-item {
+  margin-bottom: 1px;
+  font-size: 8.8pt;
+  line-height: 1.3;
+}
+
+.certificate-item strong {
+  font-size: 9pt;
+}
+
+.cert-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 8.8pt;
+}
+
+.cert-link:hover {
+  text-decoration: underline;
+}
+
+/* Experience */
+.experience-item {
+  margin-bottom: 3px;
+}
+
+.experience-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.experience-company {
+  font-style: italic;
+}
+
+.experience-date {
+  font-size: 9pt;
+  color: #444;
+  white-space: nowrap;
+}
+
+.experience-location {
+  font-size: 8.5pt;
+  color: #555;
+  margin-top: 1px;
+}
+
+.experience-bullets {
+  margin: 1px 0 0 16px;
+  padding: 0;
+  list-style-type: disc;
+}
+
+.experience-bullets li {
+  margin-bottom: 0;
+  font-size: 8.8pt;
+  line-height: 1.3;
+}
+
+/* Print styles */
+@media print {
+  .resume-page {
+    margin: 0;
+    padding: 6mm 8mm;
+    box-shadow: none;
+  }
+
+  .github-badge {
+    color: #2563eb !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .cert-link {
+    color: #2563eb !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .keyword-highlight {
+    background: #fef08a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
