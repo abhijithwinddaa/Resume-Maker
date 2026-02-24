@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { useReactToPrint } from "react-to-print";
 import {
   useUser,
@@ -7,8 +7,6 @@ import {
   SignInButton,
   UserButton,
 } from "@clerk/clerk-react";
-import ResumeTemplate from "./components/ResumeTemplate";
-import ResumeEditor from "./components/ResumeEditor";
 import { DEFAULT_AI_SETTINGS } from "./types/aiSettings";
 import type { ResumeData } from "./types/resume";
 import type { ATSResult, OptimizeProgress } from "./utils/aiService";
@@ -19,6 +17,24 @@ import {
 } from "./utils/aiService";
 import { extractTextFromPDF } from "./utils/pdfExtractor";
 import { loadResume, saveResume } from "./services/resumeService";
+import {
+  isRateLimited,
+  getRateLimitRemaining,
+  recordAction,
+  formatCooldown,
+} from "./utils/rateLimiter";
+import {
+  validatePDFFile,
+  validateResumeText,
+  validateJDText,
+  sanitizeText,
+  LIMITS,
+} from "./utils/inputValidation";
+import {
+  saveLocalBackup,
+  loadLocalBackup,
+  formatBackupAge,
+} from "./utils/localBackup";
 import {
   FileText,
   Upload,
@@ -36,8 +52,14 @@ import {
   FileUp,
   X,
   LogIn,
+  Clock,
+  HardDrive,
 } from "lucide-react";
 import "./App.css";
+
+/* ─── Lazy-loaded heavy components ─────────────────── */
+const ResumeTemplate = lazy(() => import("./components/ResumeTemplate"));
+const ResumeEditor = lazy(() => import("./components/ResumeEditor"));
 
 type AppStep = "input" | "analyzing" | "score" | "editor";
 
@@ -132,12 +154,30 @@ function App() {
   const [isPdfLoading, setIsPdfLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDbLoading, setIsDbLoading] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const [hasBackup, setHasBackup] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const aiSettings = DEFAULT_AI_SETTINGS;
   const resumeRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* ── Cooldown timer tick ──────────────────────────── */
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const analyzeRemaining = getRateLimitRemaining("analyze", 30000);
+      const optimizeRemaining = getRateLimitRemaining("optimize", 30000);
+      setCooldownRemaining(Math.max(analyzeRemaining, optimizeRemaining));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  /* ── Check for local backup on mount ────────────── */
+  useEffect(() => {
+    const backup = loadLocalBackup();
+    setHasBackup(!!backup);
+  }, []);
 
   /* ── Auto-load from Supabase when user signs in ──── */
   useEffect(() => {
@@ -182,6 +222,8 @@ function App() {
   const handleResumeChange = (data: ResumeData) => {
     setResumeData(data);
     autoSave(data);
+    // Also save to localStorage backup
+    saveLocalBackup(data, jdText);
   };
 
   const handlePrint = useReactToPrint({
@@ -196,10 +238,14 @@ function App() {
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.type !== "application/pdf") {
-      setError("Please upload a PDF file.");
+
+    // Input validation
+    const validation = validatePDFFile(file);
+    if (!validation.valid) {
+      setError(validation.error || "Invalid file.");
       return;
     }
+
     setIsPdfLoading(true);
     setError(null);
     try {
@@ -209,7 +255,7 @@ function App() {
           "Could not extract text from this PDF. It may be image-based. Try pasting the text manually.",
         );
       }
-      setResumeText(text);
+      setResumeText(sanitizeText(text));
       setUploadedFileName(file.name);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to read PDF");
@@ -228,16 +274,46 @@ function App() {
 
   const handleAnalyze = async () => {
     if (!resumeText.trim() || !jdText.trim()) return;
+
+    // Input validation
+    const resumeValidation = validateResumeText(resumeText);
+    if (!resumeValidation.valid) {
+      setError(resumeValidation.error || "Invalid resume text.");
+      return;
+    }
+    const jdValidation = validateJDText(jdText);
+    if (!jdValidation.valid) {
+      setError(jdValidation.error || "Invalid job description.");
+      return;
+    }
+
+    // Rate limiting
+    if (isRateLimited("analyze", 30000)) {
+      const remaining = getRateLimitRemaining("analyze", 30000);
+      setError(
+        `Please wait ${formatCooldown(remaining)} before analyzing again.`,
+      );
+      return;
+    }
+
     setStep("analyzing");
     setError(null);
     setLoadingMessage("Parsing your resume with AI...");
+    recordAction("analyze");
 
     try {
-      const parsed = await parseResumeFromText(aiSettings, resumeText);
+      const parsed = await parseResumeFromText(
+        aiSettings,
+        sanitizeText(resumeText),
+      );
       handleResumeChange(parsed);
 
       setLoadingMessage("Running ATS analysis...");
-      const ats = await analyzeATSScore(aiSettings, parsed, jdText);
+      const ats = await analyzeATSScore(
+        aiSettings,
+        parsed,
+        sanitizeText(jdText),
+      );
       setATSResult(ats);
       setOptimizeDone(false);
       setPreviousScore(null);
@@ -252,10 +328,21 @@ function App() {
 
   const handleOptimize = async () => {
     if (!resumeData || !atsResult) return;
+
+    // Rate limiting
+    if (isRateLimited("optimize", 30000)) {
+      const remaining = getRateLimitRemaining("optimize", 30000);
+      setError(
+        `Please wait ${formatCooldown(remaining)} before optimizing again.`,
+      );
+      return;
+    }
+
     setIsOptimizing(true);
     setOptimizeDone(false);
     setPreviousScore(atsResult.overallScore);
     setError(null);
+    recordAction("optimize");
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -344,12 +431,34 @@ function App() {
 
   const handleAnalyzeExisting = async () => {
     if (!resumeData || !jdText.trim()) return;
+
+    // Input validation
+    const jdValidation = validateJDText(jdText);
+    if (!jdValidation.valid) {
+      setError(jdValidation.error || "Invalid job description.");
+      return;
+    }
+
+    // Rate limiting
+    if (isRateLimited("analyze", 30000)) {
+      const remaining = getRateLimitRemaining("analyze", 30000);
+      setError(
+        `Please wait ${formatCooldown(remaining)} before analyzing again.`,
+      );
+      return;
+    }
+
     setStep("analyzing");
     setError(null);
     setLoadingMessage("Running ATS analysis against new JD...");
+    recordAction("analyze");
 
     try {
-      const ats = await analyzeATSScore(aiSettings, resumeData, jdText);
+      const ats = await analyzeATSScore(
+        aiSettings,
+        resumeData,
+        sanitizeText(jdText),
+      );
       setATSResult(ats);
       setOptimizeDone(false);
       setPreviousScore(null);
@@ -569,15 +678,22 @@ function App() {
                             <span>Extracting text from PDF...</span>
                           </div>
                         ) : (
-                          <textarea
-                            className="input-textarea"
-                            placeholder="Paste your full resume text here or upload a PDF..."
-                            value={resumeText}
-                            onChange={(e) => {
-                              setResumeText(e.target.value);
-                              if (uploadedFileName) setUploadedFileName(null);
-                            }}
-                          />
+                          <>
+                            <textarea
+                              className="input-textarea"
+                              placeholder="Paste your full resume text here or upload a PDF..."
+                              value={resumeText}
+                              maxLength={LIMITS.MAX_RESUME_TEXT_LENGTH}
+                              onChange={(e) => {
+                                setResumeText(e.target.value);
+                                if (uploadedFileName) setUploadedFileName(null);
+                              }}
+                            />
+                            <small className="char-count">
+                              {resumeText.length.toLocaleString()} /{" "}
+                              {LIMITS.MAX_RESUME_TEXT_LENGTH.toLocaleString()}
+                            </small>
+                          </>
                         )}
                       </div>
                     )}
@@ -590,8 +706,13 @@ function App() {
                         className="input-textarea"
                         placeholder="Paste the job description here..."
                         value={jdText}
+                        maxLength={LIMITS.MAX_JD_LENGTH}
                         onChange={(e) => setJdText(e.target.value)}
                       />
+                      <small className="char-count">
+                        {jdText.length.toLocaleString()} /{" "}
+                        {LIMITS.MAX_JD_LENGTH.toLocaleString()}
+                      </small>
                     </div>
                   </div>
                   {error && (
@@ -605,10 +726,25 @@ function App() {
                       <button
                         className="analyze-btn"
                         onClick={handleAnalyzeExisting}
-                        disabled={!jdText.trim()}
+                        disabled={
+                          !jdText.trim() ||
+                          isRateLimited("analyze", 30000)
+                        }
                       >
-                        <Search size={18} />
-                        Analyze with New JD
+                        {isRateLimited("analyze", 30000) ? (
+                          <>
+                            <Clock size={18} />
+                            Wait{" "}
+                            {formatCooldown(
+                              getRateLimitRemaining("analyze", 30000),
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Search size={18} />
+                            Analyze with New JD
+                          </>
+                        )}
                       </button>
                       <button
                         className="btn-secondary"
@@ -618,14 +754,55 @@ function App() {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      className="analyze-btn"
-                      onClick={handleAnalyze}
-                      disabled={!resumeText.trim() || !jdText.trim()}
-                    >
-                      <Search size={18} />
-                      Analyze Resume
-                    </button>
+                    <>
+                      <button
+                        className="analyze-btn"
+                        onClick={handleAnalyze}
+                        disabled={
+                          !resumeText.trim() ||
+                          !jdText.trim() ||
+                          isRateLimited("analyze", 30000)
+                        }
+                      >
+                        {isRateLimited("analyze", 30000) ? (
+                          <>
+                            <Clock size={18} />
+                            Wait{" "}
+                            {formatCooldown(
+                              getRateLimitRemaining("analyze", 30000),
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Search size={18} />
+                            Analyze Resume
+                          </>
+                        )}
+                      </button>
+                      {!resumeData && hasBackup && (
+                        <button
+                          className="btn-secondary backup-restore-btn"
+                          onClick={() => {
+                            const backup = loadLocalBackup();
+                            if (backup) {
+                              setResumeData(backup.resumeData);
+                              if (backup.jdText) setJdText(backup.jdText);
+                              setStep("editor");
+                            }
+                          }}
+                        >
+                          <HardDrive size={14} />
+                          Restore Local Backup
+                          <small>
+                            (
+                            {formatBackupAge(
+                              loadLocalBackup()?.timestamp || 0,
+                            )}
+                            )
+                          </small>
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -780,9 +957,24 @@ function App() {
                         <button
                           className="btn-optimize"
                           onClick={handleOptimize}
+                          disabled={isRateLimited("optimize", 30000)}
                         >
-                          <Zap size={18} />
-                          {optimizeDone ? "Re-Optimize" : "Optimize Resume"}
+                          {isRateLimited("optimize", 30000) ? (
+                            <>
+                              <Clock size={18} />
+                              Wait{" "}
+                              {formatCooldown(
+                                getRateLimitRemaining("optimize", 30000),
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <Zap size={18} />
+                              {optimizeDone
+                                ? "Re-Optimize"
+                                : "Optimize Resume"}
+                            </>
+                          )}
                         </button>
                         <button className="btn-edit" onClick={handleEdit}>
                           <Edit3 size={18} />
@@ -794,7 +986,16 @@ function App() {
 
                   <div className="score-right">
                     <div className="preview-container">
-                      <ResumeTemplate ref={resumeRef} data={resumeData} />
+                      <Suspense
+                        fallback={
+                          <div className="lazy-loading">
+                            <Loader2 size={24} className="spin" />
+                            Loading preview...
+                          </div>
+                        }
+                      >
+                        <ResumeTemplate ref={resumeRef} data={resumeData} />
+                      </Suspense>
                     </div>
                   </div>
                 </div>
@@ -804,14 +1005,32 @@ function App() {
               {step === "editor" && resumeData && (
                 <div className="editor-step">
                   <div className="editor-left">
-                    <ResumeEditor
-                      data={resumeData}
-                      onChange={handleResumeChange}
-                    />
+                    <Suspense
+                      fallback={
+                        <div className="lazy-loading">
+                          <Loader2 size={24} className="spin" />
+                          Loading editor...
+                        </div>
+                      }
+                    >
+                      <ResumeEditor
+                        data={resumeData}
+                        onChange={handleResumeChange}
+                      />
+                    </Suspense>
                   </div>
                   <div className="editor-right">
                     <div className="preview-container">
-                      <ResumeTemplate ref={resumeRef} data={resumeData} />
+                      <Suspense
+                        fallback={
+                          <div className="lazy-loading">
+                            <Loader2 size={24} className="spin" />
+                            Loading preview...
+                          </div>
+                        }
+                      >
+                        <ResumeTemplate ref={resumeRef} data={resumeData} />
+                      </Suspense>
                     </div>
                   </div>
                 </div>

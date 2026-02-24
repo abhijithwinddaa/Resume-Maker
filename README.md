@@ -13,6 +13,7 @@ An intelligent, full-stack resume builder that analyzes your resume against any 
 ## Features
 
 ### Core
+
 - **PDF Resume Upload** — Extract text from any PDF resume using `pdfjs-dist`
 - **AI-Powered Parsing** — Automatically structures raw resume text into organized sections (summary, skills, education, projects, certifications, achievements, experience)
 - **ATS Score Analysis** — Scores your resume against a job description across 5 categories: Keyword Match, Skills Alignment, Experience Relevance, Formatting, and Impact Language
@@ -21,12 +22,14 @@ An intelligent, full-stack resume builder that analyzes your resume against any 
 - **PDF Export** — One-click download of the final resume as a clean, single-page PDF
 
 ### AI & API
+
 - **Multi-Provider AI** — Uses GitHub Models (`gpt-4o-mini`) as primary, Google Gemini (`gemini-2.0-flash`) as fallback
 - **Multi-Token Rotation** — Automatically rotates through multiple GitHub PATs on rate limit (429) or auth (401) errors
 - **Gemini Fallback** — If all GitHub tokens are exhausted, seamlessly falls back to Google Gemini API
 - **Exhaustive Keyword Extraction** — Pulls every relevant keyword from the JD (technical skills, tools, methodologies, soft skills, certifications)
 
 ### User Experience
+
 - **Clerk Authentication** — Sign in / sign up with email, Google, GitHub, etc.
 - **Supabase Persistence** — Resume data auto-saves (2s debounce) and auto-loads on login
 - **Section Reordering** — Drag sections up/down to customize resume layout order
@@ -39,16 +42,16 @@ An intelligent, full-stack resume builder that analyzes your resume against any 
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, TypeScript 5.9, Vite 7.3 |
-| Auth | Clerk (`@clerk/clerk-react`) |
-| Database | Supabase (`@supabase/supabase-js`) |
-| AI (Primary) | GitHub Models API — `gpt-4o-mini` |
+| Layer         | Technology                             |
+| ------------- | -------------------------------------- |
+| Frontend      | React 19, TypeScript 5.9, Vite 7.3     |
+| Auth          | Clerk (`@clerk/clerk-react`)           |
+| Database      | Supabase (`@supabase/supabase-js`)     |
+| AI (Primary)  | GitHub Models API — `gpt-4o-mini`      |
 | AI (Fallback) | Google Gemini API — `gemini-2.0-flash` |
-| PDF Extract | `pdfjs-dist` v5.4 |
-| PDF Export | `react-to-print` |
-| Icons | `lucide-react` |
+| PDF Extract   | `pdfjs-dist` v5.4                      |
+| PDF Export    | `react-to-print`                       |
+| Icons         | `lucide-react`                         |
 
 ---
 
@@ -215,25 +218,25 @@ The app intelligently handles API rate limits:
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Type-check & build for production |
-| `npm run preview` | Preview production build locally |
+| Command           | Description                       |
+| ----------------- | --------------------------------- |
+| `npm run dev`     | Start development server          |
+| `npm run build`   | Type-check & build for production |
+| `npm run preview` | Preview production build locally  |
 
 ---
 
 ## Environment Variables Reference
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `VITE_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key for authentication |
-| `VITE_SUPABASE_URL` | Yes | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Yes | Supabase anonymous/public key |
-| `VITE_GITHUB_TOKEN` | Yes* | GitHub PAT for Models API access |
-| `VITE_GITHUB_TOKEN_2` | No | Additional GitHub PAT for rotation |
-| `VITE_GEMINI_API_KEY` | Yes* | Google AI Studio API key (Gemini fallback) |
-| `VITE_GROQ_API_KEY` | No | Groq API key (optional provider) |
+| Variable                     | Required | Description                                |
+| ---------------------------- | -------- | ------------------------------------------ |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Yes      | Clerk publishable key for authentication   |
+| `VITE_SUPABASE_URL`          | Yes      | Supabase project URL                       |
+| `VITE_SUPABASE_ANON_KEY`     | Yes      | Supabase anonymous/public key              |
+| `VITE_GITHUB_TOKEN`          | Yes\*    | GitHub PAT for Models API access           |
+| `VITE_GITHUB_TOKEN_2`        | No       | Additional GitHub PAT for rotation         |
+| `VITE_GEMINI_API_KEY`        | Yes\*    | Google AI Studio API key (Gemini fallback) |
+| `VITE_GROQ_API_KEY`          | No       | Groq API key (optional provider)           |
 
 \* At least one AI provider key is required (GitHub or Gemini).
 

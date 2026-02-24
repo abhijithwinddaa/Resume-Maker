@@ -4,6 +4,7 @@ import { buildResumePrompt } from "./aiPrompt";
 import { buildATSPrompt } from "./atsPrompt";
 import { buildOptimizePrompt } from "./optimizePrompt";
 import { buildResumeParsePrompt } from "./resumeParser";
+import { getCacheKey, getCached, setCache } from "./aiCache";
 
 export interface ATSBreakdownItem {
   score: number;
@@ -256,23 +257,67 @@ async function callGemini(
   return text;
 }
 
+/* ── Exponential Backoff Retry ────────────────────────── */
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 1000,
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+
+      // Don't retry on non-retryable errors
+      const msg = lastError.message;
+      if (
+        msg === "ALL_GITHUB_RATE_LIMITED" ||
+        msg.includes("invalid JSON") ||
+        msg.includes("missing required") ||
+        msg.includes("not set") ||
+        attempt === maxRetries
+      ) {
+        throw lastError;
+      }
+
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = baseDelayMs * Math.pow(2, attempt);
+      console.warn(
+        `Attempt ${attempt + 1} failed, retrying in ${delay}ms...`,
+        msg,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError!;
+}
+
 /* ── Unified AI caller with fallback chain ───────────── */
 
 async function callAI(
   settings: AISettings,
   messages: ChatMessage[],
 ): Promise<string> {
-  try {
-    return await callGitHub(settings, messages);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "";
-    // If all GitHub tokens are rate limited, fall back to Gemini
-    if (msg === "ALL_GITHUB_RATE_LIMITED" && settings.geminiApiKey) {
-      console.warn("All GitHub tokens rate limited — falling back to Gemini");
-      return callGemini(settings, messages);
+  return withRetry(async () => {
+    try {
+      return await callGitHub(settings, messages);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      // If all GitHub tokens are rate limited, fall back to Gemini
+      if (msg === "ALL_GITHUB_RATE_LIMITED" && settings.geminiApiKey) {
+        console.warn(
+          "All GitHub tokens rate limited — falling back to Gemini",
+        );
+        return callGemini(settings, messages);
+      }
+      throw err;
     }
-    throw err;
-  }
+  });
 }
 
 export async function generateAIResume(
@@ -341,6 +386,18 @@ export async function analyzeATSScore(
   resumeData: ResumeData,
   jobDescription: string,
 ): Promise<ATSResult> {
+  // Check cache first
+  const cacheKey = getCacheKey(
+    "ats",
+    JSON.stringify(resumeData),
+    jobDescription,
+  );
+  const cached = getCached<ATSResult>(cacheKey);
+  if (cached) {
+    console.log("ATS score loaded from cache");
+    return cached;
+  }
+
   const prompt = buildATSPrompt(resumeData, jobDescription);
 
   const messages: ChatMessage[] = [
@@ -382,6 +439,9 @@ export async function analyzeATSScore(
     0,
     Math.min(100, Math.round(parsed.overallScore)),
   );
+
+  // Cache the result
+  setCache(cacheKey, parsed);
 
   return parsed;
 }
@@ -587,6 +647,14 @@ export async function parseResumeFromText(
   settings: AISettings,
   resumeText: string,
 ): Promise<ResumeData> {
+  // Check cache first
+  const cacheKey = getCacheKey("parse", resumeText);
+  const cached = getCached<ResumeData>(cacheKey);
+  if (cached) {
+    console.log("Parsed resume loaded from cache");
+    return cached;
+  }
+
   const prompt = buildResumeParsePrompt(resumeText);
   const messages: ChatMessage[] = [
     {
@@ -631,6 +699,9 @@ export async function parseResumeFromText(
     const { DEFAULT_SECTION_ORDER } = await import("../types/resume");
     parsed.sectionOrder = DEFAULT_SECTION_ORDER;
   }
+
+  // Cache the result
+  setCache(cacheKey, parsed);
 
   return parsed;
 }

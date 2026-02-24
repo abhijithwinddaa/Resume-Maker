@@ -898,3 +898,64 @@
 .btn-accent:hover {
   background: #e0f2fe !important;
 }
+
+/* ─── Character Count ────────────────────────────────── */
+
+.char-count {
+  display: block;
+  text-align: right;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
+  font-family: "Inter", sans-serif;
+}
+
+/* ─── Lazy Loading Fallback ──────────────────────────── */
+
+.lazy-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #64748b;
+  font-size: 14px;
+  font-family: "Inter", sans-serif;
+}
+
+/* ─── Backup Restore Button ──────────────────────────── */
+
+.backup-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: "Inter", sans-serif;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+
+.backup-restore-btn:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+/* ─── Cooldown Button State ──────────────────────────── */
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary:disabled:hover,
+.btn-secondary:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
