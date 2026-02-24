@@ -20,6 +20,7 @@ const TemplatePicker: React.FC<TemplatePickerProps> = ({ onClose }) => {
       className="picker-overlay"
       onClick={onClose}
       role="dialog"
+      aria-modal="true"
       aria-label="Template Picker"
     >
       <div className="picker-panel" onClick={(e) => e.stopPropagation()}>

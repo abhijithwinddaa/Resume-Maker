@@ -52,6 +52,7 @@ import { exportToDocx } from "./utils/docxExporter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { EditorSkeleton, PreviewSkeleton } from "./components/Skeleton";
 import ThemeToggle from "./components/ThemeToggle";
+import LanguageSwitcher from "./components/LanguageSwitcher";
 import {
   FileText,
   Upload,
@@ -77,6 +78,7 @@ import {
   Settings,
   FileType,
   Mail,
+  FolderOpen,
 } from "lucide-react";
 import "./App.css";
 
@@ -86,6 +88,7 @@ const ResumeEditor = lazy(() => import("./components/ResumeEditor"));
 const TemplatePicker = lazy(() => import("./components/TemplatePicker"));
 const CoverLetterPanel = lazy(() => import("./components/CoverLetter"));
 const AISettingsPanel = lazy(() => import("./components/AISettings"));
+const ResumeManagerPanel = lazy(() => import("./components/ResumeManager"));
 
 /* ─── Score Visualization Components ─────────────────── */
 
@@ -215,6 +218,7 @@ function App() {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCoverLetter, setShowCoverLetter] = useState(false);
   const [showAISettings, setShowAISettings] = useState(false);
+  const [showResumeManager, setShowResumeManager] = useState(false);
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const resumeRef = useRef<HTMLDivElement>(null);
@@ -580,6 +584,11 @@ function App() {
 
   return (
     <div className="app">
+      {/* Skip Navigation */}
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+
       {/* Header */}
       <header className="app-header" role="banner">
         <div className="header-left">
@@ -614,6 +623,7 @@ function App() {
           )}
 
           <ThemeToggle />
+          <LanguageSwitcher />
 
           <button
             className="header-btn"
@@ -631,6 +641,15 @@ function App() {
             aria-label="AI Settings"
           >
             <Settings size={14} />
+          </button>
+
+          <button
+            className="header-btn"
+            onClick={() => setShowResumeManager(true)}
+            title="My Resumes"
+            aria-label="My Resumes"
+          >
+            <FolderOpen size={14} />
           </button>
 
           <SignedIn>
@@ -697,6 +716,18 @@ function App() {
         </div>
       </header>
 
+      {/* Live region for status announcements */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+        role="status"
+      >
+        {isSaving && "Saving resume..."}
+        {error && `Error: ${error}`}
+        {step === "analyzing" && loadingMessage}
+      </div>
+
       {/* Step Indicator */}
       {step !== "analyzing" && (
         <nav className="step-indicator" aria-label="Progress">
@@ -722,7 +753,7 @@ function App() {
       )}
 
       {/* Main Content */}
-      <main className="app-main" role="main">
+      <main className="app-main" id="main-content" role="main">
         <SignedOut>
           <div className="auth-gate">
             <div className="auth-card">
@@ -753,7 +784,7 @@ function App() {
             <>
               {/* ═══ INPUT STEP ═══ */}
               {step === "input" && (
-                <div className="input-step">
+                <div className="input-step" role="region" aria-label="Resume input">
                   <div className="input-hero">
                     <h2>
                       {resumeData
@@ -955,7 +986,7 @@ function App() {
 
               {/* ═══ SCORE STEP ═══ */}
               {step === "score" && atsResult && resumeData && (
-                <div className="score-step">
+                <div className="score-step" role="region" aria-label="ATS score results">
                   <div className="score-left">
                     <div className="score-header">
                       <ScoreMeter score={atsResult.overallScore} />
@@ -1126,7 +1157,7 @@ function App() {
 
               {/* ═══ EDITOR STEP ═══ */}
               {step === "editor" && resumeData && (
-                <div className="editor-step">
+                <div className="editor-step" role="region" aria-label="Resume editor">
                   <div className="editor-left">
                     <ErrorBoundary>
                       <Suspense fallback={<EditorSkeleton />}>
@@ -1154,6 +1185,7 @@ function App() {
       </main>
 
       {/* Modals/Panels */}
+      {/* Modal panels — rendered outside main for correct focus trap */}
       {showTemplatePicker && (
         <Suspense fallback={null}>
           <TemplatePicker onClose={() => setShowTemplatePicker(false)} />
@@ -1167,6 +1199,11 @@ function App() {
       {showAISettings && (
         <Suspense fallback={null}>
           <AISettingsPanel onClose={() => setShowAISettings(false)} />
+        </Suspense>
+      )}
+      {showResumeManager && (
+        <Suspense fallback={null}>
+          <ResumeManagerPanel onClose={() => setShowResumeManager(false)} />
         </Suspense>
       )}
     </div>

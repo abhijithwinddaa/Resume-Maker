@@ -84,6 +84,7 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
       className="cl-overlay"
       onClick={onClose}
       role="dialog"
+      aria-modal="true"
       aria-label="Cover Letter Generator"
     >
       <div className="cl-panel" onClick={(e) => e.stopPropagation()}>

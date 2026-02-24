@@ -22,6 +22,7 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({ onClose }) => {
       className="ai-settings-overlay"
       onClick={onClose}
       role="dialog"
+      aria-modal="true"
       aria-label="AI Settings"
     >
       <div className="ai-settings-panel" onClick={(e) => e.stopPropagation()}>
@@ -46,6 +47,7 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({ onClose }) => {
             <button
               className={`toggle-btn ${settings.provider === "github" ? "active" : ""}`}
               onClick={() => update({ provider: "github" })}
+              aria-pressed={settings.provider === "github"}
             >
               <Github size={14} />
               GitHub Models
@@ -53,6 +55,7 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({ onClose }) => {
             <button
               className={`toggle-btn ${settings.provider === "groq" ? "active" : ""}`}
               onClick={() => update({ provider: "groq" })}
+              aria-pressed={settings.provider === "groq"}
             >
               <Globe size={14} />
               Groq
@@ -60,6 +63,7 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({ onClose }) => {
             <button
               className={`toggle-btn ${settings.provider === "ollama" ? "active" : ""}`}
               onClick={() => update({ provider: "ollama" })}
+              aria-pressed={settings.provider === "ollama"}
             >
               <Cpu size={14} />
               Ollama

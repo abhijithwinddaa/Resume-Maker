@@ -327,9 +327,12 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
     title,
     section,
   }) => (
-    <div
+    <button
+      type="button"
       className="editor-section-header"
       onClick={() => toggleSection(section)}
+      aria-expanded={expandedSections.has(section)}
+      aria-label={`${title} section`}
     >
       <h3>{title}</h3>
       {expandedSections.has(section) ? (
@@ -337,18 +340,21 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       ) : (
         <ChevronDown size={18} />
       )}
-    </div>
+    </button>
   );
 
   return (
-    <div className="resume-editor">
+    <div className="resume-editor" role="form" aria-label="Resume editor form">
       <h2 className="editor-title">Resume Editor</h2>
 
       {/* Section Order */}
       <div className="editor-section">
-        <div
+        <button
+          type="button"
           className="editor-section-header"
           onClick={() => toggleSection("sectionOrder")}
+          aria-expanded={expandedSections.has("sectionOrder")}
+          aria-label="Section Order"
         >
           <h3>
             <Layers
@@ -362,7 +368,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
           ) : (
             <ChevronDown size={18} />
           )}
-        </div>
+        </button>
         {expandedSections.has("sectionOrder") && (
           <div className="editor-fields">
             <Suspense fallback={<div style={{ padding: 8 }}>Loading...</div>}>

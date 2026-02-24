@@ -1,0 +1,138 @@
+{
+  "app": {
+    "title": "Resume Maker",
+    "saving": "Saving...",
+    "loading": "Loading your saved resume..."
+  },
+  "auth": {
+    "welcome": "Welcome to Resume Maker",
+    "description": "Sign in to analyze, optimize, and manage your resumes with AI.",
+    "signIn": "Sign In to Get Started"
+  },
+  "header": {
+    "startOver": "Start Over",
+    "newJD": "New JD",
+    "loadJSON": "Load JSON",
+    "saveJSON": "Save JSON",
+    "reAnalyze": "Re-Analyze",
+    "coverLetter": "Cover Letter",
+    "docx": "DOCX",
+    "exportPDF": "Export PDF",
+    "undo": "Undo",
+    "redo": "Redo",
+    "templateStyle": "Template & Style",
+    "aiSettings": "AI Settings"
+  },
+  "steps": {
+    "input": "Input",
+    "atsScore": "ATS Score",
+    "editor": "Editor"
+  },
+  "input": {
+    "analyzeTitle": "Analyze & Optimize Your Resume",
+    "analyzeDesc": "Paste your resume and the job description to get an ATS score, keyword analysis, and AI-powered optimization.",
+    "newJDTitle": "Analyze Against a New Job Description",
+    "newJDDesc": "Your saved resume will be used. Just paste the new job description below.",
+    "yourResume": "Your Resume",
+    "uploadPDF": "Upload PDF",
+    "resumePlaceholder": "Paste your full resume text here or upload a PDF...",
+    "jobDescription": "Job Description",
+    "jdPlaceholder": "Paste the job description here...",
+    "analyzeResume": "Analyze Resume",
+    "analyzeNewJD": "Analyze with New JD",
+    "backToEditor": "Back to Editor",
+    "restoreBackup": "Restore Local Backup",
+    "extractingPDF": "Extracting text from PDF...",
+    "wait": "Wait"
+  },
+  "analyzing": {
+    "parsing": "Parsing your resume with AI...",
+    "atsAnalysis": "Running ATS analysis...",
+    "reAnalyzing": "Re-analyzing with ATS...",
+    "newJDAnalysis": "Running ATS analysis against new JD...",
+    "moment": "This may take a moment..."
+  },
+  "score": {
+    "atsScore": "ATS Score",
+    "keywordsFound": "Keywords Found",
+    "missingKeywords": "Missing Keywords",
+    "breakdown": "Breakdown",
+    "keywordMatch": "Keyword Match",
+    "skillsAlignment": "Skills Alignment",
+    "experienceRelevance": "Experience Relevance",
+    "formatting": "Formatting",
+    "impactMetrics": "Impact & Metrics",
+    "suggestions": "Suggestions",
+    "optimize": "Optimize Resume",
+    "reOptimize": "Re-Optimize",
+    "editResume": "Edit Resume",
+    "editManually": "Edit Manually",
+    "improved": "Improved",
+    "stop": "Stop"
+  },
+  "editor": {
+    "title": "Resume Editor",
+    "sectionOrder": "Section Order",
+    "contact": "Contact Information",
+    "summary": "Summary",
+    "education": "Education",
+    "experience": "Experience",
+    "projects": "Projects",
+    "skills": "Skills",
+    "achievements": "Achievements",
+    "certificates": "Certificates",
+    "fullName": "Full Name",
+    "phone": "Phone",
+    "email": "Email",
+    "linkedin": "LinkedIn URL",
+    "github": "GitHub URL",
+    "portfolio": "Portfolio URL",
+    "addEducation": "Add Education",
+    "addExperience": "Add Experience",
+    "addProject": "Add Project",
+    "addSkill": "Add Skill Category",
+    "addAchievement": "Add Achievement",
+    "addCertificate": "Add Certificate"
+  },
+  "coverLetter": {
+    "title": "Generate Cover Letter",
+    "companyName": "Company Name",
+    "position": "Position",
+    "generate": "Generate",
+    "generating": "Generating...",
+    "copy": "Copy",
+    "download": "Download",
+    "close": "Close"
+  },
+  "template": {
+    "title": "Template & Style",
+    "chooseTemplate": "Choose Template",
+    "colorPresets": "Color Presets",
+    "customColors": "Custom Colors",
+    "primaryColor": "Primary",
+    "secondaryColor": "Secondary",
+    "font": "Font",
+    "fontSize": "Font Size",
+    "spacing": "Spacing",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "compact": "Compact",
+    "normal": "Normal",
+    "relaxed": "Relaxed"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "add": "Add",
+    "edit": "Edit",
+    "remove": "Remove"
+  }
+}

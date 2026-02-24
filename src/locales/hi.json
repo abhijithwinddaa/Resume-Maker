@@ -1,0 +1,138 @@
+{
+  "app": {
+    "title": "रिज़्यूमे मेकर",
+    "saving": "सहेज रहे हैं...",
+    "loading": "आपका सहेजा गया रिज़्यूमे लोड हो रहा है..."
+  },
+  "auth": {
+    "welcome": "रिज़्यूमे मेकर में आपका स्वागत है",
+    "description": "AI के साथ अपने रिज़्यूमे का विश्लेषण, अनुकूलन और प्रबंधन करने के लिए साइन इन करें।",
+    "signIn": "शुरू करने के लिए साइन इन करें"
+  },
+  "header": {
+    "startOver": "शुरू से करें",
+    "newJD": "नई JD",
+    "loadJSON": "JSON लोड करें",
+    "saveJSON": "JSON सहेजें",
+    "reAnalyze": "पुनः विश्लेषण",
+    "coverLetter": "कवर लेटर",
+    "docx": "DOCX",
+    "exportPDF": "PDF निर्यात",
+    "undo": "पूर्ववत",
+    "redo": "पुनः करें",
+    "templateStyle": "टेम्पलेट और शैली",
+    "aiSettings": "AI सेटिंग्स"
+  },
+  "steps": {
+    "input": "इनपुट",
+    "atsScore": "ATS स्कोर",
+    "editor": "एडिटर"
+  },
+  "input": {
+    "analyzeTitle": "अपने रिज़्यूमे का विश्लेषण और अनुकूलन करें",
+    "analyzeDesc": "ATS स्कोर, कीवर्ड विश्लेषण और AI-संचालित अनुकूलन प्राप्त करने के लिए अपना रिज़्यूमे और जॉब विवरण पेस्ट करें।",
+    "newJDTitle": "नए जॉब विवरण के खिलाफ विश्लेषण करें",
+    "newJDDesc": "आपका सहेजा गया रिज़्यूमे उपयोग किया जाएगा। बस नीचे नया जॉब विवरण पेस्ट करें।",
+    "yourResume": "आपका रिज़्यूमे",
+    "uploadPDF": "PDF अपलोड करें",
+    "resumePlaceholder": "अपने रिज़्यूमे का पूरा टेक्स्ट यहाँ पेस्ट करें या PDF अपलोड करें...",
+    "jobDescription": "जॉब विवरण",
+    "jdPlaceholder": "जॉब विवरण यहाँ पेस्ट करें...",
+    "analyzeResume": "रिज़्यूमे का विश्लेषण करें",
+    "analyzeNewJD": "नई JD के साथ विश्लेषण करें",
+    "backToEditor": "एडिटर पर वापस जाएं",
+    "restoreBackup": "स्थानीय बैकअप पुनर्स्थापित करें",
+    "extractingPDF": "PDF से टेक्स्ट निकाल रहे हैं...",
+    "wait": "प्रतीक्षा करें"
+  },
+  "analyzing": {
+    "parsing": "AI के साथ आपके रिज़्यूमे का विश्लेषण हो रहा है...",
+    "atsAnalysis": "ATS विश्लेषण चल रहा है...",
+    "reAnalyzing": "ATS के साथ पुनः विश्लेषण हो रहा है...",
+    "newJDAnalysis": "नई JD के खिलाफ ATS विश्लेषण चल रहा है...",
+    "moment": "इसमें कुछ समय लग सकता है..."
+  },
+  "score": {
+    "atsScore": "ATS स्कोर",
+    "keywordsFound": "मिले कीवर्ड",
+    "missingKeywords": "गायब कीवर्ड",
+    "breakdown": "विभाजन",
+    "keywordMatch": "कीवर्ड मिलान",
+    "skillsAlignment": "कौशल संरेखण",
+    "experienceRelevance": "अनुभव प्रासंगिकता",
+    "formatting": "फ़ॉर्मेटिंग",
+    "impactMetrics": "प्रभाव और मेट्रिक्स",
+    "suggestions": "सुझाव",
+    "optimize": "रिज़्यूमे अनुकूलित करें",
+    "reOptimize": "पुनः अनुकूलित करें",
+    "editResume": "रिज़्यूमे संपादित करें",
+    "editManually": "मैन्युअल रूप से संपादित करें",
+    "improved": "सुधार हुआ",
+    "stop": "रुकें"
+  },
+  "editor": {
+    "title": "रिज़्यूमे एडिटर",
+    "sectionOrder": "अनुभाग क्रम",
+    "contact": "संपर्क जानकारी",
+    "summary": "सारांश",
+    "education": "शिक्षा",
+    "experience": "अनुभव",
+    "projects": "प्रोजेक्ट्स",
+    "skills": "कौशल",
+    "achievements": "उपलब्धियाँ",
+    "certificates": "प्रमाणपत्र",
+    "fullName": "पूरा नाम",
+    "phone": "फ़ोन",
+    "email": "ईमेल",
+    "linkedin": "LinkedIn URL",
+    "github": "GitHub URL",
+    "portfolio": "पोर्टफोलियो URL",
+    "addEducation": "शिक्षा जोड़ें",
+    "addExperience": "अनुभव जोड़ें",
+    "addProject": "प्रोजेक्ट जोड़ें",
+    "addSkill": "कौशल श्रेणी जोड़ें",
+    "addAchievement": "उपलब्धि जोड़ें",
+    "addCertificate": "प्रमाणपत्र जोड़ें"
+  },
+  "coverLetter": {
+    "title": "कवर लेटर जनरेट करें",
+    "companyName": "कंपनी का नाम",
+    "position": "पद",
+    "generate": "जनरेट करें",
+    "generating": "जनरेट हो रहा है...",
+    "copy": "कॉपी करें",
+    "download": "डाउनलोड करें",
+    "close": "बंद करें"
+  },
+  "template": {
+    "title": "टेम्पलेट और शैली",
+    "chooseTemplate": "टेम्पलेट चुनें",
+    "colorPresets": "रंग प्रीसेट",
+    "customColors": "कस्टम रंग",
+    "primaryColor": "प्राथमिक",
+    "secondaryColor": "द्वितीयक",
+    "font": "फ़ॉन्ट",
+    "fontSize": "फ़ॉन्ट आकार",
+    "spacing": "स्पेसिंग",
+    "small": "छोटा",
+    "medium": "मध्यम",
+    "large": "बड़ा",
+    "compact": "संकुचित",
+    "normal": "सामान्य",
+    "relaxed": "खुला"
+  },
+  "theme": {
+    "light": "लाइट",
+    "dark": "डार्क",
+    "system": "सिस्टम"
+  },
+  "common": {
+    "close": "बंद करें",
+    "cancel": "रद्द करें",
+    "save": "सहेजें",
+    "delete": "हटाएं",
+    "add": "जोड़ें",
+    "edit": "संपादित करें",
+    "remove": "हटाएं"
+  }
+}

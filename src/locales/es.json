@@ -1,0 +1,138 @@
+{
+  "app": {
+    "title": "Creador de Currículum",
+    "saving": "Guardando...",
+    "loading": "Cargando tu currículum guardado..."
+  },
+  "auth": {
+    "welcome": "Bienvenido a Creador de Currículum",
+    "description": "Inicia sesión para analizar, optimizar y gestionar tus currículums con IA.",
+    "signIn": "Iniciar Sesión"
+  },
+  "header": {
+    "startOver": "Empezar de Nuevo",
+    "newJD": "Nueva Oferta",
+    "loadJSON": "Cargar JSON",
+    "saveJSON": "Guardar JSON",
+    "reAnalyze": "Re-analizar",
+    "coverLetter": "Carta de Presentación",
+    "docx": "DOCX",
+    "exportPDF": "Exportar PDF",
+    "undo": "Deshacer",
+    "redo": "Rehacer",
+    "templateStyle": "Plantilla y Estilo",
+    "aiSettings": "Configuración IA"
+  },
+  "steps": {
+    "input": "Entrada",
+    "atsScore": "Puntuación ATS",
+    "editor": "Editor"
+  },
+  "input": {
+    "analyzeTitle": "Analiza y Optimiza tu Currículum",
+    "analyzeDesc": "Pega tu currículum y la descripción del puesto para obtener una puntuación ATS, análisis de palabras clave y optimización con IA.",
+    "newJDTitle": "Analizar con Nueva Descripción de Puesto",
+    "newJDDesc": "Se usará tu currículum guardado. Solo pega la nueva descripción del puesto abajo.",
+    "yourResume": "Tu Currículum",
+    "uploadPDF": "Subir PDF",
+    "resumePlaceholder": "Pega el texto completo de tu currículum aquí o sube un PDF...",
+    "jobDescription": "Descripción del Puesto",
+    "jdPlaceholder": "Pega la descripción del puesto aquí...",
+    "analyzeResume": "Analizar Currículum",
+    "analyzeNewJD": "Analizar con Nueva Oferta",
+    "backToEditor": "Volver al Editor",
+    "restoreBackup": "Restaurar Copia Local",
+    "extractingPDF": "Extrayendo texto del PDF...",
+    "wait": "Espera"
+  },
+  "analyzing": {
+    "parsing": "Analizando tu currículum con IA...",
+    "atsAnalysis": "Ejecutando análisis ATS...",
+    "reAnalyzing": "Re-analizando con ATS...",
+    "newJDAnalysis": "Analizando contra nueva descripción...",
+    "moment": "Esto puede tardar un momento..."
+  },
+  "score": {
+    "atsScore": "Puntuación ATS",
+    "keywordsFound": "Palabras Clave Encontradas",
+    "missingKeywords": "Palabras Clave Faltantes",
+    "breakdown": "Desglose",
+    "keywordMatch": "Coincidencia de Palabras Clave",
+    "skillsAlignment": "Alineación de Habilidades",
+    "experienceRelevance": "Relevancia de Experiencia",
+    "formatting": "Formato",
+    "impactMetrics": "Impacto y Métricas",
+    "suggestions": "Sugerencias",
+    "optimize": "Optimizar Currículum",
+    "reOptimize": "Re-optimizar",
+    "editResume": "Editar Currículum",
+    "editManually": "Editar Manualmente",
+    "improved": "Mejorado",
+    "stop": "Detener"
+  },
+  "editor": {
+    "title": "Editor de Currículum",
+    "sectionOrder": "Orden de Secciones",
+    "contact": "Información de Contacto",
+    "summary": "Resumen",
+    "education": "Educación",
+    "experience": "Experiencia",
+    "projects": "Proyectos",
+    "skills": "Habilidades",
+    "achievements": "Logros",
+    "certificates": "Certificados",
+    "fullName": "Nombre Completo",
+    "phone": "Teléfono",
+    "email": "Correo Electrónico",
+    "linkedin": "URL de LinkedIn",
+    "github": "URL de GitHub",
+    "portfolio": "URL de Portafolio",
+    "addEducation": "Agregar Educación",
+    "addExperience": "Agregar Experiencia",
+    "addProject": "Agregar Proyecto",
+    "addSkill": "Agregar Categoría de Habilidad",
+    "addAchievement": "Agregar Logro",
+    "addCertificate": "Agregar Certificado"
+  },
+  "coverLetter": {
+    "title": "Generar Carta de Presentación",
+    "companyName": "Nombre de la Empresa",
+    "position": "Puesto",
+    "generate": "Generar",
+    "generating": "Generando...",
+    "copy": "Copiar",
+    "download": "Descargar",
+    "close": "Cerrar"
+  },
+  "template": {
+    "title": "Plantilla y Estilo",
+    "chooseTemplate": "Elegir Plantilla",
+    "colorPresets": "Colores Predefinidos",
+    "customColors": "Colores Personalizados",
+    "primaryColor": "Primario",
+    "secondaryColor": "Secundario",
+    "font": "Fuente",
+    "fontSize": "Tamaño de Fuente",
+    "spacing": "Espaciado",
+    "small": "Pequeño",
+    "medium": "Mediano",
+    "large": "Grande",
+    "compact": "Compacto",
+    "normal": "Normal",
+    "relaxed": "Relajado"
+  },
+  "theme": {
+    "light": "Claro",
+    "dark": "Oscuro",
+    "system": "Sistema"
+  },
+  "common": {
+    "close": "Cerrar",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "add": "Agregar",
+    "edit": "Editar",
+    "remove": "Eliminar"
+  }
+}
