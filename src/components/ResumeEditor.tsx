@@ -313,6 +313,18 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
     onChange({ ...data, sectionOrder: newOrder });
   };
 
+  const handleSectionLabelChange = (key: SectionKey, label: string) => {
+    onChange({
+      ...data,
+      sectionLabels: { ...data.sectionLabels, [key]: label },
+    });
+  };
+
+  const handleSectionDelete = (key: SectionKey) => {
+    const newOrder = sectionOrder.filter((k) => k !== key);
+    onChange({ ...data, sectionOrder: newOrder });
+  };
+
   const sectionLabels: Record<SectionKey, string> = {
     summary: "Summary",
     education: "Education",
@@ -375,6 +387,9 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
               <DnDSectionOrder
                 sectionOrder={sectionOrder}
                 onChange={handleSectionOrderChange}
+                sectionLabels={data.sectionLabels}
+                onLabelChange={handleSectionLabelChange}
+                onDelete={handleSectionDelete}
               />
             </Suspense>
           </div>

@@ -66,6 +66,16 @@ export const DEFAULT_SECTION_ORDER: SectionKey[] = [
   "certificates",
 ];
 
+export const DEFAULT_SECTION_LABELS: Record<SectionKey, string> = {
+  summary: "Summary",
+  education: "Education",
+  experience: "Experience",
+  projects: "Projects",
+  skills: "Skills",
+  achievements: "Achievements",
+  certificates: "Certificates",
+};
+
 export interface ResumeData {
   contact: ContactInfo;
   summary: string;
@@ -78,6 +88,7 @@ export interface ResumeData {
   certificates: Certificate[];
   showCertificates: boolean;
   sectionOrder: SectionKey[];
+  sectionLabels?: Partial<Record<SectionKey, string>>;
 }
 
 export interface JDAnalysis {

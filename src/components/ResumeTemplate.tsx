@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import type { ResumeData, SectionKey } from "../types/resume";
+import { DEFAULT_SECTION_LABELS } from "../types/resume";
 import { useAppStore } from "../store/appStore";
 import "./ResumeTemplate.css";
 
@@ -71,12 +72,17 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
             "certificates",
           ];
 
+    const getSectionTitle = (key: SectionKey): string => {
+      const label = data.sectionLabels?.[key] || DEFAULT_SECTION_LABELS[key];
+      return label.toUpperCase();
+    };
+
     const renderSection = (key: SectionKey) => {
       switch (key) {
         case "summary":
           return (
             <section key="summary" className="resume-section">
-              <h2 className="section-title">SUMMARY</h2>
+              <h2 className="section-title">{getSectionTitle("summary")}</h2>
               <div className="section-divider"></div>
               <p className="summary-text">{highlightText(data.summary)}</p>
             </section>
@@ -85,7 +91,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
         case "education":
           return (
             <section key="education" className="resume-section">
-              <h2 className="section-title">EDUCATION</h2>
+              <h2 className="section-title">{getSectionTitle("education")}</h2>
               <div className="section-divider"></div>
               {data.education.map((edu, i) => (
                 <div key={i} className="education-item">
@@ -113,7 +119,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
             return null;
           return (
             <section key="experience" className="resume-section">
-              <h2 className="section-title">EXPERIENCE</h2>
+              <h2 className="section-title">{getSectionTitle("experience")}</h2>
               <div className="section-divider"></div>
               {data.experience.map((exp, i) => (
                 <div key={i} className="experience-item">
@@ -141,7 +147,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
         case "projects":
           return (
             <section key="projects" className="resume-section">
-              <h2 className="section-title">PROJECTS</h2>
+              <h2 className="section-title">{getSectionTitle("projects")}</h2>
               <div className="section-divider"></div>
               {data.projects.map((project, i) => (
                 <div key={i} className="project-item">
@@ -179,7 +185,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
         case "skills":
           return (
             <section key="skills" className="resume-section">
-              <h2 className="section-title">SKILLS</h2>
+              <h2 className="section-title">{getSectionTitle("skills")}</h2>
               <div className="section-divider"></div>
               <ul className="skills-list">
                 {data.skills.map((skill, i) => (
@@ -196,7 +202,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
           if (!data.achievements || data.achievements.length === 0) return null;
           return (
             <section key="achievements" className="resume-section">
-              <h2 className="section-title">ACHIEVEMENTS</h2>
+              <h2 className="section-title">
+                {getSectionTitle("achievements")}
+              </h2>
               <div className="section-divider"></div>
               <ul className="achievements-list">
                 {data.achievements.map((ach, i) => (
@@ -230,7 +238,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
             return null;
           return (
             <section key="certificates" className="resume-section">
-              <h2 className="section-title">CERTIFICATES</h2>
+              <h2 className="section-title">
+                {getSectionTitle("certificates")}
+              </h2>
               <div className="section-divider"></div>
               <ul className="certificates-list">
                 {data.certificates.map((cert, i) => (
