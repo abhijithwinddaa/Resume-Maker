@@ -65,7 +65,7 @@
 .section-title {
   font-size: 10pt;
   font-weight: 700;
-  color: var(--resume-secondary);
+  color: var(--resume-primary);
   margin: 0;
   padding-bottom: 1px;
   text-transform: uppercase;
@@ -74,7 +74,7 @@
 
 .section-divider {
   height: 1.5px;
-  background: linear-gradient(to right, var(--resume-primary), #85c1e9);
+  background: var(--resume-primary);
   margin-bottom: 2px;
 }
 
@@ -131,7 +131,7 @@
 }
 
 .project-links a {
-  color: #2563eb;
+  color: var(--resume-primary);
   text-decoration: none;
   font-size: 9pt;
 }
@@ -191,7 +191,7 @@
 }
 
 .github-badge {
-  color: #2563eb;
+  color: var(--resume-primary);
   text-decoration: none;
   font-size: 8.8pt;
   font-weight: 500;
@@ -228,7 +228,7 @@
 }
 
 .cert-link {
-  color: #2563eb;
+  color: var(--resume-primary);
   text-decoration: none;
   font-size: 8.8pt;
 }
@@ -403,13 +403,13 @@
   }
 
   .github-badge {
-    color: #2563eb !important;
+    color: var(--resume-primary) !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
   .cert-link {
-    color: #2563eb !important;
+    color: var(--resume-primary) !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
