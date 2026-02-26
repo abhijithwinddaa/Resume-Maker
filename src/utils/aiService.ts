@@ -3,6 +3,8 @@ import type { ResumeData } from "../types/resume";
 import { buildResumePrompt } from "./aiPrompt";
 import { buildATSPrompt } from "./atsPrompt";
 import { buildOptimizePrompt } from "./optimizePrompt";
+import { buildSelfATSPrompt } from "./selfATSPrompt";
+import { buildSelfOptimizePrompt } from "./selfOptimizePrompt";
 import { buildResumeParsePrompt } from "./resumeParser";
 import { getCacheKey, getCached, setCache } from "./aiCache";
 
@@ -537,6 +539,66 @@ export async function analyzeATSScore(
   return parsed;
 }
 
+// ─── Self ATS Score (No JD) ─────────────────────────────
+
+export async function selfATSScore(
+  settings: AISettings,
+  resumeData: ResumeData,
+): Promise<ATSResult> {
+  // Check cache first
+  const cacheKey = getCacheKey("self-ats", JSON.stringify(resumeData));
+  const cached = getCached<ATSResult>(cacheKey);
+  if (cached) {
+    console.log("Self ATS score loaded from cache");
+    return cached;
+  }
+
+  const prompt = buildSelfATSPrompt(resumeData);
+
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You are an expert ATS resume auditor. You output ONLY valid JSON. No markdown, no explanation, no code fences.",
+    },
+    {
+      role: "user",
+      content: prompt,
+    },
+  ];
+
+  const rawResponse = await callAI(settings, messages);
+  const jsonStr = extractJSON(rawResponse);
+
+  let parsed: ATSResult;
+  try {
+    parsed = JSON.parse(jsonStr) as ATSResult;
+  } catch {
+    throw new Error(
+      `AI returned invalid JSON for self ATS analysis. Try again.\n\nRaw response preview: ${rawResponse.substring(0, 300)}...`,
+    );
+  }
+
+  if (
+    typeof parsed.overallScore !== "number" ||
+    !parsed.breakdown ||
+    !parsed.topSuggestions
+  ) {
+    throw new Error("AI response is missing required ATS fields. Try again.");
+  }
+
+  // Clamp score to 0-100
+  parsed.overallScore = Math.max(
+    0,
+    Math.min(100, Math.round(parsed.overallScore)),
+  );
+
+  // Cache the result
+  setCache(cacheKey, parsed);
+
+  return parsed;
+}
+
 // ─── Auto-Optimize Loop ─────────────────────────────────
 
 export interface OptimizeIteration {
@@ -674,6 +736,173 @@ export async function optimizeResumeLoop(
         role: "system",
         content:
           "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. You must incorporate ALL missing keywords and skills from the ATS report.",
+      },
+      { role: "user", content: optimizePrompt },
+    ];
+
+    let rawResponse: string;
+    try {
+      rawResponse = await callAI(settings, messages);
+    } catch (err) {
+      const progress: OptimizeProgress = {
+        currentIteration: i,
+        maxIterations,
+        phase: "error",
+        message: `AI rewrite failed on iteration ${i}.`,
+        history,
+        finalResume: bestResume,
+        finalScore: bestScore,
+        error: err instanceof Error ? err.message : "AI rewrite failed",
+      };
+      onProgress(progress);
+      return progress;
+    }
+
+    const jsonStr = extractJSON(rawResponse);
+
+    let parsed: ResumeData;
+    try {
+      parsed = JSON.parse(jsonStr) as ResumeData;
+    } catch {
+      // If parse fails, skip this iteration and use previous best
+      continue;
+    }
+
+    // Preserve immutable fields
+    parsed.contact = resumeData.contact;
+    parsed.education = resumeData.education;
+    parsed.certificates = resumeData.certificates;
+    parsed.showCertificates = resumeData.showCertificates;
+    parsed.sectionOrder = resumeData.sectionOrder;
+    if (!parsed.experience) parsed.experience = resumeData.experience;
+    parsed.showExperience = resumeData.showExperience;
+
+    currentResume = parsed;
+  }
+
+  // Exhausted all iterations — return best result
+  const progress: OptimizeProgress = {
+    currentIteration: maxIterations,
+    maxIterations,
+    phase: "done",
+    message: `Completed ${maxIterations} iterations. Best score: ${bestScore}/100.`,
+    history,
+    finalResume: bestResume,
+    finalScore: bestScore,
+  };
+  onProgress(progress);
+  return progress;
+}
+
+// ─── Self-Optimize Loop (No JD) ─────────────────────────
+
+export async function selfOptimizeLoop(
+  settings: AISettings,
+  resumeData: ResumeData,
+  targetScore: number,
+  maxIterations: number,
+  onProgress: (progress: OptimizeProgress) => void,
+  abortSignal?: AbortSignal,
+): Promise<OptimizeProgress> {
+  const history: OptimizeIteration[] = [];
+  let currentResume = { ...resumeData };
+  let bestScore = 0;
+  let bestResume = currentResume;
+
+  for (let i = 1; i <= maxIterations; i++) {
+    // Check abort
+    if (abortSignal?.aborted) {
+      const progress: OptimizeProgress = {
+        currentIteration: i,
+        maxIterations,
+        phase: "error",
+        message: "Optimization cancelled by user.",
+        history,
+        finalResume: bestResume,
+        finalScore: bestScore,
+        error: "Cancelled",
+      };
+      onProgress(progress);
+      return progress;
+    }
+
+    // Phase 1: Self ATS Scan
+    onProgress({
+      currentIteration: i,
+      maxIterations,
+      phase: "scanning",
+      message: `Iteration ${i}/${maxIterations}: Self-scoring resume...`,
+      history,
+      finalResume: null,
+      finalScore: bestScore,
+    });
+
+    let atsResult: ATSResult;
+    try {
+      atsResult = await selfATSScore(settings, currentResume);
+    } catch (err) {
+      const progress: OptimizeProgress = {
+        currentIteration: i,
+        maxIterations,
+        phase: "error",
+        message: `Self ATS scan failed on iteration ${i}.`,
+        history,
+        finalResume: bestResume,
+        finalScore: bestScore,
+        error: err instanceof Error ? err.message : "Self ATS scan failed",
+      };
+      onProgress(progress);
+      return progress;
+    }
+
+    // Track best
+    if (atsResult.overallScore > bestScore) {
+      bestScore = atsResult.overallScore;
+      bestResume = currentResume;
+    }
+
+    history.push({
+      iteration: i,
+      atsResult,
+      resumeData: currentResume,
+      phase: "done",
+    });
+
+    // Check if target reached
+    if (atsResult.overallScore >= targetScore) {
+      const progress: OptimizeProgress = {
+        currentIteration: i,
+        maxIterations,
+        phase: "target-reached",
+        message: `Target reached! Score: ${atsResult.overallScore}/100 after ${i} iteration(s).`,
+        history,
+        finalResume: currentResume,
+        finalScore: atsResult.overallScore,
+      };
+      onProgress(progress);
+      return progress;
+    }
+
+    // Phase 2: Self-optimize rewrite
+    if (abortSignal?.aborted) break;
+
+    onProgress({
+      currentIteration: i,
+      maxIterations,
+      phase: "rewriting",
+      message: `Iteration ${i}/${maxIterations}: Score ${atsResult.overallScore}/100 — AI is improving resume...`,
+      history,
+      finalResume: null,
+      finalScore: bestScore,
+    });
+
+    const optimizePrompt = buildSelfOptimizePrompt(currentResume, atsResult, i);
+
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content:
+          "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. You must improve the resume based on general best practices.",
       },
       { role: "user", content: optimizePrompt },
     ];

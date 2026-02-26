@@ -195,6 +195,20 @@
   color: var(--text-primary);
 }
 
+.optional-tag {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+
+.self-score-tag {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
 /* Resume input label row with upload button */
 
 .input-label-row {

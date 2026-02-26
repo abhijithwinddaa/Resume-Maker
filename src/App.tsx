@@ -21,6 +21,8 @@ import {
   parseResumeFromText,
   analyzeATSScore,
   optimizeResumeLoop,
+  selfATSScore,
+  selfOptimizeLoop,
 } from "./utils/aiService";
 import { detectTemplateStyle } from "./utils/templateDetector";
 import { extractTextFromPDF } from "./utils/pdfExtractorWorker";
@@ -376,6 +378,129 @@ function App() {
     setOriginalPdfUrl(null);
   }, [setResumeText, setUploadedFileName, setDetectedStyle, setOriginalPdfUrl]);
 
+  /* ── Quick Edit (no JD required) ─────────────────────── */
+
+  const handleQuickEdit = async () => {
+    if (!resumeText.trim()) return;
+
+    const resumeValidation = validateResumeText(resumeText);
+    if (!resumeValidation.valid) {
+      setError(resumeValidation.error || "Invalid resume text.");
+      return;
+    }
+
+    if (isRateLimited("analyze", 30000)) {
+      const remaining = getRateLimitRemaining("analyze", 30000);
+      setError(
+        `Please wait ${formatCooldown(remaining)} before analyzing again.`,
+      );
+      return;
+    }
+
+    setStep("analyzing");
+    setError(null);
+    setLoadingMessage("Parsing your resume with AI...");
+    recordAction("analyze");
+
+    const controller = getRequestController("quick-edit");
+
+    try {
+      if (controller.signal.aborted) return;
+      const parsed = await parseResumeFromText(
+        aiSettings,
+        sanitizeText(resumeText),
+      );
+      if (controller.signal.aborted) return;
+      handleResumeChange(parsed);
+      setStep("editor");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Parsing failed");
+      setStep("input");
+    } finally {
+      clearRequestController("quick-edit");
+    }
+  };
+
+  /* ── Self ATS Score (no JD) ─────────────────────────── */
+
+  const handleSelfScore = async () => {
+    if (!resumeData) return;
+
+    if (isRateLimited("analyze", 30000)) {
+      const remaining = getRateLimitRemaining("analyze", 30000);
+      setError(
+        `Please wait ${formatCooldown(remaining)} before scoring again.`,
+      );
+      return;
+    }
+
+    setStep("analyzing");
+    setError(null);
+    setLoadingMessage("Running self ATS analysis...");
+    recordAction("analyze");
+
+    try {
+      const ats = await selfATSScore(aiSettings, resumeData);
+      setATSResult(ats);
+      setOptimizeDone(false);
+      setPreviousScore(null);
+      setStep("score");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Self scoring failed");
+      setStep("editor");
+    }
+  };
+
+  /* ── Self Optimize (no JD) ──────────────────────────── */
+
+  const handleSelfOptimize = async () => {
+    if (!resumeData || !atsResult) return;
+
+    if (isRateLimited("optimize", 30000)) {
+      const remaining = getRateLimitRemaining("optimize", 30000);
+      setError(
+        `Please wait ${formatCooldown(remaining)} before optimizing again.`,
+      );
+      return;
+    }
+
+    setIsOptimizing(true);
+    setOptimizeDone(false);
+    setPreviousScore(atsResult.overallScore);
+    setError(null);
+    recordAction("optimize");
+
+    const controller = getRequestController("self-optimize");
+    abortRef.current = controller;
+
+    try {
+      const result = await selfOptimizeLoop(
+        aiSettings,
+        resumeData,
+        90,
+        5,
+        (p) => setOptimizeProgress({ ...p }),
+        controller.signal,
+      );
+
+      if (controller.signal.aborted) return;
+      if (result.finalResume) {
+        handleResumeChange(result.finalResume);
+        const newAts = await selfATSScore(aiSettings, result.finalResume);
+        setATSResult(newAts);
+      }
+      setOptimizeDone(true);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Optimization failed");
+    } finally {
+      setIsOptimizing(false);
+      abortRef.current = null;
+      clearRequestController("self-optimize");
+    }
+  };
+
   /* ── Step 1 → Analyzing ─────────────────────────────── */
 
   const handleAnalyze = async () => {
@@ -502,12 +627,18 @@ function App() {
     if (!resumeData) return;
     setStep("analyzing");
     setError(null);
-    setLoadingMessage("Re-analyzing with ATS...");
+    setLoadingMessage(
+      jdText.trim()
+        ? "Re-analyzing with ATS..."
+        : "Running self ATS analysis...",
+    );
     setOptimizeDone(false);
     setPreviousScore(null);
 
     try {
-      const ats = await analyzeATSScore(aiSettings, resumeData, jdText);
+      const ats = jdText.trim()
+        ? await analyzeATSScore(aiSettings, resumeData, jdText)
+        : await selfATSScore(aiSettings, resumeData);
       setATSResult(ats);
       setStep("score");
     } catch (err) {
@@ -733,6 +864,14 @@ function App() {
                     <Save size={14} />
                     <span>Save JSON</span>
                   </button>
+                  <button
+                    className="header-btn"
+                    onClick={handleSelfScore}
+                    title="Score resume on general best practices (no JD needed)"
+                  >
+                    <Trophy size={14} />
+                    <span>Self Score</span>
+                  </button>
                   <button className="header-btn" onClick={handleReAnalyze}>
                     <Search size={14} />
                     <span>Re-Analyze</span>
@@ -848,8 +987,8 @@ function App() {
                     </h2>
                     <p>
                       {resumeData
-                        ? "Your saved resume will be used. Just paste the new job description below."
-                        : "Paste your resume and the job description to get an ATS score, keyword analysis, and AI-powered optimization."}
+                        ? "Your saved resume will be used. Paste a job description for targeted analysis, or go back to the editor."
+                        : "Paste your resume to get started. Add a job description for targeted ATS scoring, or skip it for a general self-assessment."}
                     </p>
                   </div>
                   <div
@@ -921,15 +1060,16 @@ function App() {
                     <div className="input-card">
                       <label className="input-label">
                         <Target size={16} />
-                        Job Description
+                        Job Description{" "}
+                        <span className="optional-tag">(Optional)</span>
                       </label>
                       <textarea
                         className="input-textarea"
-                        placeholder="Paste the job description here..."
+                        placeholder="Paste the job description here for targeted ATS scoring, or leave empty for a general self-assessment..."
                         value={jdText}
                         maxLength={LIMITS.MAX_JD_LENGTH}
                         onChange={(e) => setJdText(e.target.value)}
-                        aria-label="Job description"
+                        aria-label="Job description (optional)"
                       />
                       <small className="char-count">
                         {jdText.length.toLocaleString()} /{" "}
@@ -945,28 +1085,49 @@ function App() {
                   )}
                   {resumeData ? (
                     <div className="input-actions-row">
-                      <button
-                        className="analyze-btn"
-                        onClick={handleAnalyzeExisting}
-                        disabled={
-                          !jdText.trim() || isRateLimited("analyze", 30000)
-                        }
-                      >
-                        {isRateLimited("analyze", 30000) ? (
-                          <>
-                            <Clock size={18} />
-                            Wait{" "}
-                            {formatCooldown(
-                              getRateLimitRemaining("analyze", 30000),
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <Search size={18} />
-                            Analyze with New JD
-                          </>
-                        )}
-                      </button>
+                      {jdText.trim() ? (
+                        <button
+                          className="analyze-btn"
+                          onClick={handleAnalyzeExisting}
+                          disabled={isRateLimited("analyze", 30000)}
+                        >
+                          {isRateLimited("analyze", 30000) ? (
+                            <>
+                              <Clock size={18} />
+                              Wait{" "}
+                              {formatCooldown(
+                                getRateLimitRemaining("analyze", 30000),
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <Search size={18} />
+                              Analyze with JD
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          className="analyze-btn"
+                          onClick={handleSelfScore}
+                          disabled={isRateLimited("analyze", 30000)}
+                        >
+                          {isRateLimited("analyze", 30000) ? (
+                            <>
+                              <Clock size={18} />
+                              Wait{" "}
+                              {formatCooldown(
+                                getRateLimitRemaining("analyze", 30000),
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <Target size={18} />
+                              Self Score
+                            </>
+                          )}
+                        </button>
+                      )}
                       <button
                         className="btn-secondary"
                         onClick={() => setStep("editor")}
@@ -975,31 +1136,56 @@ function App() {
                       </button>
                     </div>
                   ) : (
-                    <>
-                      <button
-                        className="analyze-btn"
-                        onClick={handleAnalyze}
-                        disabled={
-                          !resumeText.trim() ||
-                          !jdText.trim() ||
-                          isRateLimited("analyze", 30000)
-                        }
-                      >
-                        {isRateLimited("analyze", 30000) ? (
-                          <>
-                            <Clock size={18} />
-                            Wait{" "}
-                            {formatCooldown(
-                              getRateLimitRemaining("analyze", 30000),
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <Search size={18} />
-                            Analyze Resume
-                          </>
-                        )}
-                      </button>
+                    <div className="input-actions-row">
+                      {jdText.trim() ? (
+                        <button
+                          className="analyze-btn"
+                          onClick={handleAnalyze}
+                          disabled={
+                            !resumeText.trim() ||
+                            isRateLimited("analyze", 30000)
+                          }
+                        >
+                          {isRateLimited("analyze", 30000) ? (
+                            <>
+                              <Clock size={18} />
+                              Wait{" "}
+                              {formatCooldown(
+                                getRateLimitRemaining("analyze", 30000),
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <Search size={18} />
+                              Analyze Resume
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          className="analyze-btn"
+                          onClick={handleQuickEdit}
+                          disabled={
+                            !resumeText.trim() ||
+                            isRateLimited("analyze", 30000)
+                          }
+                        >
+                          {isRateLimited("analyze", 30000) ? (
+                            <>
+                              <Clock size={18} />
+                              Wait{" "}
+                              {formatCooldown(
+                                getRateLimitRemaining("analyze", 30000),
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <Edit3 size={18} />
+                              Quick Edit
+                            </>
+                          )}
+                        </button>
+                      )}
                       {!resumeData && hasBackup && (
                         <button
                           className="btn-secondary backup-restore-btn"
@@ -1021,7 +1207,7 @@ function App() {
                           </small>
                         </button>
                       )}
-                    </>
+                    </div>
                   )}
                 </div>
               )}
@@ -1050,7 +1236,14 @@ function App() {
                     <div className="score-header">
                       <ScoreMeter score={atsResult.overallScore} />
                       <div className="score-verdict">
-                        <h3>ATS Score</h3>
+                        <h3>
+                          {jdText.trim() ? "ATS Score" : "Self ATS Score"}
+                        </h3>
+                        {!jdText.trim() && (
+                          <small className="self-score-tag">
+                            General best practices — no JD
+                          </small>
+                        )}
                         <p>{atsResult.summaryVerdict}</p>
                         {optimizeDone && previousScore !== null && (
                           <div className="improvement-badge">
@@ -1063,7 +1256,11 @@ function App() {
                     </div>
 
                     <div className="keywords-section">
-                      <h4>Keywords Found</h4>
+                      <h4>
+                        {jdText.trim()
+                          ? "Keywords Found"
+                          : "Industry Keywords Found"}
+                      </h4>
                       <div className="keyword-tags">
                         {atsResult.breakdown.keywordMatch.matchedKeywords?.map(
                           (k) => (
@@ -1080,7 +1277,11 @@ function App() {
                           ),
                         )}
                       </div>
-                      <h4>Missing Keywords</h4>
+                      <h4>
+                        {jdText.trim()
+                          ? "Missing Keywords"
+                          : "Suggested Keywords to Add"}
+                      </h4>
                       <div className="keyword-tags">
                         {atsResult.breakdown.keywordMatch.missingKeywords?.map(
                           (k) => (
@@ -1102,17 +1303,27 @@ function App() {
                     <div className="breakdown-section">
                       <h4>Breakdown</h4>
                       <BreakdownBar
-                        label="Keyword Match"
+                        label={
+                          jdText.trim() ? "Keyword Match" : "Industry Keywords"
+                        }
                         score={atsResult.breakdown.keywordMatch.score}
                         weight={atsResult.breakdown.keywordMatch.weight}
                       />
                       <BreakdownBar
-                        label="Skills Alignment"
+                        label={
+                          jdText.trim()
+                            ? "Skills Alignment"
+                            : "Skills Presentation"
+                        }
                         score={atsResult.breakdown.skillsAlignment.score}
                         weight={atsResult.breakdown.skillsAlignment.weight}
                       />
                       <BreakdownBar
-                        label="Experience Relevance"
+                        label={
+                          jdText.trim()
+                            ? "Experience Relevance"
+                            : "Content Quality"
+                        }
                         score={atsResult.breakdown.experienceRelevance.score}
                         weight={atsResult.breakdown.experienceRelevance.weight}
                       />
@@ -1176,7 +1387,9 @@ function App() {
                       <div className="score-actions">
                         <button
                           className="btn-optimize"
-                          onClick={handleOptimize}
+                          onClick={
+                            jdText.trim() ? handleOptimize : handleSelfOptimize
+                          }
                           disabled={isRateLimited("optimize", 30000)}
                         >
                           {isRateLimited("optimize", 30000) ? (
@@ -1190,7 +1403,11 @@ function App() {
                           ) : (
                             <>
                               <Zap size={18} />
-                              {optimizeDone ? "Re-Optimize" : "Optimize Resume"}
+                              {optimizeDone
+                                ? "Re-Optimize"
+                                : jdText.trim()
+                                  ? "Optimize Resume"
+                                  : "Self Optimize"}
                             </>
                           )}
                         </button>
