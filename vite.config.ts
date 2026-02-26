@@ -10,6 +10,8 @@ export default defineConfig({
         manualChunks: {
           // PDF parsing (largest dep)
           "vendor-pdf": ["pdfjs-dist"],
+          // PDF export (html2canvas + pdf-lib, lazy-loaded)
+          "vendor-pdf-export": ["html2canvas-pro", "pdf-lib"],
           // Icons
           "vendor-icons": ["lucide-react"],
           // Auth + DB

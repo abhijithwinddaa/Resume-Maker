@@ -7,7 +7,7 @@ import {
   Suspense,
   useState,
 } from "react";
-import { useReactToPrint } from "react-to-print";
+import { exportResumeToPDF } from "./utils/pdfExporter";
 import {
   useUser,
   SignedIn,
@@ -315,12 +315,19 @@ function App() {
     [setResumeData, debouncedSupabaseSave, jdText],
   );
 
-  const handlePrint = useReactToPrint({
-    contentRef: resumeRef,
-    documentTitle: resumeData
+  const handleExportPDF = useCallback(async () => {
+    const el = resumeRef.current;
+    if (!el) return;
+    const fileName = resumeData
       ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
-      : "Resume",
-  });
+      : "Resume";
+    try {
+      await exportResumeToPDF(el, fileName);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      setError("PDF export failed. Please try again.");
+    }
+  }, [resumeData, setError]);
 
   /* ── PDF Upload ──────────────────────────────────────── */
 
@@ -921,7 +928,7 @@ function App() {
               </button>
               <button
                 className="header-btn btn-primary"
-                onClick={() => handlePrint()}
+                onClick={handleExportPDF}
               >
                 <Download size={14} />
                 <span>Export PDF</span>
