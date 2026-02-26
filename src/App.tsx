@@ -25,7 +25,7 @@ import {
   selfOptimizeLoop,
 } from "./utils/aiService";
 import { detectTemplateStyle } from "./utils/templateDetector";
-import { extractTextFromPDF } from "./utils/pdfExtractorWorker";
+import { extractTextAndLinks } from "./utils/pdfExtractorWorker";
 import { loadResume, saveResume } from "./services/resumeService";
 import {
   isRateLimited,
@@ -232,6 +232,9 @@ function App() {
   const [showAISettings, setShowAISettings] = useState(false);
   const [showResumeManager, setShowResumeManager] = useState(false);
 
+  // Extracted PDF links for parser
+  const extractedLinksRef = useRef<string[]>([]);
+
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const resumeRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -334,26 +337,28 @@ function App() {
     setIsPdfLoading(true);
     setError(null);
     try {
-      const text = await extractTextFromPDF(file);
+      // Extract text AND hyperlinks from the PDF
+      const { text, links } = await extractTextAndLinks(file);
       if (!text.trim()) {
         throw new Error(
           "Could not extract text from this PDF. It may be image-based. Try pasting the text manually.",
         );
       }
-      setResumeText(sanitizeText(text));
+
+      const sanitized = sanitizeText(text);
+      setResumeText(sanitized);
       setUploadedFileName(file.name);
+      extractedLinksRef.current = links;
 
       // Store original PDF as blob URL for side-by-side preview
       const pdfBlobUrl = URL.createObjectURL(file);
       setOriginalPdfUrl(pdfBlobUrl);
 
       // Run template style detection in background (non-blocking)
-      detectTemplateStyle(aiSettings, sanitizeText(text))
+      detectTemplateStyle(aiSettings, sanitized)
         .then((detected) => {
           setDetectedStyle(detected);
-          // Auto-apply the detected style if confidence is high enough
           if (detected.confidence >= 50) {
-            // Apply style to store — this updates template + customization
             const { templateId, customization } = detected;
             const store = useAppStore.getState();
             store.setTemplateId(templateId);
@@ -363,8 +368,21 @@ function App() {
         .catch((err) => {
           console.warn("Template detection failed (non-critical):", err);
         });
+
+      // Auto-parse the resume immediately so it's ready for editing
+      setLoadingMessage(
+        "Parsing your resume with AI (preserving all links)...",
+      );
+      setStep("analyzing");
+      recordAction("analyze");
+
+      const parsed = await parseResumeFromText(aiSettings, sanitized, links);
+      handleResumeChange(parsed);
+      // Go straight to editor — user can then choose to optimize or edit
+      setStep("editor");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to read PDF");
+      setStep("input");
     } finally {
       setIsPdfLoading(false);
       if (pdfInputRef.current) pdfInputRef.current.value = "";
@@ -376,6 +394,7 @@ function App() {
     setUploadedFileName(null);
     setDetectedStyle(null);
     setOriginalPdfUrl(null);
+    extractedLinksRef.current = [];
   }, [setResumeText, setUploadedFileName, setDetectedStyle, setOriginalPdfUrl]);
 
   /* ── Quick Edit (no JD required) ─────────────────────── */
@@ -409,6 +428,9 @@ function App() {
       const parsed = await parseResumeFromText(
         aiSettings,
         sanitizeText(resumeText),
+        extractedLinksRef.current.length > 0
+          ? extractedLinksRef.current
+          : undefined,
       );
       if (controller.signal.aborted) return;
       handleResumeChange(parsed);
@@ -537,6 +559,9 @@ function App() {
       const parsed = await parseResumeFromText(
         aiSettings,
         sanitizeText(resumeText),
+        extractedLinksRef.current.length > 0
+          ? extractedLinksRef.current
+          : undefined,
       );
       if (controller.signal.aborted) return;
       handleResumeChange(parsed);

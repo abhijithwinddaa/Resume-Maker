@@ -51,12 +51,13 @@ ${suggestions}
 5. **Quantify impact** — Add numbers, percentages, metrics wherever possible (e.g., "reduced load time by 40%", "served 10K+ users").
 6. **Summary must be strong** — Front-load with the candidate's top strengths and domain expertise.
 7. **Keep it truthful** — Rephrase and enhance, but don't fabricate experience. Adding related skills they COULD know is fine.
-8. **Education & Contact** — Keep as-is.
+8. **Education & Contact** — Keep as-is. NEVER remove or change any URLs/links.
 9. **The resume MUST fit on a single page** — Be concise. Each bullet point should be 1-2 lines max.
 10. **Every missing keyword from the report MUST appear somewhere in the output** — This is the #1 priority.
 11. **Experience section** — If present, optimize bullets with stronger action verbs and metrics.
 12. **sectionOrder** — Keep the same section order.
-13. **Output ONLY valid JSON** — No markdown, no code fences, no explanation.
+13. **PRESERVE ALL LINKS** — Keep ALL githubLink, liveLink, linkedin, github, portfolio, and certificate link values EXACTLY as they are. Never empty or modify URLs.
+14. **Output ONLY valid JSON** — No markdown, no code fences, no explanation.
 
 ## RESUME JSON SCHEMA
 {

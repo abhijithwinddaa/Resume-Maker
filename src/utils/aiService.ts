@@ -471,7 +471,50 @@ export async function generateAIResume(
   if (!parsed.experience) parsed.experience = resumeData.experience;
   parsed.showExperience = resumeData.showExperience;
 
+  // Restore links that AI may have dropped
+  restoreLinks(parsed, resumeData);
+
   return parsed;
+}
+
+/**
+ * Restore links from the original resume data that AI may have dropped.
+ * Matches by project title, achievement text, certificate name.
+ */
+function restoreLinks(parsed: ResumeData, original: ResumeData): void {
+  // Restore project links
+  if (parsed.projects && original.projects) {
+    for (const proj of parsed.projects) {
+      const orig = original.projects.find(
+        (o) => o.title.toLowerCase().trim() === proj.title.toLowerCase().trim(),
+      );
+      if (orig) {
+        if (!proj.githubLink && orig.githubLink)
+          proj.githubLink = orig.githubLink;
+        if (!proj.liveLink && orig.liveLink) proj.liveLink = orig.liveLink;
+      }
+    }
+  }
+  // Restore achievement links
+  if (parsed.achievements && original.achievements) {
+    for (let i = 0; i < parsed.achievements.length; i++) {
+      const orig = original.achievements[i];
+      if (orig && !parsed.achievements[i].githubLink && orig.githubLink) {
+        parsed.achievements[i].githubLink = orig.githubLink;
+      }
+    }
+  }
+  // Restore certificate links
+  if (parsed.certificates && original.certificates) {
+    for (const cert of parsed.certificates) {
+      const orig = original.certificates.find(
+        (o) => o.name.toLowerCase().trim() === cert.name.toLowerCase().trim(),
+      );
+      if (orig && !cert.link && orig.link) {
+        cert.link = orig.link;
+      }
+    }
+  }
 }
 
 export async function analyzeATSScore(
@@ -776,6 +819,7 @@ export async function optimizeResumeLoop(
     parsed.sectionOrder = resumeData.sectionOrder;
     if (!parsed.experience) parsed.experience = resumeData.experience;
     parsed.showExperience = resumeData.showExperience;
+    restoreLinks(parsed, resumeData);
 
     currentResume = parsed;
   }
@@ -943,6 +987,7 @@ export async function selfOptimizeLoop(
     parsed.sectionOrder = resumeData.sectionOrder;
     if (!parsed.experience) parsed.experience = resumeData.experience;
     parsed.showExperience = resumeData.showExperience;
+    restoreLinks(parsed, resumeData);
 
     currentResume = parsed;
   }
@@ -966,21 +1011,26 @@ export async function selfOptimizeLoop(
 export async function parseResumeFromText(
   settings: AISettings,
   resumeText: string,
+  extractedLinks?: string[],
 ): Promise<ResumeData> {
   // Check cache first
-  const cacheKey = getCacheKey("parse", resumeText);
+  const cacheKey = getCacheKey(
+    "parse",
+    resumeText,
+    extractedLinks?.join(",") || "",
+  );
   const cached = getCached<ResumeData>(cacheKey);
   if (cached) {
     console.log("Parsed resume loaded from cache");
     return cached;
   }
 
-  const prompt = buildResumeParsePrompt(resumeText);
+  const prompt = buildResumeParsePrompt(resumeText, extractedLinks);
   const messages: ChatMessage[] = [
     {
       role: "system",
       content:
-        "You are an expert resume parser. Output ONLY valid JSON. No markdown, no explanation, no code fences.",
+        "You are an expert resume parser. You MUST preserve ALL URLs/links from the resume. Output ONLY valid JSON. No markdown, no explanation, no code fences.",
     },
     { role: "user", content: prompt },
   ];

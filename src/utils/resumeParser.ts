@@ -1,6 +1,27 @@
-export function buildResumeParsePrompt(resumeText: string): string {
+export function buildResumeParsePrompt(
+  resumeText: string,
+  extractedLinks?: string[],
+): string {
+  const linksSection =
+    extractedLinks && extractedLinks.length > 0
+      ? `\n\n## EXTRACTED HYPERLINKS FROM THE PDF\nThese URLs were extracted from clickable links in the original PDF. You MUST map each URL to the correct field:\n${extractedLinks.map((l, i) => `${i + 1}. ${l}`).join("\n")}\n`
+      : "";
+
   return `Parse the following resume text into a structured JSON object.
 
+## CRITICAL: PRESERVE ALL LINKS / URLs
+This is the #1 priority. The user has links in their resume that are TIME-CONSUMING to re-add.
+- Extract EVERY URL found in the text OR in the extracted hyperlinks section below
+- LinkedIn URLs → contact.linkedin
+- GitHub profile URLs (github.com/username with NO repo path) → contact.github
+- Portfolio/website URLs → contact.portfolio
+- Project GitHub URLs (github.com/username/repo) → project.githubLink
+- Project live/demo URLs → project.liveLink
+- Certificate URLs → certificate.link
+- Achievement GitHub URLs → achievement.githubLink
+- If a URL appears in both text and hyperlinks, include it
+- NEVER leave a link field as empty string if a URL exists for it
+${linksSection}
 OUTPUT FORMAT — return ONLY valid JSON with this EXACT structure:
 {
   "contact": {
@@ -69,13 +90,14 @@ PARSING RULES:
 3. If there is NO work experience section, set "experience" to [] and "showExperience" to false
 4. Personal projects (not work) go into "projects" array
 5. For techStack: list all technologies, tools, and frameworks mentioned in each project
-6. Keep bullet points concise, action-oriented, and impactful
+6. Keep bullet points EXACTLY as they appear — do NOT rephrase, shorten, or "improve" them. Preserve the original wording.
 7. Group skills into logical categories (Languages, Frameworks, Tools, Databases, etc.)
 8. If no certificates section is found, use an empty array and set showCertificates to false
-9. If URLs are found for LinkedIn, GitHub, Portfolio, or projects, include them; otherwise use empty strings
+9. **LINKS ARE CRITICAL** — Extract ALL URLs: LinkedIn, GitHub profile, portfolio, project GitHub links, project live demo links, certificate links, achievement links. Check both the resume text AND the "EXTRACTED HYPERLINKS" section above. Map each URL to the correct field. This is the user's #1 priority.
 10. For contact info: extract name, phone, email from the header area of the resume
 11. sectionOrder should reflect the order sections appear in the original resume
-12. Return ONLY the JSON object — no markdown, no code fences, no explanation
+12. Keep the resume summary/objective EXACTLY as written — do not change wording
+13. Return ONLY the JSON object — no markdown, no code fences, no explanation
 
 RESUME TEXT:
 ${resumeText}`;
