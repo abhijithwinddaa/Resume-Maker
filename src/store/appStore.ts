@@ -9,6 +9,7 @@ import {
   loadAISettings,
   saveAISettings,
 } from "../types/aiSettings";
+import type { DetectedStyle } from "../utils/templateDetector";
 
 // ─── Undo/Redo History ───────────────────────────────
 const MAX_HISTORY = 50;
@@ -60,6 +61,11 @@ interface AppState {
   templateId: TemplateId;
   customization: TemplateCustomization;
 
+  // ─── Detected Style (from uploaded PDF) ─
+  detectedStyle: DetectedStyle | null;
+  originalPdfUrl: string | null;
+  showOriginalPdf: boolean;
+
   // ─── Theme ──────────────────────────────
   theme: ThemeMode;
 
@@ -99,6 +105,12 @@ interface AppState {
   // Template actions
   setTemplateId: (id: TemplateId) => void;
   setCustomization: (c: Partial<TemplateCustomization>) => void;
+
+  // Detected style actions
+  setDetectedStyle: (style: DetectedStyle | null) => void;
+  applyDetectedStyle: () => void;
+  setOriginalPdfUrl: (url: string | null) => void;
+  setShowOriginalPdf: (v: boolean) => void;
 
   // Theme actions
   setTheme: (theme: ThemeMode) => void;
@@ -178,6 +190,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   templateId: loadTemplateId(),
   customization: loadCustomization(),
+  detectedStyle: null,
+  originalPdfUrl: null,
+  showOriginalPdf: false,
   theme: loadTheme(),
   aiSettings: loadAISettings(),
   resumes: [],
@@ -225,6 +240,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     localStorage.setItem("template-customization", JSON.stringify(merged));
     set({ customization: merged });
   },
+
+  // Detected style
+  setDetectedStyle: (detectedStyle) => set({ detectedStyle }),
+  applyDetectedStyle: () => {
+    const { detectedStyle } = get();
+    if (!detectedStyle) return;
+    const { templateId, customization } = detectedStyle;
+    localStorage.setItem("template-id", templateId);
+    localStorage.setItem(
+      "template-customization",
+      JSON.stringify(customization),
+    );
+    set({ templateId, customization });
+  },
+  setOriginalPdfUrl: (originalPdfUrl) => {
+    // Revoke previous blob URL to prevent memory leaks
+    const prev = get().originalPdfUrl;
+    if (prev) {
+      try {
+        URL.revokeObjectURL(prev);
+      } catch {
+        /* ignore */
+      }
+    }
+    set({ originalPdfUrl });
+  },
+  setShowOriginalPdf: (showOriginalPdf) => set({ showOriginalPdf }),
 
   // Theme
   setTheme: (theme) => {
@@ -288,6 +330,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       resumeText: "",
       coverLetter: null,
       history: { past: [], future: [] },
+      detectedStyle: null,
+      originalPdfUrl: null,
+      showOriginalPdf: false,
     }),
   newJD: () =>
     set({

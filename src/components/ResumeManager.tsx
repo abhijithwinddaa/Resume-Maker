@@ -62,7 +62,13 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
   };
 
   return (
-    <div className="rm-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="My Resumes">
+    <div
+      className="rm-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="My Resumes"
+    >
       <div className="rm-panel" onClick={(e) => e.stopPropagation()}>
         <div className="rm-header">
           <h2>My Resumes</h2>
@@ -107,7 +113,10 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
                         autoFocus
                         aria-label="Resume name"
                       />
-                      <button onClick={() => handleRename(row.id)} aria-label="Confirm rename">
+                      <button
+                        onClick={() => handleRename(row.id)}
+                        aria-label="Confirm rename"
+                      >
                         <Check size={14} />
                       </button>
                     </div>

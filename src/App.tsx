@@ -22,6 +22,7 @@ import {
   analyzeATSScore,
   optimizeResumeLoop,
 } from "./utils/aiService";
+import { detectTemplateStyle } from "./utils/templateDetector";
 import { extractTextFromPDF } from "./utils/pdfExtractorWorker";
 import { loadResume, saveResume } from "./services/resumeService";
 import {
@@ -53,6 +54,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { EditorSkeleton, PreviewSkeleton } from "./components/Skeleton";
 import ThemeToggle from "./components/ThemeToggle";
 import LanguageSwitcher from "./components/LanguageSwitcher";
+import StyleDetectedBadge from "./components/StyleDetectedBadge";
 import {
   FileText,
   Upload,
@@ -79,6 +81,7 @@ import {
   FileType,
   Mail,
   FolderOpen,
+  Eye,
 } from "lucide-react";
 import "./App.css";
 
@@ -89,6 +92,7 @@ const TemplatePicker = lazy(() => import("./components/TemplatePicker"));
 const CoverLetterPanel = lazy(() => import("./components/CoverLetter"));
 const AISettingsPanel = lazy(() => import("./components/AISettings"));
 const ResumeManagerPanel = lazy(() => import("./components/ResumeManager"));
+const PdfPreviewPanel = lazy(() => import("./components/PdfPreview"));
 
 /* ─── Score Visualization Components ─────────────────── */
 
@@ -213,6 +217,12 @@ function App() {
   const redo = useAppStore((s) => s.redo);
   const canUndo = useAppStore((s) => s.canUndo);
   const canRedo = useAppStore((s) => s.canRedo);
+  const setDetectedStyle = useAppStore((s) => s.setDetectedStyle);
+  const setOriginalPdfUrl = useAppStore((s) => s.setOriginalPdfUrl);
+  const originalPdfUrl = useAppStore((s) => s.originalPdfUrl);
+  const showOriginalPdf = useAppStore((s) => s.showOriginalPdf);
+  const setShowOriginalPdf = useAppStore((s) => s.setShowOriginalPdf);
+  const applyDetectedStyle = useAppStore((s) => s.applyDetectedStyle);
 
   // Panel visibility
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -330,6 +340,27 @@ function App() {
       }
       setResumeText(sanitizeText(text));
       setUploadedFileName(file.name);
+
+      // Store original PDF as blob URL for side-by-side preview
+      const pdfBlobUrl = URL.createObjectURL(file);
+      setOriginalPdfUrl(pdfBlobUrl);
+
+      // Run template style detection in background (non-blocking)
+      detectTemplateStyle(aiSettings, sanitizeText(text))
+        .then((detected) => {
+          setDetectedStyle(detected);
+          // Auto-apply the detected style if confidence is high enough
+          if (detected.confidence >= 50) {
+            // Apply style to store — this updates template + customization
+            const { templateId, customization } = detected;
+            const store = useAppStore.getState();
+            store.setTemplateId(templateId);
+            store.setCustomization(customization);
+          }
+        })
+        .catch((err) => {
+          console.warn("Template detection failed (non-critical):", err);
+        });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to read PDF");
     } finally {
@@ -341,7 +372,9 @@ function App() {
   const handleClearUpload = useCallback(() => {
     setResumeText("");
     setUploadedFileName(null);
-  }, [setResumeText, setUploadedFileName]);
+    setDetectedStyle(null);
+    setOriginalPdfUrl(null);
+  }, [setResumeText, setUploadedFileName, setDetectedStyle, setOriginalPdfUrl]);
 
   /* ── Step 1 → Analyzing ─────────────────────────────── */
 
@@ -652,6 +685,24 @@ function App() {
             <FolderOpen size={14} />
           </button>
 
+          {/* Show Original PDF toggle */}
+          {originalPdfUrl && (step === "editor" || step === "score") && (
+            <button
+              className={`header-btn ${showOriginalPdf ? "btn-accent" : ""}`}
+              onClick={() => setShowOriginalPdf(!showOriginalPdf)}
+              title={
+                showOriginalPdf ? "Hide Original PDF" : "Show Original PDF"
+              }
+              aria-label={
+                showOriginalPdf ? "Hide Original PDF" : "Show Original PDF"
+              }
+              aria-pressed={showOriginalPdf}
+            >
+              <Eye size={14} />
+              <span>Original</span>
+            </button>
+          )}
+
           <SignedIn>
             <UserButton afterSignOutUrl="/" />
           </SignedIn>
@@ -784,7 +835,11 @@ function App() {
             <>
               {/* ═══ INPUT STEP ═══ */}
               {step === "input" && (
-                <div className="input-step" role="region" aria-label="Resume input">
+                <div
+                  className="input-step"
+                  role="region"
+                  aria-label="Resume input"
+                >
                   <div className="input-hero">
                     <h2>
                       {resumeData
@@ -986,7 +1041,11 @@ function App() {
 
               {/* ═══ SCORE STEP ═══ */}
               {step === "score" && atsResult && resumeData && (
-                <div className="score-step" role="region" aria-label="ATS score results">
+                <div
+                  className="score-step"
+                  role="region"
+                  aria-label="ATS score results"
+                >
                   <div className="score-left">
                     <div className="score-header">
                       <ScoreMeter score={atsResult.overallScore} />
@@ -1157,8 +1216,13 @@ function App() {
 
               {/* ═══ EDITOR STEP ═══ */}
               {step === "editor" && resumeData && (
-                <div className="editor-step" role="region" aria-label="Resume editor">
+                <div
+                  className="editor-step"
+                  role="region"
+                  aria-label="Resume editor"
+                >
                   <div className="editor-left">
+                    <StyleDetectedBadge />
                     <ErrorBoundary>
                       <Suspense fallback={<EditorSkeleton />}>
                         <ResumeEditor
@@ -1204,6 +1268,13 @@ function App() {
       {showResumeManager && (
         <Suspense fallback={null}>
           <ResumeManagerPanel onClose={() => setShowResumeManager(false)} />
+        </Suspense>
+      )}
+
+      {/* Side panel: original PDF preview */}
+      {showOriginalPdf && originalPdfUrl && (
+        <Suspense fallback={null}>
+          <PdfPreviewPanel onClose={() => setShowOriginalPdf(false)} />
         </Suspense>
       )}
     </div>

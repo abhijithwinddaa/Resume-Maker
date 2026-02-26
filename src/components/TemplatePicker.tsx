@@ -2,7 +2,7 @@ import React from "react";
 import { useAppStore } from "../store/appStore";
 import { TEMPLATES, COLOR_PRESETS, FONT_OPTIONS } from "../types/templates";
 import type { TemplateId } from "../types/templates";
-import { Palette, Type, X } from "lucide-react";
+import { Palette, Type, X, Sparkles } from "lucide-react";
 import "./TemplatePicker.css";
 
 interface TemplatePickerProps {
@@ -14,6 +14,8 @@ const TemplatePicker: React.FC<TemplatePickerProps> = ({ onClose }) => {
   const customization = useAppStore((s) => s.customization);
   const setTemplateId = useAppStore((s) => s.setTemplateId);
   const setCustomization = useAppStore((s) => s.setCustomization);
+  const detectedStyle = useAppStore((s) => s.detectedStyle);
+  const applyDetectedStyle = useAppStore((s) => s.applyDetectedStyle);
 
   return (
     <div
@@ -37,6 +39,32 @@ const TemplatePicker: React.FC<TemplatePickerProps> = ({ onClose }) => {
         <div className="picker-section">
           <h4>Template</h4>
           <div className="template-grid">
+            {/* Uploaded Style — shown when AI detected the original style */}
+            {detectedStyle && detectedStyle.confidence > 0 && (
+              <button
+                className={`template-card template-card-detected ${
+                  templateId === detectedStyle.templateId &&
+                  customization.primaryColor ===
+                    detectedStyle.customization.primaryColor
+                    ? "selected"
+                    : ""
+                }`}
+                onClick={applyDetectedStyle}
+                aria-pressed={
+                  templateId === detectedStyle.templateId &&
+                  customization.primaryColor ===
+                    detectedStyle.customization.primaryColor
+                }
+              >
+                <span className="template-thumb">
+                  <Sparkles size={20} />
+                </span>
+                <span className="template-name">Uploaded Style</span>
+                <span className="template-desc">
+                  {detectedStyle.styleName} ({detectedStyle.confidence}% match)
+                </span>
+              </button>
+            )}
             {TEMPLATES.map((t) => (
               <button
                 key={t.id}

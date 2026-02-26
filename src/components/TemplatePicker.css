@@ -112,6 +112,22 @@
   background: rgba(41, 128, 185, 0.08);
 }
 
+.template-card-detected {
+  border-style: dashed;
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.template-card-detected.selected {
+  border-style: solid;
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.template-card-detected .template-thumb {
+  color: #f59e0b;
+}
+
 .template-thumb {
   font-size: 28px;
 }
