@@ -12,30 +12,38 @@ export default defineConfig({
     /* ── Vendor Chunk Splitting ────────────────────── */
     rollupOptions: {
       output: {
-        manualChunks: {
-          // PDF parsing (largest dep)
-          "vendor-pdf": ["pdfjs-dist"],
-          // PDF export (html2canvas + pdf-lib, lazy-loaded)
-          "vendor-pdf-export": ["html2canvas-pro", "pdf-lib"],
-          // OCR (tesseract.js, lazy-loaded)
-          "vendor-ocr": ["tesseract.js"],
-          // Icons
-          "vendor-icons": ["lucide-react"],
-          // Auth + DB + i18n
-          "vendor-services": [
-            "@clerk/clerk-react",
-            "@supabase/supabase-js",
-            "i18next",
-            "react-i18next",
-          ],
-          // State + validation
-          "vendor-core": ["zustand", "zod"],
-          // DnD
-          "vendor-dnd": [
-            "@dnd-kit/core",
-            "@dnd-kit/sortable",
-            "@dnd-kit/utilities",
-          ],
+        manualChunks(id) {
+          // Third-party vendor splits
+          if (id.includes("node_modules/pdfjs-dist")) return "vendor-pdf";
+          if (
+            id.includes("node_modules/html2canvas-pro") ||
+            id.includes("node_modules/pdf-lib")
+          )
+            return "vendor-pdf-export";
+          if (id.includes("node_modules/tesseract.js")) return "vendor-ocr";
+          if (id.includes("node_modules/lucide-react")) return "vendor-icons";
+          if (
+            id.includes("node_modules/@clerk") ||
+            id.includes("node_modules/@supabase") ||
+            id.includes("node_modules/i18next") ||
+            id.includes("node_modules/react-i18next")
+          )
+            return "vendor-services";
+          if (
+            id.includes("node_modules/zustand") ||
+            id.includes("node_modules/zod")
+          )
+            return "vendor-core";
+          if (id.includes("node_modules/@dnd-kit")) return "vendor-dnd";
+          if (id.includes("node_modules/docx")) return "vendor-docx";
+          // App code splits — heavy modules only loaded when needed
+          if (id.includes("src/utils/aiService")) return "app-ai";
+          if (
+            id.includes("src/utils/pdfExtractor") ||
+            id.includes("src/utils/pdfOcr") ||
+            id.includes("src/utils/templateDetector")
+          )
+            return "app-pdf-utils";
         },
       },
     },

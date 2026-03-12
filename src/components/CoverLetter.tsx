@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useAppStore } from "../store/appStore";
 import { generateCoverLetter } from "../utils/coverLetterService";
 import { FileText, Loader2, Copy, Download, X, Sparkles } from "lucide-react";
@@ -23,6 +23,7 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
   const [position, setPosition] = useState(coverLetter?.position || "");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const handleGenerate = async () => {
     if (!resumeData || !jdText.trim()) {
@@ -37,27 +38,41 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
     setIsGenerating(true);
     setError(null);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const resumeText = JSON.stringify(resumeData);
-      const content = await generateCoverLetter({
-        aiSettings,
-        resumeText,
-        jobDescription: jdText,
-        companyName: companyName.trim(),
-        position: position.trim(),
-      });
+      const content = await generateCoverLetter(
+        {
+          aiSettings,
+          resumeText,
+          jobDescription: jdText,
+          companyName: companyName.trim(),
+          position: position.trim(),
+        },
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
       setCoverLetter({
         content,
         companyName: companyName.trim(),
         position: position.trim(),
       });
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(
         err instanceof Error ? err.message : "Failed to generate cover letter",
       );
     } finally {
       setIsGenerating(false);
+      abortRef.current = null;
     }
+  };
+
+  const handleCancel = () => {
+    abortRef.current?.abort();
+    setIsGenerating(false);
   };
 
   const handleCopy = async () => {
@@ -120,21 +135,32 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
           </div>
         </div>
 
-        <button
-          className="cl-generate-btn"
-          onClick={handleGenerate}
-          disabled={isGenerating || !companyName.trim() || !position.trim()}
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 size={16} className="spin" /> Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles size={16} /> Generate Cover Letter
-            </>
+        <div className="cl-actions-row">
+          <button
+            className="cl-generate-btn"
+            onClick={handleGenerate}
+            disabled={isGenerating || !companyName.trim() || !position.trim()}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 size={16} className="spin" /> Generating...
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} /> Generate Cover Letter
+              </>
+            )}
+          </button>
+          {isGenerating && (
+            <button
+              className="cl-cancel-btn"
+              onClick={handleCancel}
+              type="button"
+            >
+              <X size={16} /> Cancel
+            </button>
           )}
-        </button>
+        </div>
 
         {error && <div className="cl-error">{error}</div>}
 

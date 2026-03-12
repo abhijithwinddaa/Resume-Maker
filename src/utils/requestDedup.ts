@@ -30,4 +30,15 @@ export function clearRequestController(key: string): void {
   activeRequests.delete(key);
 }
 
+/**
+ * Abort and clear a request by key. Safe to call even if no request exists.
+ */
+export function abortRequestController(key: string): void {
+  const existing = activeRequests.get(key);
+  if (existing) {
+    existing.abort();
+    activeRequests.delete(key);
+  }
+}
+
 

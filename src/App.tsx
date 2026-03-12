@@ -55,6 +55,7 @@ import {
 import {
   getRequestController,
   clearRequestController,
+  abortRequestController,
 } from "./utils/requestDedup";
 import { useDebounce } from "./hooks/useDebounce";
 import { validateResumeData } from "./utils/zodSchemas";
@@ -256,9 +257,16 @@ function App() {
   const resumeRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  /* ── Keyboard shortcuts (Ctrl+Z / Ctrl+Y) ────────── */
+  /* ── Keyboard shortcuts (Ctrl+Z / Ctrl+Y / Escape) ── */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowTemplatePicker(false);
+        setShowCoverLetter(false);
+        setShowAISettings(false);
+        setShowResumeManager(false);
+        return;
+      }
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "z" && !e.shiftKey) {
           e.preventDefault();
@@ -733,15 +741,21 @@ function App() {
     setLoadingMessage("Running self ATS analysis...");
     recordAction("analyze");
 
+    const controller = getRequestController("self-score");
+
     try {
       const ats = await selfATSScore(aiSettings, resumeData);
+      if (controller.signal.aborted) return;
       setATSResult(ats);
       setOptimizeDone(false);
       setPreviousScore(null);
       setStep("score");
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Self scoring failed");
       setStep("editor");
+    } finally {
+      clearRequestController("self-score");
     }
   };
 
@@ -889,6 +903,20 @@ function App() {
       )
     ) {
       return;
+    }
+    // Abort all in-flight AI requests before resetting
+    abortRef.current?.abort();
+    for (const key of [
+      "pdf-upload",
+      "parse-resume",
+      "analyze",
+      "analyze-existing",
+      "optimize",
+      "self-optimize",
+      "self-score",
+      "cover-letter",
+    ]) {
+      abortRequestController(key);
     }
     startOver();
   }, [startOver, resumeData]);
@@ -1197,6 +1225,15 @@ function App() {
               <div
                 className="landing-card"
                 onClick={() => handleSelectMode("ats")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleSelectMode("ats");
+                  }
+                }}
+                aria-label="ATS Score and Optimize"
               >
                 <div className="landing-card-icon landing-card-icon-ats">
                   <Target size={32} />
@@ -1232,6 +1269,15 @@ function App() {
               <div
                 className="landing-card"
                 onClick={() => handleSelectMode("edit")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleSelectMode("edit");
+                  }
+                }}
+                aria-label="Edit My Resume"
               >
                 <div className="landing-card-icon landing-card-icon-edit">
                   <Edit3 size={32} />
@@ -1267,6 +1313,15 @@ function App() {
               <div
                 className="landing-card"
                 onClick={() => handleSelectMode("create")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleSelectMode("create");
+                  }
+                }}
+                aria-label="Create New Resume"
               >
                 <div className="landing-card-icon landing-card-icon-create">
                   <PlusCircle size={32} />

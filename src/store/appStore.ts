@@ -320,7 +320,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Revoke blob URL before clearing to prevent memory leak
     const prev = get().originalPdfUrl;
     if (prev) {
-      try { URL.revokeObjectURL(prev); } catch { /* ignore */ }
+      try {
+        URL.revokeObjectURL(prev);
+      } catch {
+        /* ignore */
+      }
     }
     set({
       step: "landing",

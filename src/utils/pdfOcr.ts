@@ -62,7 +62,10 @@ export async function extractTextWithOCR(
           canvas: canvas as unknown as HTMLCanvasElement,
         }).promise;
         blob = await new Promise<Blob>((resolve, reject) =>
-          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Canvas toBlob failed"))), "image/png"),
+          canvas.toBlob(
+            (b) => (b ? resolve(b) : reject(new Error("Canvas toBlob failed"))),
+            "image/png",
+          ),
         );
       }
 

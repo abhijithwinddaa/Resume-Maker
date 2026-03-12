@@ -1256,10 +1256,16 @@
   box-shadow: var(--shadow-sm);
 }
 
-.landing-card:hover {
+.landing-card:hover,
+.landing-card:focus-visible {
   border-color: var(--accent-color);
   box-shadow: 0 8px 30px rgba(41, 128, 185, 0.15);
   transform: translateY(-4px);
+  outline: none;
+}
+
+.landing-card:focus-visible {
+  box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.4);
 }
 
 .landing-card-icon {

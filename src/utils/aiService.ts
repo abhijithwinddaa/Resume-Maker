@@ -126,6 +126,7 @@ let currentTokenIndex = 0;
 async function callGitHub(
   settings: AISettings,
   messages: ChatMessage[],
+  signal?: AbortSignal,
 ): Promise<string> {
   const tokens =
     settings.githubTokens && settings.githubTokens.length > 0
@@ -159,6 +160,7 @@ async function callGitHub(
           temperature: 0.3,
           max_tokens: 16000,
         }),
+        signal,
       },
     );
 
@@ -202,6 +204,7 @@ interface GeminiResponse {
 async function callGemini(
   settings: AISettings,
   messages: ChatMessage[],
+  signal?: AbortSignal,
 ): Promise<string> {
   if (!settings.geminiApiKey) {
     throw new Error("Gemini API key is not set.");
@@ -240,6 +243,7 @@ async function callGemini(
           maxOutputTokens: 16000,
         },
       }),
+      signal,
     },
   );
 
@@ -304,16 +308,18 @@ async function withRetry<T>(
 export async function callAI(
   settings: AISettings,
   messages: ChatMessage[],
+  signal?: AbortSignal,
 ): Promise<string> {
   return withRetry(async () => {
+    signal?.throwIfAborted();
     try {
-      return await callGitHub(settings, messages);
+      return await callGitHub(settings, messages, signal);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       // If all GitHub tokens are rate limited, fall back to Gemini
       if (msg === "ALL_GITHUB_RATE_LIMITED" && settings.geminiApiKey) {
         console.warn("All GitHub tokens rate limited — falling back to Gemini");
-        return callGemini(settings, messages);
+        return callGemini(settings, messages, signal);
       }
       throw err;
     }

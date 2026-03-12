@@ -94,8 +94,13 @@
   box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.1);
 }
 
+.cl-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
 .cl-generate-btn {
-  width: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -119,6 +124,25 @@
 .cl-generate-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.cl-cancel-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cl-cancel-btn:hover {
+  background: #dc2626;
 }
 
 .cl-error {

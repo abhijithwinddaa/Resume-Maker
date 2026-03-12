@@ -15,6 +15,7 @@ interface CoverLetterParams {
 
 export async function generateCoverLetter(
   params: CoverLetterParams,
+  signal?: AbortSignal,
 ): Promise<string> {
   const { aiSettings, resumeText, jobDescription, companyName, position } =
     params;
@@ -50,6 +51,6 @@ Return ONLY the cover letter text, no JSON, no markdown formatting.`;
   ];
 
   const { callAI } = await import("./aiService");
-  const response = await callAI(aiSettings, messages);
+  const response = await callAI(aiSettings, messages, signal);
   return response.trim();
 }
