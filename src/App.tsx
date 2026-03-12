@@ -482,12 +482,11 @@ function App() {
         );
         setStep("analyzing");
         const ocr = await extractTextWithOCR(file, (page, total) => {
-          setLoadingMessage(
-            `Running OCR on page ${page} of ${total}...`,
-          );
+          setLoadingMessage(`Running OCR on page ${page} of ${total}...`);
         });
         text = ocr.text;
-        links = [];
+        // Keep annotation links from extractTextAndLinks — image PDFs can still
+        // have clickable link annotations (e.g., our exported PDFs do).
       }
 
       if (!text.trim()) {
