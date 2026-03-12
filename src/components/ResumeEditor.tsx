@@ -21,6 +21,7 @@ import {
   Layers,
 } from "lucide-react";
 import "./ResumeEditor.css";
+import CompletenessBar from "./CompletenessBar";
 
 const DnDSectionOrder = lazy(() => import("./DnDSectionOrder"));
 
@@ -358,6 +359,8 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   return (
     <div className="resume-editor" role="form" aria-label="Resume editor form">
       <h2 className="editor-title">Resume Editor</h2>
+
+      <CompletenessBar data={data} />
 
       {/* Section Order */}
       <div className="editor-section">

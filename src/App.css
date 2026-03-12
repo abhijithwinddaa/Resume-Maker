@@ -897,6 +897,16 @@
   animation: pulse 1.5s ease-in-out infinite;
 }
 
+.save-indicator.saved {
+  color: #22c55e;
+  animation: none;
+}
+
+.save-indicator.unsaved {
+  color: #f59e0b;
+  animation: none;
+}
+
 @keyframes pulse {
   0%,
   100% {

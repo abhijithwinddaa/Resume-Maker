@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { exportResumeToPDF } from "./utils/pdfExporter";
+import { validateForExport } from "./utils/exportValidation";
 import {
   useUser,
   SignedIn,
@@ -236,6 +237,9 @@ function App() {
   const [showAISettings, setShowAISettings] = useState(false);
   const [showResumeManager, setShowResumeManager] = useState(false);
 
+  // Save status tracking
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+
   // Deferred auth: track which mode was selected before sign-in
   const [pendingMode, setPendingMode] = useState<AppMode>(null);
 
@@ -262,6 +266,17 @@ function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [undo, redo]);
+
+  /* ── Navigation guard: warn on tab close with unsaved changes ── */
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isSaving || (step === "editor" && resumeData)) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isSaving, step, resumeData]);
 
   /* ── Cooldown timer tick ──────────────────────────── */
   useEffect(() => {
@@ -341,12 +356,15 @@ function App() {
   const debouncedSupabaseSave = useDebounce((data: ResumeData) => {
     if (!user?.id) return;
     setIsSaving(true);
+    setSaveStatus("saving");
     saveResume(user.id, data)
       .then((ok) => {
         if (!ok) console.warn("Supabase save returned false");
+        setSaveStatus("saved");
       })
       .catch((err) => {
         console.error("Supabase save failed:", err);
+        setSaveStatus("idle");
       })
       .finally(() => setIsSaving(false));
   }, 500);
@@ -354,6 +372,7 @@ function App() {
   const handleResumeChange = useCallback(
     (data: ResumeData) => {
       setResumeData(data);
+      setSaveStatus("idle"); // Mark as unsaved immediately
       debouncedSupabaseSave(data);
       saveLocalBackup(data, jdText);
     },
@@ -363,6 +382,13 @@ function App() {
   const handleExportPDF = useCallback(async () => {
     const el = resumeRef.current;
     if (!el) return;
+    if (resumeData) {
+      const validation = validateForExport(resumeData);
+      if (!validation.valid) {
+        setError(validation.errors.join("\n"));
+        return;
+      }
+    }
     const fileName = resumeData
       ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
       : "Resume";
@@ -817,7 +843,12 @@ function App() {
   };
 
   const handleNewJD = useCallback(() => newJD(), [newJD]);
-  const handleStartOver = useCallback(() => startOver(), [startOver]);
+  const handleStartOver = useCallback(() => {
+    if (resumeData && !window.confirm("You have resume data that may not be fully saved. Are you sure you want to start over?")) {
+      return;
+    }
+    startOver();
+  }, [startOver, resumeData]);
 
   const handleSaveJSON = () => {
     if (!resumeData) return;
@@ -862,6 +893,11 @@ function App() {
 
   const handleExportDocx = async () => {
     if (!resumeData) return;
+    const validation = validateForExport(resumeData);
+    if (!validation.valid) {
+      setError(validation.errors.join("\n"));
+      return;
+    }
     try {
       await exportToDocx(resumeData);
     } catch (err) {
@@ -916,7 +952,11 @@ function App() {
           <h1 className="app-title">Resume Maker</h1>
         </div>
         <div className="header-actions">
-          {isSaving && <span className="save-indicator">Saving...</span>}
+          {saveStatus === "saving" && <span className="save-indicator">Saving...</span>}
+          {saveStatus === "saved" && <span className="save-indicator saved">Saved ✓</span>}
+          {saveStatus === "idle" && step === "editor" && resumeData && user && (
+            <span className="save-indicator unsaved">Unsaved changes •</span>
+          )}
 
           {/* Undo/Redo */}
           {step === "editor" && (
@@ -1069,7 +1109,8 @@ function App() {
         className="sr-only"
         role="status"
       >
-        {isSaving && "Saving resume..."}
+        {saveStatus === "saving" && "Saving resume..."}
+        {saveStatus === "saved" && "Resume saved"}
         {error && `Error: ${error}`}
         {step === "analyzing" && loadingMessage}
       </div>

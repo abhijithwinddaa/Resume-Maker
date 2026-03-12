@@ -1,3 +1,17 @@
+export interface ResumeMeta {
+  template: string;
+  createdAt: number;
+  lastModified: number;
+  entryPath: "A" | "B" | "C";
+}
+
+export interface VolunteerEntry {
+  organization: string;
+  role: string;
+  dateRange: string;
+  bullets: string[];
+}
+
 export interface ContactInfo {
   name: string;
   phone: string;
@@ -89,6 +103,8 @@ export interface ResumeData {
   showCertificates: boolean;
   sectionOrder: SectionKey[];
   sectionLabels?: Partial<Record<SectionKey, string>>;
+  meta?: ResumeMeta;
+  volunteer?: VolunteerEntry[];
 }
 
 export function createEmptyResume(): ResumeData {
