@@ -15,11 +15,7 @@ function containsPlaceholder(text: string): boolean {
 }
 
 /** Recursively scan all string values in an object for placeholder text */
-function findPlaceholders(
-  obj: unknown,
-  path: string,
-  results: string[],
-): void {
+function findPlaceholders(obj: unknown, path: string, results: string[]): void {
   if (typeof obj === "string") {
     if (containsPlaceholder(obj)) {
       results.push(path);
@@ -63,9 +59,7 @@ export function validateForExport(data: ResumeData): ExportValidationResult {
   }
 
   // At least one skill
-  const hasSkills = data.skills.some(
-    (s) => s.label.trim() && s.skills.trim(),
-  );
+  const hasSkills = data.skills.some((s) => s.label.trim() && s.skills.trim());
   if (!hasSkills) {
     errors.push("Add at least one skill");
   }
@@ -114,7 +108,8 @@ export function calculateCompleteness(data: ResumeData): {
   const hasExp =
     data.showExperience &&
     data.experience.some(
-      (e) => e.company.trim() && e.role.trim() && e.bullets.some((b) => b.trim()),
+      (e) =>
+        e.company.trim() && e.role.trim() && e.bullets.some((b) => b.trim()),
     );
   breakdown.push({ label: "Experience", complete: hasExp, weight: 20 });
 
@@ -125,9 +120,7 @@ export function calculateCompleteness(data: ResumeData): {
   breakdown.push({ label: "Education", complete: hasEdu, weight: 15 });
 
   // Skills (15%)
-  const hasSkills = data.skills.some(
-    (s) => s.label.trim() && s.skills.trim(),
-  );
+  const hasSkills = data.skills.some((s) => s.label.trim() && s.skills.trim());
   breakdown.push({ label: "Skills", complete: hasSkills, weight: 15 });
 
   // Projects or Certifications (10%)

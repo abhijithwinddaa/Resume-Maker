@@ -5,11 +5,11 @@
  *
  * Principles followed:
  * - A4 page (210mm × 297mm = 595.28 × 841.89 pt)
- * - High DPI (scale 3) for crisp text
+ * - Adaptive DPI (scale 2 on mobile/Safari, scale 3 on desktop)
  * - White background, no browser chrome
  * - Preserves all colors, fonts, links as rendered
  * - Clickable link annotations overlaid on the image
- * - Direct download — no print dialog
+ * - Cross-platform download (file-saver fallback for Safari/iOS)
  */
 
 interface LinkRect {
@@ -18,6 +18,14 @@ interface LinkRect {
   y: number;
   width: number;
   height: number;
+}
+
+/** Detect iOS / Safari for platform-specific workarounds */
+function isSafariOrIOS(): boolean {
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+  return isIOS || isSafari;
 }
 
 /** Collect all <a> elements with valid href and their bounding rects relative to the container */
@@ -49,10 +57,16 @@ export async function exportResumeToPDF(
   element: HTMLElement,
   fileName: string = "Resume",
 ): Promise<void> {
+  // Wait for all fonts to load before rendering
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
+
   // Lazy-load heavy libraries for code splitting
-  const [{ default: html2canvas }, pdfLib] = await Promise.all([
+  const [{ default: html2canvas }, pdfLib, { saveAs }] = await Promise.all([
     import("html2canvas-pro"),
     import("pdf-lib"),
+    import("file-saver"),
   ]);
   const { PDFDocument } = pdfLib;
 
@@ -65,8 +79,8 @@ export async function exportResumeToPDF(
   const elementWidth = element.offsetWidth;
   const elementHeight = element.offsetHeight;
 
-  // High-res canvas for crisp text
-  const scale = 3;
+  // Adaptive scale: lower for mobile/Safari to avoid memory issues
+  const scale = isSafariOrIOS() ? 2 : 3;
 
   const canvas = await html2canvas(element, {
     scale,
@@ -82,6 +96,9 @@ export async function exportResumeToPDF(
         clonedEl.style.border = "none";
         clonedEl.style.width = "210mm";
         clonedEl.style.minHeight = "297mm";
+        // Clear CSS that html2canvas can't render properly
+        clonedEl.style.filter = "none";
+        clonedEl.style.backdropFilter = "none";
       }
     },
   });
@@ -143,15 +160,8 @@ export async function exportResumeToPDF(
 
   const pdfBytes = await pdfDoc.save();
 
-  // Trigger download
-  const blob = new Blob([pdfBytes as BlobPart], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
+  // Cross-platform download using file-saver (handles Safari/iOS correctly)
   const safeName = fileName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Resume";
-  a.download = `${safeName}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const blob = new Blob([pdfBytes as BlobPart], { type: "application/pdf" });
+  saveAs(blob, `${safeName}.pdf`);
 }

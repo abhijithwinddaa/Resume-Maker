@@ -14,7 +14,7 @@ interface PerformanceMetric {
 const metrics: PerformanceMetric[] = [];
 
 function rateMetric(
-  name: string,
+  _name: string,
   value: number,
   good: number,
   poor: number,

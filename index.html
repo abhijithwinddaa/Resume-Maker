@@ -11,14 +11,15 @@
     />
     <link rel="manifest" href="/manifest.json" />
     <title>Resume Maker</title>
+    <!-- DNS prefetch + preconnect for external resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://clerk.com" />
     <!-- Font: subset to Latin only for smaller download -->
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap&subset=latin"
       rel="stylesheet"
     />
-    <!-- Preload lazy-loaded component chunks for faster perceived loading -->
-    <link rel="modulepreload" href="/src/components/ResumeTemplate.tsx" />
-    <link rel="modulepreload" href="/src/components/ResumeEditor.tsx" />
   </head>
   <body>
     <div id="root"></div>

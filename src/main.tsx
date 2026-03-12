@@ -23,5 +23,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 // Register service worker for PWA/offline caching (production only)
 registerServiceWorker();
 
-// Start performance monitoring
-initPerformanceMonitoring();
+// Defer performance monitoring to idle time
+if ("requestIdleCallback" in window) {
+  window.requestIdleCallback(() => initPerformanceMonitoring());
+} else {
+  setTimeout(initPerformanceMonitoring, 2000);
+}

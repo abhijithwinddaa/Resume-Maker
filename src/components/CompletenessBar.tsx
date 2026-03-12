@@ -34,11 +34,7 @@ const CompletenessBar: React.FC<CompletenessBarProps> = ({ data }) => {
       <ul className="completeness-checklist">
         {breakdown.map((item) => (
           <li key={item.label} className={item.complete ? "done" : "pending"}>
-            {item.complete ? (
-              <CheckCircle2 size={14} />
-            ) : (
-              <Circle size={14} />
-            )}
+            {item.complete ? <CheckCircle2 size={14} /> : <Circle size={14} />}
             <span>{item.label}</span>
           </li>
         ))}

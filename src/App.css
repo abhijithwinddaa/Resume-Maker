@@ -4,6 +4,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height — accounts for mobile browser chrome */
   overflow: hidden;
   background: var(--bg-tertiary);
   transition: background 0.3s;
@@ -765,6 +766,8 @@
     width: 100%;
     min-width: 0;
     max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .score-right,
@@ -797,6 +800,16 @@
   .input-hero p {
     font-size: 13px;
   }
+
+  .score-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .score-actions {
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 600px) {
@@ -812,20 +825,124 @@
     display: none;
   }
 
+  .header-btn {
+    padding: 6px;
+    min-width: 32px;
+    min-height: 32px;
+    justify-content: center;
+  }
+
   .input-step {
     padding: 20px 12px;
   }
 
   .input-textarea {
-    min-height: 200px;
+    min-height: 180px;
   }
 
   .score-left {
     padding: 16px;
+    max-height: 40vh;
   }
 
   .auth-card {
     padding: 32px 20px;
+  }
+
+  .auth-card h2 {
+    font-size: 18px;
+  }
+
+  .analyze-btn {
+    max-width: 100%;
+    padding: 12px 20px;
+    font-size: 14px;
+  }
+
+  .input-actions-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .input-actions-row .analyze-btn,
+  .input-actions-row .btn-secondary {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .preview-container {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .step-indicator {
+    padding: 8px 12px;
+    gap: 6px;
+  }
+
+  .step-number {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
+
+  .error-banner {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header {
+    padding: 6px 8px;
+  }
+
+  .logo-icon {
+    display: none;
+  }
+
+  .app-title {
+    font-size: 13px;
+  }
+
+  .input-step {
+    padding: 16px 8px;
+  }
+
+  .input-hero {
+    margin-bottom: 20px;
+  }
+
+  .input-hero h2 {
+    font-size: 18px;
+  }
+
+  .input-hero p {
+    font-size: 12px;
+  }
+
+  .score-left {
+    padding: 12px;
+  }
+
+  .keyword-tags {
+    gap: 4px;
+  }
+
+  .tag {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .auth-card {
+    padding: 24px 16px;
+    border-radius: 12px;
+  }
+
+  .save-indicator {
+    font-size: 10px;
+    padding: 2px 4px;
   }
 }
 
@@ -1239,5 +1356,48 @@
 
   .landing-card h3 {
     font-size: 16px;
+  }
+
+  .landing-hero h2 {
+    font-size: 20px;
+  }
+
+  .landing-hero p {
+    font-size: 13px;
+  }
+
+  .landing-step {
+    padding: 24px 12px;
+  }
+
+  .landing-hero {
+    margin-bottom: 28px;
+  }
+}
+
+@media (max-width: 480px) {
+  .landing-card {
+    padding: 20px 12px;
+  }
+
+  .landing-card-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 14px;
+  }
+
+  .landing-card h3 {
+    font-size: 15px;
+  }
+
+  .landing-card p {
+    font-size: 13px;
+  }
+
+  .landing-card-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 13px;
   }
 }

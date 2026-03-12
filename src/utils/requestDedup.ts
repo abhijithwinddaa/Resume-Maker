@@ -30,31 +30,4 @@ export function clearRequestController(key: string): void {
   activeRequests.delete(key);
 }
 
-/**
- * Abort a specific request by key.
- */
-export function abortRequest(key: string): void {
-  const controller = activeRequests.get(key);
-  if (controller) {
-    controller.abort();
-    activeRequests.delete(key);
-  }
-}
 
-/**
- * Check if a request is currently in flight for a given key.
- */
-export function isRequestInFlight(key: string): boolean {
-  const controller = activeRequests.get(key);
-  return !!controller && !controller.signal.aborted;
-}
-
-/**
- * Abort all in-flight requests.
- */
-export function abortAllRequests(): void {
-  for (const [key, controller] of activeRequests) {
-    controller.abort();
-    activeRequests.delete(key);
-  }
-}

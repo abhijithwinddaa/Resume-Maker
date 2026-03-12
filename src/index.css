@@ -74,6 +74,7 @@ body {
 
 #root {
   height: 100vh;
+  height: 100dvh;
 }
 
 /* Scrollbar */
@@ -160,4 +161,42 @@ body {
 :focus-visible {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
+}
+
+/* ─── Mobile / Touch Support ─────────────────────── */
+
+/* Prevent iOS zoom on input focus */
+@media (max-width: 600px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Safe area insets for notched devices (iPhone X+) */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .app {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .app-header {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+}
+
+/* Smooth scrolling on touch devices */
+.app-main,
+.score-left,
+.editor-left,
+.score-right,
+.editor-right {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent text size adjustment on orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }

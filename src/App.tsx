@@ -238,7 +238,9 @@ function App() {
   const [showResumeManager, setShowResumeManager] = useState(false);
 
   // Save status tracking
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
+    "idle",
+  );
 
   // Deferred auth: track which mode was selected before sign-in
   const [pendingMode, setPendingMode] = useState<AppMode>(null);
@@ -844,7 +846,12 @@ function App() {
 
   const handleNewJD = useCallback(() => newJD(), [newJD]);
   const handleStartOver = useCallback(() => {
-    if (resumeData && !window.confirm("You have resume data that may not be fully saved. Are you sure you want to start over?")) {
+    if (
+      resumeData &&
+      !window.confirm(
+        "You have resume data that may not be fully saved. Are you sure you want to start over?",
+      )
+    ) {
       return;
     }
     startOver();
@@ -952,8 +959,12 @@ function App() {
           <h1 className="app-title">Resume Maker</h1>
         </div>
         <div className="header-actions">
-          {saveStatus === "saving" && <span className="save-indicator">Saving...</span>}
-          {saveStatus === "saved" && <span className="save-indicator saved">Saved ✓</span>}
+          {saveStatus === "saving" && (
+            <span className="save-indicator">Saving...</span>
+          )}
+          {saveStatus === "saved" && (
+            <span className="save-indicator saved">Saved ✓</span>
+          )}
           {saveStatus === "idle" && step === "editor" && resumeData && user && (
             <span className="save-indicator unsaved">Unsaved changes •</span>
           )}
@@ -1134,7 +1145,11 @@ function App() {
       <main className="app-main" id="main-content" role="main">
         {/* ═══ LANDING PAGE ═══ */}
         {step === "landing" && !isDbLoading && (
-          <div className="landing-step" role="region" aria-label="Choose an option">
+          <div
+            className="landing-step"
+            role="region"
+            aria-label="Choose an option"
+          >
             <div className="landing-hero">
               <FileText size={48} className="landing-hero-icon" />
               <h2>Welcome to Resume Maker</h2>
@@ -1143,7 +1158,10 @@ function App() {
 
             <div className="landing-cards">
               {/* Card 1: ATS Score & Optimize */}
-              <div className="landing-card" onClick={() => handleSelectMode("ats")}>
+              <div
+                className="landing-card"
+                onClick={() => handleSelectMode("ats")}
+              >
                 <div className="landing-card-icon landing-card-icon-ats">
                   <Target size={32} />
                 </div>
@@ -1175,7 +1193,10 @@ function App() {
               </div>
 
               {/* Card 2: Edit My Resume */}
-              <div className="landing-card" onClick={() => handleSelectMode("edit")}>
+              <div
+                className="landing-card"
+                onClick={() => handleSelectMode("edit")}
+              >
                 <div className="landing-card-icon landing-card-icon-edit">
                   <Edit3 size={32} />
                 </div>
@@ -1207,7 +1228,10 @@ function App() {
               </div>
 
               {/* Card 3: Create Resume */}
-              <div className="landing-card" onClick={() => handleSelectMode("create")}>
+              <div
+                className="landing-card"
+                onClick={() => handleSelectMode("create")}
+              >
                 <div className="landing-card-icon landing-card-icon-create">
                   <PlusCircle size={32} />
                 </div>
@@ -1276,7 +1300,11 @@ function App() {
 
         {/* ═══ INPUT STEP — ATS MODE ═══ */}
         {step === "input" && mode === "ats" && !isDbLoading && (
-          <div className="input-step" role="region" aria-label="Resume and JD input">
+          <div
+            className="input-step"
+            role="region"
+            aria-label="Resume and JD input"
+          >
             <div className="input-hero">
               <h2>ATS Score & Optimize</h2>
               <p>
@@ -1285,7 +1313,11 @@ function App() {
                   : "Paste your resume and the target job description to get an ATS score."}
               </p>
             </div>
-            <div className={resumeData ? "input-grid input-grid-single" : "input-grid"}>
+            <div
+              className={
+                resumeData ? "input-grid input-grid-single" : "input-grid"
+              }
+            >
               {!resumeData && (
                 <div className="input-card">
                   <div className="input-label-row">
@@ -1385,9 +1417,7 @@ function App() {
                     <>
                       <Clock size={18} />
                       Wait{" "}
-                      {formatCooldown(
-                        getRateLimitRemaining("analyze", 30000),
-                      )}
+                      {formatCooldown(getRateLimitRemaining("analyze", 30000))}
                     </>
                   ) : (
                     <>
@@ -1410,9 +1440,7 @@ function App() {
                     <>
                       <Clock size={18} />
                       Wait{" "}
-                      {formatCooldown(
-                        getRateLimitRemaining("analyze", 30000),
-                      )}
+                      {formatCooldown(getRateLimitRemaining("analyze", 30000))}
                     </>
                   ) : (
                     <>
@@ -1517,17 +1545,13 @@ function App() {
               <button
                 className="analyze-btn"
                 onClick={handleParseResume}
-                disabled={
-                  !resumeText.trim() || isRateLimited("analyze", 30000)
-                }
+                disabled={!resumeText.trim() || isRateLimited("analyze", 30000)}
               >
                 {isRateLimited("analyze", 30000) ? (
                   <>
                     <Clock size={18} />
                     Wait{" "}
-                    {formatCooldown(
-                      getRateLimitRemaining("analyze", 30000),
-                    )}
+                    {formatCooldown(getRateLimitRemaining("analyze", 30000))}
                   </>
                 ) : (
                   <>
@@ -1560,9 +1584,7 @@ function App() {
               <div className="score-header">
                 <ScoreMeter score={atsResult.overallScore} />
                 <div className="score-verdict">
-                  <h3>
-                    {jdText.trim() ? "ATS Score" : "Self ATS Score"}
-                  </h3>
+                  <h3>{jdText.trim() ? "ATS Score" : "Self ATS Score"}</h3>
                   {!jdText.trim() && (
                     <small className="self-score-tag">
                       General best practices — no JD
@@ -1572,8 +1594,7 @@ function App() {
                   {optimizeDone && previousScore !== null && (
                     <div className="improvement-badge">
                       <Trophy size={16} />
-                      Improved: {previousScore} &rarr;{" "}
-                      {atsResult.overallScore}
+                      Improved: {previousScore} &rarr; {atsResult.overallScore}
                     </div>
                   )}
                 </div>
@@ -1581,9 +1602,7 @@ function App() {
 
               <div className="keywords-section">
                 <h4>
-                  {jdText.trim()
-                    ? "Keywords Found"
-                    : "Industry Keywords Found"}
+                  {jdText.trim() ? "Keywords Found" : "Industry Keywords Found"}
                 </h4>
                 <div className="keyword-tags">
                   {atsResult.breakdown.keywordMatch.matchedKeywords?.map(
@@ -1627,26 +1646,20 @@ function App() {
               <div className="breakdown-section">
                 <h4>Breakdown</h4>
                 <BreakdownBar
-                  label={
-                    jdText.trim() ? "Keyword Match" : "Industry Keywords"
-                  }
+                  label={jdText.trim() ? "Keyword Match" : "Industry Keywords"}
                   score={atsResult.breakdown.keywordMatch.score}
                   weight={atsResult.breakdown.keywordMatch.weight}
                 />
                 <BreakdownBar
                   label={
-                    jdText.trim()
-                      ? "Skills Alignment"
-                      : "Skills Presentation"
+                    jdText.trim() ? "Skills Alignment" : "Skills Presentation"
                   }
                   score={atsResult.breakdown.skillsAlignment.score}
                   weight={atsResult.breakdown.skillsAlignment.weight}
                 />
                 <BreakdownBar
                   label={
-                    jdText.trim()
-                      ? "Experience Relevance"
-                      : "Content Quality"
+                    jdText.trim() ? "Experience Relevance" : "Content Quality"
                   }
                   score={atsResult.breakdown.experienceRelevance.score}
                   weight={atsResult.breakdown.experienceRelevance.weight}
@@ -1757,11 +1770,7 @@ function App() {
 
         {/* ═══ EDITOR STEP ═══ */}
         {step === "editor" && resumeData && (
-          <div
-            className="editor-step"
-            role="region"
-            aria-label="Resume editor"
-          >
+          <div className="editor-step" role="region" aria-label="Resume editor">
             <div className="editor-left">
               <StyleDetectedBadge />
               <ErrorBoundary>

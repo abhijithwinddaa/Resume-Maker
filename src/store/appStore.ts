@@ -5,7 +5,6 @@ import type { TemplateId, TemplateCustomization } from "../types/templates";
 import { DEFAULT_CUSTOMIZATION } from "../types/templates";
 import type { AISettings } from "../types/aiSettings";
 import {
-  DEFAULT_AI_SETTINGS,
   loadAISettings,
   saveAISettings,
 } from "../types/aiSettings";

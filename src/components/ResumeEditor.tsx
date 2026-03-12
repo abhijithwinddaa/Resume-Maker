@@ -17,7 +17,6 @@ import {
   ChevronUp,
   ToggleLeft,
   ToggleRight,
-  GripVertical,
   Layers,
 } from "lucide-react";
 import "./ResumeEditor.css";
@@ -324,16 +323,6 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   const handleSectionDelete = (key: SectionKey) => {
     const newOrder = sectionOrder.filter((k) => k !== key);
     onChange({ ...data, sectionOrder: newOrder });
-  };
-
-  const sectionLabels: Record<SectionKey, string> = {
-    summary: "Summary",
-    education: "Education",
-    experience: "Experience",
-    projects: "Projects",
-    skills: "Skills",
-    achievements: "Achievements",
-    certificates: "Certificates",
   };
 
   const SectionHeader: React.FC<{ title: string; section: SectionName }> = ({

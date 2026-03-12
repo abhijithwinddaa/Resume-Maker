@@ -318,6 +318,60 @@
   flex-shrink: 0;
 }
 
+/* ─── Responsive ─────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .resume-editor {
+    padding: 12px 8px;
+  }
+
+  .editor-title {
+    font-size: 16px;
+  }
+
+  .field-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .skill-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .skill-label-group {
+    flex: 1 1 auto;
+  }
+
+  .cert-fields {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .cert-name-input,
+  .cert-desc-input,
+  .cert-link-input {
+    flex: 1 1 auto;
+  }
+
+  .bullet-row {
+    gap: 2px;
+  }
+
+  .editor-section-header {
+    padding: 10px 10px;
+  }
+
+  .editor-fields {
+    padding: 10px 8px;
+  }
+
+  .btn-icon {
+    width: 36px;
+    height: 36px;
+  }
+}
+
 /* Section Order */
 .section-order-list {
   display: flex;
