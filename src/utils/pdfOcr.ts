@@ -38,19 +38,33 @@ export async function extractTextWithOCR(
       const page = await pdf.getPage(i);
       const viewport = page.getViewport({ scale: 2 }); // 2x for better OCR accuracy
 
-      // Render page to an OffscreenCanvas (or regular canvas)
-      const canvas = new OffscreenCanvas(viewport.width, viewport.height);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) continue;
-
-      await page.render({
-        canvasContext: ctx as unknown as CanvasRenderingContext2D,
-        viewport,
-        canvas: canvas as unknown as HTMLCanvasElement,
-      }).promise;
-
-      // Convert to blob for Tesseract
-      const blob = await canvas.convertToBlob({ type: "image/png" });
+      // Render page to canvas — use OffscreenCanvas where available, fallback for Safari <16.4
+      let blob: Blob;
+      if (typeof OffscreenCanvas !== "undefined") {
+        const canvas = new OffscreenCanvas(viewport.width, viewport.height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        await page.render({
+          canvasContext: ctx as unknown as CanvasRenderingContext2D,
+          viewport,
+          canvas: canvas as unknown as HTMLCanvasElement,
+        }).promise;
+        blob = await canvas.convertToBlob({ type: "image/png" });
+      } else {
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        await page.render({
+          canvasContext: ctx,
+          viewport,
+          canvas: canvas as unknown as HTMLCanvasElement,
+        }).promise;
+        blob = await new Promise<Blob>((resolve, reject) =>
+          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Canvas toBlob failed"))), "image/png"),
+        );
+      }
 
       const { data } = await worker.recognize(blob);
       if (data.text.trim()) {

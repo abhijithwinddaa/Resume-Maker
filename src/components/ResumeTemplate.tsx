@@ -157,13 +157,13 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                       {project.githubLink && (
                         <>
                           {" | "}
-                          <a href={project.githubLink}>Github</a>
+                          <a href={project.githubLink} target="_blank" rel="noreferrer">Github</a>
                         </>
                       )}
                       {project.liveLink && (
                         <>
                           {" | "}
-                          <a href={project.liveLink}>Live Demo</a>
+                          <a href={project.liveLink} target="_blank" rel="noreferrer">Live Demo</a>
                         </>
                       )}
                     </span>

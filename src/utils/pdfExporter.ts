@@ -228,6 +228,7 @@ export async function exportResumeToPDF(
   // text that is still extractable by text parsers and ATS systems.
   if (textRects.length > 0) {
     const font = await pdfDoc.embedFont(pdfLib.StandardFonts.Helvetica);
+    const fontKey = page.node.newFontDictionary("Helvetica", font.ref);
 
     for (const tr of textRects) {
       // Convert DOM coords to PDF coords
@@ -238,8 +239,6 @@ export async function exportResumeToPDF(
       // Sanitize text — pdf-lib's Helvetica can only encode WinAnsi characters
       const safe = tr.text.replace(/[^\x20-\x7E]/g, " ");
       if (!safe.trim()) continue;
-
-      const fontKey = page.node.newFontDictionary("Helvetica", font.ref);
 
       page.pushOperators(
         pdfLib.pushGraphicsState(),

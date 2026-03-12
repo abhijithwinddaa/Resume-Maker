@@ -4,10 +4,7 @@ import type { ATSResult, OptimizeProgress } from "../utils/aiService";
 import type { TemplateId, TemplateCustomization } from "../types/templates";
 import { DEFAULT_CUSTOMIZATION } from "../types/templates";
 import type { AISettings } from "../types/aiSettings";
-import {
-  loadAISettings,
-  saveAISettings,
-} from "../types/aiSettings";
+import { loadAISettings, saveAISettings } from "../types/aiSettings";
 import type { DetectedStyle } from "../utils/templateDetector";
 
 // ─── Undo/Redo History ───────────────────────────────
@@ -319,7 +316,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   canRedo: () => get().history.future.length > 0,
 
   // Composite
-  startOver: () =>
+  startOver: () => {
+    // Revoke blob URL before clearing to prevent memory leak
+    const prev = get().originalPdfUrl;
+    if (prev) {
+      try { URL.revokeObjectURL(prev); } catch { /* ignore */ }
+    }
     set({
       step: "landing",
       mode: null,
@@ -338,7 +340,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       detectedStyle: null,
       originalPdfUrl: null,
       showOriginalPdf: false,
-    }),
+    });
+  },
   newJD: () =>
     set({
       jdText: "",
