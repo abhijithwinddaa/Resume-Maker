@@ -8,21 +8,62 @@
  * - High DPI (scale 3) for crisp text
  * - White background, no browser chrome
  * - Preserves all colors, fonts, links as rendered
+ * - Clickable link annotations overlaid on the image
  * - Direct download — no print dialog
  */
+
+interface LinkRect {
+  href: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Collect all <a> elements with valid href and their bounding rects relative to the container */
+function collectLinkRects(container: HTMLElement): LinkRect[] {
+  const containerRect = container.getBoundingClientRect();
+  const links: LinkRect[] = [];
+  const anchors = container.querySelectorAll("a[href]");
+
+  anchors.forEach((anchor) => {
+    const href = anchor.getAttribute("href");
+    if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+
+    const rect = anchor.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    links.push({
+      href,
+      x: rect.left - containerRect.left,
+      y: rect.top - containerRect.top,
+      width: rect.width,
+      height: rect.height,
+    });
+  });
+
+  return links;
+}
+
 export async function exportResumeToPDF(
   element: HTMLElement,
   fileName: string = "Resume",
 ): Promise<void> {
   // Lazy-load heavy libraries for code splitting
-  const [{ default: html2canvas }, { PDFDocument }] = await Promise.all([
+  const [{ default: html2canvas }, pdfLib] = await Promise.all([
     import("html2canvas-pro"),
     import("pdf-lib"),
   ]);
+  const { PDFDocument } = pdfLib;
 
   // A4 in points (1pt = 1/72 inch)
   const A4_WIDTH_PT = 595.28;
   const A4_HEIGHT_PT = 841.89;
+
+  // Collect link positions BEFORE html2canvas clones (need live DOM rects)
+  const linkRects = collectLinkRects(element);
+  const elementWidth = element.offsetWidth;
+  const elementHeight = element.offsetHeight;
 
   // High-res canvas for crisp text
   const scale = 3;
@@ -47,9 +88,8 @@ export async function exportResumeToPDF(
 
   // Convert canvas to PNG bytes
   const pngDataUrl = canvas.toDataURL("image/png", 1.0);
-  const pngBytes = Uint8Array.from(
-    atob(pngDataUrl.split(",")[1]),
-    (c) => c.charCodeAt(0),
+  const pngBytes = Uint8Array.from(atob(pngDataUrl.split(",")[1]), (c) =>
+    c.charCodeAt(0),
   );
 
   // Build PDF with pdf-lib
@@ -63,12 +103,43 @@ export async function exportResumeToPDF(
   const pageHeight = Math.max(imgHeight, A4_HEIGHT_PT);
 
   const page = pdfDoc.addPage([pageWidth, pageHeight]);
+  const imgY = pageHeight - imgHeight;
+
   page.drawImage(pngImage, {
     x: 0,
-    y: pageHeight - imgHeight,
+    y: imgY,
     width: pageWidth,
     height: imgHeight,
   });
+
+  // Overlay clickable link annotations
+  // Convert DOM pixel coords to PDF points
+  const scaleX = pageWidth / elementWidth;
+  const scaleY = imgHeight / elementHeight;
+
+  for (const link of linkRects) {
+    const pdfX = link.x * scaleX;
+    // PDF y-axis is bottom-up; DOM y is top-down
+    const pdfY = pageHeight - (link.y + link.height) * scaleY;
+    const pdfW = link.width * scaleX;
+    const pdfH = link.height * scaleY;
+
+    page.node.addAnnot(
+      pdfDoc.context.register(
+        pdfDoc.context.obj({
+          Type: "Annot",
+          Subtype: "Link",
+          Rect: [pdfX, pdfY, pdfX + pdfW, pdfY + pdfH],
+          Border: [0, 0, 0],
+          A: {
+            Type: "Action",
+            S: "URI",
+            URI: pdfLib.PDFString.of(link.href),
+          },
+        }),
+      ),
+    );
+  }
 
   const pdfBytes = await pdfDoc.save();
 
