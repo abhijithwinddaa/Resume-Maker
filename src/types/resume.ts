@@ -91,6 +91,35 @@ export interface ResumeData {
   sectionLabels?: Partial<Record<SectionKey, string>>;
 }
 
+export function createEmptyResume(): ResumeData {
+  return {
+    contact: {
+      name: "",
+      phone: "",
+      email: "",
+      linkedin: "",
+      github: "",
+      portfolio: "",
+    },
+    summary: "",
+    education: [
+      { university: "", location: "", degree: "", yearRange: "", cgpa: "" },
+    ],
+    experience: [
+      { company: "", role: "", location: "", dateRange: "", bullets: [""] },
+    ],
+    showExperience: true,
+    projects: [
+      { title: "", githubLink: "", liveLink: "", techStack: "", bullets: [""] },
+    ],
+    skills: [{ label: "", skills: "" }],
+    achievements: [{ text: "" }],
+    certificates: [{ name: "", description: "", link: "" }],
+    showCertificates: true,
+    sectionOrder: [...DEFAULT_SECTION_ORDER],
+  };
+}
+
 export interface JDAnalysis {
   allKeywords: string[];
   matchedKeywords: string[];

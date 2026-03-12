@@ -148,8 +148,7 @@ export async function exportResumeToPDF(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  const safeName =
-    fileName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Resume";
+  const safeName = fileName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Resume";
   a.download = `${safeName}.pdf`;
   document.body.appendChild(a);
   a.click();

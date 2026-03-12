@@ -16,7 +16,9 @@ import {
   UserButton,
 } from "@clerk/clerk-react";
 import { useAppStore } from "./store/appStore";
+import type { AppMode } from "./store/appStore";
 import type { ResumeData } from "./types/resume";
+import { createEmptyResume } from "./types/resume";
 import {
   parseResumeFromText,
   analyzeATSScore,
@@ -84,6 +86,7 @@ import {
   Mail,
   FolderOpen,
   Eye,
+  PlusCircle,
 } from "lucide-react";
 import "./App.css";
 
@@ -181,6 +184,8 @@ function App() {
   // Zustand store
   const step = useAppStore((s) => s.step);
   const setStep = useAppStore((s) => s.setStep);
+  const mode = useAppStore((s) => s.mode);
+  const setMode = useAppStore((s) => s.setMode);
   const resumeText = useAppStore((s) => s.resumeText);
   const setResumeText = useAppStore((s) => s.setResumeText);
   const jdText = useAppStore((s) => s.jdText);
@@ -224,13 +229,15 @@ function App() {
   const originalPdfUrl = useAppStore((s) => s.originalPdfUrl);
   const showOriginalPdf = useAppStore((s) => s.showOriginalPdf);
   const setShowOriginalPdf = useAppStore((s) => s.setShowOriginalPdf);
-  const applyDetectedStyle = useAppStore((s) => s.applyDetectedStyle);
 
   // Panel visibility
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCoverLetter, setShowCoverLetter] = useState(false);
   const [showAISettings, setShowAISettings] = useState(false);
   const [showResumeManager, setShowResumeManager] = useState(false);
+
+  // Deferred auth: track which mode was selected before sign-in
+  const [pendingMode, setPendingMode] = useState<AppMode>(null);
 
   // Extracted PDF links for parser
   const extractedLinksRef = useRef<string[]>([]);
@@ -280,7 +287,33 @@ function App() {
       .then((saved) => {
         if (saved) {
           setResumeData(saved, false);
-          setStep("editor");
+          // If user had a pending mode from landing page, honor it
+          if (pendingMode) {
+            setMode(pendingMode);
+            setPendingMode(null);
+            if (pendingMode === "ats") {
+              setStep("input");
+            } else {
+              setStep("editor");
+            }
+          } else {
+            // Returning user with saved resume → straight to editor
+            setMode("edit");
+            setStep("editor");
+          }
+        } else if (pendingMode) {
+          // No saved resume, but user picked a mode
+          setMode(pendingMode);
+          setPendingMode(null);
+          if (pendingMode === "create") {
+            setResumeData(createEmptyResume(), false);
+            setStep("editor");
+          } else {
+            setStep("input");
+          }
+        } else {
+          // No saved resume and no pending mode — show landing
+          setStep("landing");
         }
       })
       .catch((err) => {
@@ -288,9 +321,21 @@ function App() {
         setError(
           "Failed to load saved resume from database. Check console for details.",
         );
+        // Still honor pending mode on error
+        if (pendingMode) {
+          setMode(pendingMode);
+          setPendingMode(null);
+          if (pendingMode === "create") {
+            setResumeData(createEmptyResume(), false);
+            setStep("editor");
+          } else {
+            setStep("input");
+          }
+        }
       })
       .finally(() => setIsDbLoading(false));
-  }, [user?.id, setIsDbLoading, setResumeData, setStep, setError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   /* ── Debounced auto-save to Supabase (500ms) ────── */
   const debouncedSupabaseSave = useDebounce((data: ResumeData) => {
@@ -329,6 +374,41 @@ function App() {
     }
   }, [resumeData, setError]);
 
+  /* ── Mode Selection (landing page) ───────────────── */
+
+  const handleSelectMode = useCallback(
+    (selectedMode: AppMode) => {
+      if (!user) {
+        // Not signed in → save mode and let Clerk prompt
+        setPendingMode(selectedMode);
+        return;
+      }
+      setMode(selectedMode);
+      setError(null);
+      if (selectedMode === "create") {
+        if (!resumeData) {
+          setResumeData(createEmptyResume(), false);
+        }
+        setStep("editor");
+      } else if (selectedMode === "ats") {
+        if (resumeData) {
+          // Already have resume data, go to input for JD
+          setStep("input");
+        } else {
+          setStep("input");
+        }
+      } else {
+        // edit mode
+        if (resumeData) {
+          setStep("editor");
+        } else {
+          setStep("input");
+        }
+      }
+    },
+    [user, setMode, setStep, setError, resumeData, setResumeData],
+  );
+
   /* ── PDF Upload ──────────────────────────────────────── */
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -344,7 +424,6 @@ function App() {
     setIsPdfLoading(true);
     setError(null);
     try {
-      // Extract text AND hyperlinks from the PDF
       const { text, links } = await extractTextAndLinks(file);
       if (!text.trim()) {
         throw new Error(
@@ -376,7 +455,7 @@ function App() {
           console.warn("Template detection failed (non-critical):", err);
         });
 
-      // Auto-parse the resume immediately so it's ready for editing
+      // Auto-parse the resume immediately
       setLoadingMessage(
         "Parsing your resume with AI (preserving all links)...",
       );
@@ -385,8 +464,14 @@ function App() {
 
       const parsed = await parseResumeFromText(aiSettings, sanitized, links);
       handleResumeChange(parsed);
-      // Go straight to editor — user can then choose to optimize or edit
-      setStep("editor");
+
+      if (mode === "ats") {
+        // In ATS mode, go to input for JD entry
+        setStep("input");
+      } else {
+        // In edit mode, go straight to editor
+        setStep("editor");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to read PDF");
       setStep("input");
@@ -404,9 +489,9 @@ function App() {
     extractedLinksRef.current = [];
   }, [setResumeText, setUploadedFileName, setDetectedStyle, setOriginalPdfUrl]);
 
-  /* ── Quick Edit (no JD required) ─────────────────────── */
+  /* ── Parse Resume (edit mode — no JD) ────────────────── */
 
-  const handleQuickEdit = async () => {
+  const handleParseResume = async () => {
     if (!resumeText.trim()) return;
 
     const resumeValidation = validateResumeText(resumeText);
@@ -428,7 +513,7 @@ function App() {
     setLoadingMessage("Parsing your resume with AI...");
     recordAction("analyze");
 
-    const controller = getRequestController("quick-edit");
+    const controller = getRequestController("parse-resume");
 
     try {
       if (controller.signal.aborted) return;
@@ -447,7 +532,122 @@ function App() {
       setError(err instanceof Error ? err.message : "Parsing failed");
       setStep("input");
     } finally {
-      clearRequestController("quick-edit");
+      clearRequestController("parse-resume");
+    }
+  };
+
+  /* ── Analyze (ATS mode — resume + JD) ───────────────── */
+
+  const handleAnalyze = async () => {
+    if (!resumeText.trim() && !resumeData) return;
+    if (!jdText.trim()) return;
+
+    if (!resumeData) {
+      const resumeValidation = validateResumeText(resumeText);
+      if (!resumeValidation.valid) {
+        setError(resumeValidation.error || "Invalid resume text.");
+        return;
+      }
+    }
+    const jdValidation = validateJDText(jdText);
+    if (!jdValidation.valid) {
+      setError(jdValidation.error || "Invalid job description.");
+      return;
+    }
+
+    if (isRateLimited("analyze", 30000)) {
+      const remaining = getRateLimitRemaining("analyze", 30000);
+      setError(
+        `Please wait ${formatCooldown(remaining)} before analyzing again.`,
+      );
+      return;
+    }
+
+    setStep("analyzing");
+    setError(null);
+    recordAction("analyze");
+
+    const controller = getRequestController("analyze");
+
+    try {
+      let parsed = resumeData;
+      if (!parsed) {
+        setLoadingMessage("Parsing your resume with AI...");
+        if (controller.signal.aborted) return;
+        parsed = await parseResumeFromText(
+          aiSettings,
+          sanitizeText(resumeText),
+          extractedLinksRef.current.length > 0
+            ? extractedLinksRef.current
+            : undefined,
+        );
+        if (controller.signal.aborted) return;
+        handleResumeChange(parsed);
+      }
+
+      setLoadingMessage("Running ATS analysis...");
+      const ats = await analyzeATSScore(
+        aiSettings,
+        parsed,
+        sanitizeText(jdText),
+      );
+      if (controller.signal.aborted) return;
+      setATSResult(ats);
+      setOptimizeDone(false);
+      setPreviousScore(null);
+      setStep("score");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Analysis failed");
+      setStep("input");
+    } finally {
+      clearRequestController("analyze");
+    }
+  };
+
+  /* ── Analyze Existing (from editor, with new JD) ───── */
+
+  const handleAnalyzeExisting = async () => {
+    if (!resumeData || !jdText.trim()) return;
+
+    const jdValidation = validateJDText(jdText);
+    if (!jdValidation.valid) {
+      setError(jdValidation.error || "Invalid job description.");
+      return;
+    }
+
+    if (isRateLimited("analyze", 30000)) {
+      const remaining = getRateLimitRemaining("analyze", 30000);
+      setError(
+        `Please wait ${formatCooldown(remaining)} before analyzing again.`,
+      );
+      return;
+    }
+
+    setStep("analyzing");
+    setError(null);
+    setLoadingMessage("Running ATS analysis against new JD...");
+    recordAction("analyze");
+
+    const controller = getRequestController("analyze-existing");
+
+    try {
+      const ats = await analyzeATSScore(
+        aiSettings,
+        resumeData,
+        sanitizeText(jdText),
+      );
+      if (controller.signal.aborted) return;
+      setATSResult(ats);
+      setOptimizeDone(false);
+      setPreviousScore(null);
+      setStep("score");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Analysis failed");
+      setStep("input");
+    } finally {
+      clearRequestController("analyze-existing");
     }
   };
 
@@ -530,70 +730,7 @@ function App() {
     }
   };
 
-  /* ── Step 1 → Analyzing ─────────────────────────────── */
-
-  const handleAnalyze = async () => {
-    if (!resumeText.trim() || !jdText.trim()) return;
-
-    const resumeValidation = validateResumeText(resumeText);
-    if (!resumeValidation.valid) {
-      setError(resumeValidation.error || "Invalid resume text.");
-      return;
-    }
-    const jdValidation = validateJDText(jdText);
-    if (!jdValidation.valid) {
-      setError(jdValidation.error || "Invalid job description.");
-      return;
-    }
-
-    if (isRateLimited("analyze", 30000)) {
-      const remaining = getRateLimitRemaining("analyze", 30000);
-      setError(
-        `Please wait ${formatCooldown(remaining)} before analyzing again.`,
-      );
-      return;
-    }
-
-    setStep("analyzing");
-    setError(null);
-    setLoadingMessage("Parsing your resume with AI...");
-    recordAction("analyze");
-
-    const controller = getRequestController("analyze");
-
-    try {
-      if (controller.signal.aborted) return;
-      const parsed = await parseResumeFromText(
-        aiSettings,
-        sanitizeText(resumeText),
-        extractedLinksRef.current.length > 0
-          ? extractedLinksRef.current
-          : undefined,
-      );
-      if (controller.signal.aborted) return;
-      handleResumeChange(parsed);
-
-      setLoadingMessage("Running ATS analysis...");
-      const ats = await analyzeATSScore(
-        aiSettings,
-        parsed,
-        sanitizeText(jdText),
-      );
-      if (controller.signal.aborted) return;
-      setATSResult(ats);
-      setOptimizeDone(false);
-      setPreviousScore(null);
-      setStep("score");
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Analysis failed");
-      setStep("input");
-    } finally {
-      clearRequestController("analyze");
-    }
-  };
-
-  /* ── Optimize ──────────────────────────────────────── */
+  /* ── Optimize (with JD) ────────────────────────────── */
 
   const handleOptimize = async () => {
     if (!resumeData || !atsResult) return;
@@ -682,50 +819,6 @@ function App() {
   const handleNewJD = useCallback(() => newJD(), [newJD]);
   const handleStartOver = useCallback(() => startOver(), [startOver]);
 
-  const handleAnalyzeExisting = async () => {
-    if (!resumeData || !jdText.trim()) return;
-
-    const jdValidation = validateJDText(jdText);
-    if (!jdValidation.valid) {
-      setError(jdValidation.error || "Invalid job description.");
-      return;
-    }
-
-    if (isRateLimited("analyze", 30000)) {
-      const remaining = getRateLimitRemaining("analyze", 30000);
-      setError(
-        `Please wait ${formatCooldown(remaining)} before analyzing again.`,
-      );
-      return;
-    }
-
-    setStep("analyzing");
-    setError(null);
-    setLoadingMessage("Running ATS analysis against new JD...");
-    recordAction("analyze");
-
-    const controller = getRequestController("analyze-existing");
-
-    try {
-      const ats = await analyzeATSScore(
-        aiSettings,
-        resumeData,
-        sanitizeText(jdText),
-      );
-      if (controller.signal.aborted) return;
-      setATSResult(ats);
-      setOptimizeDone(false);
-      setPreviousScore(null);
-      setStep("score");
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Analysis failed");
-      setStep("input");
-    } finally {
-      clearRequestController("analyze-existing");
-    }
-  };
-
   const handleSaveJSON = () => {
     if (!resumeData) return;
     const blob = new Blob([JSON.stringify(resumeData, null, 2)], {
@@ -774,6 +867,37 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "DOCX export failed");
     }
+  };
+
+  /* ── Step indicator config per mode ─────────────────── */
+
+  const getStepConfig = () => {
+    if (mode === "ats") {
+      return [
+        { key: "input", label: "Resume & JD" },
+        { key: "score", label: "ATS Score" },
+        { key: "editor", label: "Editor" },
+      ];
+    }
+    if (mode === "edit") {
+      return [
+        { key: "input", label: "Resume Input" },
+        { key: "editor", label: "Editor" },
+      ];
+    }
+    if (mode === "create") {
+      return [{ key: "editor", label: "Editor" }];
+    }
+    return [];
+  };
+
+  const getStepStatus = (stepKey: string) => {
+    const steps = getStepConfig().map((s) => s.key);
+    const currentIdx = steps.indexOf(step);
+    const thisIdx = steps.indexOf(stepKey);
+    if (thisIdx < currentIdx) return "completed";
+    if (thisIdx === currentIdx) return "active";
+    return "";
   };
 
   /* ─── Render ─────────────────────────────────────────── */
@@ -870,7 +994,7 @@ function App() {
             <UserButton afterSignOutUrl="/" />
           </SignedIn>
 
-          {step !== "input" && step !== "analyzing" && (
+          {step !== "landing" && step !== "analyzing" && (
             <button className="header-btn" onClick={handleStartOver}>
               <RotateCcw size={14} />
               <span>Start Over</span>
@@ -950,555 +1074,678 @@ function App() {
         {step === "analyzing" && loadingMessage}
       </div>
 
-      {/* Step Indicator */}
-      {step !== "analyzing" && (
+      {/* Step Indicator — only for active flows (not landing) */}
+      {mode && step !== "analyzing" && step !== "landing" && (
         <nav className="step-indicator" aria-label="Progress">
-          <div
-            className={`step-item ${step === "input" ? "active" : "completed"}`}
-          >
-            <div className="step-number">1</div>
-            <span>Input</span>
-          </div>
-          <ChevronRight size={16} className="step-arrow" />
-          <div
-            className={`step-item ${step === "score" ? "active" : step === "editor" ? "completed" : ""}`}
-          >
-            <div className="step-number">2</div>
-            <span>ATS Score</span>
-          </div>
-          <ChevronRight size={16} className="step-arrow" />
-          <div className={`step-item ${step === "editor" ? "active" : ""}`}>
-            <div className="step-number">3</div>
-            <span>Editor</span>
-          </div>
+          {getStepConfig().map((s, i) => (
+            <span key={s.key} style={{ display: "contents" }}>
+              {i > 0 && <ChevronRight size={16} className="step-arrow" />}
+              <div className={`step-item ${getStepStatus(s.key)}`}>
+                <div className="step-number">{i + 1}</div>
+                <span>{s.label}</span>
+              </div>
+            </span>
+          ))}
         </nav>
       )}
 
       {/* Main Content */}
       <main className="app-main" id="main-content" role="main">
-        <SignedOut>
-          <div className="auth-gate">
-            <div className="auth-card">
-              <FileText size={48} className="auth-icon" />
+        {/* ═══ LANDING PAGE ═══ */}
+        {step === "landing" && !isDbLoading && (
+          <div className="landing-step" role="region" aria-label="Choose an option">
+            <div className="landing-hero">
+              <FileText size={48} className="landing-hero-icon" />
               <h2>Welcome to Resume Maker</h2>
-              <p>
-                Sign in to analyze, optimize, and manage your resumes with AI.
-              </p>
-              <SignInButton mode="modal">
-                <button className="auth-signin-btn">
-                  <LogIn size={18} />
-                  Sign In to Get Started
-                </button>
-              </SignInButton>
+              <p>AI-powered resume building, editing, and ATS optimization</p>
             </div>
-          </div>
-        </SignedOut>
 
-        <SignedIn>
-          {isDbLoading && (
-            <div className="analyzing-step">
-              <Loader2 size={48} className="spin" />
-              <h2>Loading your saved resume...</h2>
+            <div className="landing-cards">
+              {/* Card 1: ATS Score & Optimize */}
+              <div className="landing-card" onClick={() => handleSelectMode("ats")}>
+                <div className="landing-card-icon landing-card-icon-ats">
+                  <Target size={32} />
+                </div>
+                <h3>ATS Score & Optimize</h3>
+                <p>
+                  Have a resume and a job description? Get your ATS score and
+                  optimize your resume to match the job requirements.
+                </p>
+                <SignedOut>
+                  <SignInButton mode="modal">
+                    <button
+                      className="landing-card-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingMode("ats");
+                      }}
+                    >
+                      <LogIn size={16} />
+                      Sign In & Start
+                    </button>
+                  </SignInButton>
+                </SignedOut>
+                <SignedIn>
+                  <button className="landing-card-btn">
+                    <Search size={16} />
+                    Get Started
+                  </button>
+                </SignedIn>
+              </div>
+
+              {/* Card 2: Edit My Resume */}
+              <div className="landing-card" onClick={() => handleSelectMode("edit")}>
+                <div className="landing-card-icon landing-card-icon-edit">
+                  <Edit3 size={32} />
+                </div>
+                <h3>Edit My Resume</h3>
+                <p>
+                  Already have a resume? Upload or paste it to parse with AI and
+                  edit in our live preview editor.
+                </p>
+                <SignedOut>
+                  <SignInButton mode="modal">
+                    <button
+                      className="landing-card-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingMode("edit");
+                      }}
+                    >
+                      <LogIn size={16} />
+                      Sign In & Start
+                    </button>
+                  </SignInButton>
+                </SignedOut>
+                <SignedIn>
+                  <button className="landing-card-btn">
+                    <Edit3 size={16} />
+                    Get Started
+                  </button>
+                </SignedIn>
+              </div>
+
+              {/* Card 3: Create Resume */}
+              <div className="landing-card" onClick={() => handleSelectMode("create")}>
+                <div className="landing-card-icon landing-card-icon-create">
+                  <PlusCircle size={32} />
+                </div>
+                <h3>Create New Resume</h3>
+                <p>
+                  Don't have a resume yet? Start from scratch using our
+                  templates and fill in your details.
+                </p>
+                <SignedOut>
+                  <SignInButton mode="modal">
+                    <button
+                      className="landing-card-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingMode("create");
+                      }}
+                    >
+                      <LogIn size={16} />
+                      Sign In & Start
+                    </button>
+                  </SignInButton>
+                </SignedOut>
+                <SignedIn>
+                  <button className="landing-card-btn">
+                    <PlusCircle size={16} />
+                    Get Started
+                  </button>
+                </SignedIn>
+              </div>
             </div>
-          )}
 
-          {!isDbLoading && (
-            <>
-              {/* ═══ INPUT STEP ═══ */}
-              {step === "input" && (
-                <div
-                  className="input-step"
-                  role="region"
-                  aria-label="Resume input"
-                >
-                  <div className="input-hero">
-                    <h2>
-                      {resumeData
-                        ? "Analyze Against a New Job Description"
-                        : "Analyze & Optimize Your Resume"}
-                    </h2>
-                    <p>
-                      {resumeData
-                        ? "Your saved resume will be used. Paste a job description for targeted analysis, or go back to the editor."
-                        : "Paste your resume to get started. Add a job description for targeted ATS scoring, or skip it for a general self-assessment."}
-                    </p>
-                  </div>
-                  <div
-                    className={
-                      resumeData ? "input-grid input-grid-single" : "input-grid"
+            {/* Restore backup hint */}
+            {hasBackup && (
+              <div className="landing-backup">
+                <button
+                  className="btn-secondary backup-restore-btn"
+                  onClick={() => {
+                    if (!user) return;
+                    const backup = loadLocalBackup();
+                    if (backup) {
+                      setResumeData(backup.resumeData, false);
+                      if (backup.jdText) setJdText(backup.jdText);
+                      setMode("edit");
+                      setStep("editor");
                     }
-                  >
-                    {!resumeData && (
-                      <div className="input-card">
-                        <div className="input-label-row">
-                          <label className="input-label">
-                            <FileText size={16} />
-                            Your Resume
-                          </label>
-                          <div className="upload-actions">
-                            {uploadedFileName && (
-                              <span className="uploaded-file">
-                                <FileUp size={12} />
-                                {uploadedFileName}
-                                <button
-                                  className="clear-upload"
-                                  onClick={handleClearUpload}
-                                  aria-label="Clear upload"
-                                >
-                                  <X size={12} />
-                                </button>
-                              </span>
-                            )}
-                            <label className="upload-btn">
-                              <Upload size={13} />
-                              Upload PDF
-                              <input
-                                ref={pdfInputRef}
-                                type="file"
-                                accept=".pdf"
-                                onChange={handlePdfUpload}
-                                hidden
-                                aria-label="Upload PDF"
-                              />
-                            </label>
-                          </div>
-                        </div>
-                        {isPdfLoading ? (
-                          <div className="pdf-loading">
-                            <Loader2 size={24} className="spin" />
-                            <span>Extracting text from PDF...</span>
-                          </div>
-                        ) : (
-                          <>
-                            <textarea
-                              className="input-textarea"
-                              placeholder="Paste your full resume text here or upload a PDF..."
-                              value={resumeText}
-                              maxLength={LIMITS.MAX_RESUME_TEXT_LENGTH}
-                              onChange={(e) => {
-                                setResumeText(e.target.value);
-                                if (uploadedFileName) setUploadedFileName(null);
-                              }}
-                              aria-label="Resume text"
-                            />
-                            <small className="char-count">
-                              {resumeText.length.toLocaleString()} /{" "}
-                              {LIMITS.MAX_RESUME_TEXT_LENGTH.toLocaleString()}
-                            </small>
-                          </>
-                        )}
-                      </div>
-                    )}
-                    <div className="input-card">
-                      <label className="input-label">
-                        <Target size={16} />
-                        Job Description{" "}
-                        <span className="optional-tag">(Optional)</span>
+                  }}
+                >
+                  <HardDrive size={14} />
+                  Restore Local Backup
+                  <small>
+                    ({formatBackupAge(loadLocalBackup()?.timestamp || 0)})
+                  </small>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* DB Loading */}
+        {isDbLoading && (
+          <div className="analyzing-step">
+            <Loader2 size={48} className="spin" />
+            <h2>Loading your saved resume...</h2>
+          </div>
+        )}
+
+        {/* ═══ INPUT STEP — ATS MODE ═══ */}
+        {step === "input" && mode === "ats" && !isDbLoading && (
+          <div className="input-step" role="region" aria-label="Resume and JD input">
+            <div className="input-hero">
+              <h2>ATS Score & Optimize</h2>
+              <p>
+                {resumeData
+                  ? "Your resume is loaded. Paste the job description below to run ATS analysis."
+                  : "Paste your resume and the target job description to get an ATS score."}
+              </p>
+            </div>
+            <div className={resumeData ? "input-grid input-grid-single" : "input-grid"}>
+              {!resumeData && (
+                <div className="input-card">
+                  <div className="input-label-row">
+                    <label className="input-label">
+                      <FileText size={16} />
+                      Your Resume
+                    </label>
+                    <div className="upload-actions">
+                      {uploadedFileName && (
+                        <span className="uploaded-file">
+                          <FileUp size={12} />
+                          {uploadedFileName}
+                          <button
+                            className="clear-upload"
+                            onClick={handleClearUpload}
+                            aria-label="Clear upload"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      )}
+                      <label className="upload-btn">
+                        <Upload size={13} />
+                        Upload PDF
+                        <input
+                          ref={pdfInputRef}
+                          type="file"
+                          accept=".pdf"
+                          onChange={handlePdfUpload}
+                          hidden
+                          aria-label="Upload PDF"
+                        />
                       </label>
-                      <textarea
-                        className="input-textarea"
-                        placeholder="Paste the job description here for targeted ATS scoring, or leave empty for a general self-assessment..."
-                        value={jdText}
-                        maxLength={LIMITS.MAX_JD_LENGTH}
-                        onChange={(e) => setJdText(e.target.value)}
-                        aria-label="Job description (optional)"
-                      />
-                      <small className="char-count">
-                        {jdText.length.toLocaleString()} /{" "}
-                        {LIMITS.MAX_JD_LENGTH.toLocaleString()}
-                      </small>
                     </div>
                   </div>
-                  {error && (
-                    <div className="error-banner" role="alert">
-                      <AlertCircle size={16} />
-                      {error}
-                    </div>
-                  )}
-                  {resumeData ? (
-                    <div className="input-actions-row">
-                      {jdText.trim() ? (
-                        <button
-                          className="analyze-btn"
-                          onClick={handleAnalyzeExisting}
-                          disabled={isRateLimited("analyze", 30000)}
-                        >
-                          {isRateLimited("analyze", 30000) ? (
-                            <>
-                              <Clock size={18} />
-                              Wait{" "}
-                              {formatCooldown(
-                                getRateLimitRemaining("analyze", 30000),
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <Search size={18} />
-                              Analyze with JD
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          className="analyze-btn"
-                          onClick={handleSelfScore}
-                          disabled={isRateLimited("analyze", 30000)}
-                        >
-                          {isRateLimited("analyze", 30000) ? (
-                            <>
-                              <Clock size={18} />
-                              Wait{" "}
-                              {formatCooldown(
-                                getRateLimitRemaining("analyze", 30000),
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <Target size={18} />
-                              Self Score
-                            </>
-                          )}
-                        </button>
-                      )}
-                      <button
-                        className="btn-secondary"
-                        onClick={() => setStep("editor")}
-                      >
-                        Back to Editor
-                      </button>
+                  {isPdfLoading ? (
+                    <div className="pdf-loading">
+                      <Loader2 size={24} className="spin" />
+                      <span>Extracting text from PDF...</span>
                     </div>
                   ) : (
-                    <div className="input-actions-row">
-                      {jdText.trim() ? (
-                        <button
-                          className="analyze-btn"
-                          onClick={handleAnalyze}
-                          disabled={
-                            !resumeText.trim() ||
-                            isRateLimited("analyze", 30000)
-                          }
-                        >
-                          {isRateLimited("analyze", 30000) ? (
-                            <>
-                              <Clock size={18} />
-                              Wait{" "}
-                              {formatCooldown(
-                                getRateLimitRemaining("analyze", 30000),
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <Search size={18} />
-                              Analyze Resume
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          className="analyze-btn"
-                          onClick={handleQuickEdit}
-                          disabled={
-                            !resumeText.trim() ||
-                            isRateLimited("analyze", 30000)
-                          }
-                        >
-                          {isRateLimited("analyze", 30000) ? (
-                            <>
-                              <Clock size={18} />
-                              Wait{" "}
-                              {formatCooldown(
-                                getRateLimitRemaining("analyze", 30000),
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <Edit3 size={18} />
-                              Quick Edit
-                            </>
-                          )}
-                        </button>
-                      )}
-                      {!resumeData && hasBackup && (
-                        <button
-                          className="btn-secondary backup-restore-btn"
-                          onClick={() => {
-                            const backup = loadLocalBackup();
-                            if (backup) {
-                              setResumeData(backup.resumeData, false);
-                              if (backup.jdText) setJdText(backup.jdText);
-                              setStep("editor");
-                            }
-                          }}
-                        >
-                          <HardDrive size={14} />
-                          Restore Local Backup
-                          <small>
-                            (
-                            {formatBackupAge(loadLocalBackup()?.timestamp || 0)}
-                            )
-                          </small>
-                        </button>
-                      )}
-                    </div>
+                    <>
+                      <textarea
+                        className="input-textarea"
+                        placeholder="Paste your full resume text here or upload a PDF..."
+                        value={resumeText}
+                        maxLength={LIMITS.MAX_RESUME_TEXT_LENGTH}
+                        onChange={(e) => {
+                          setResumeText(e.target.value);
+                          if (uploadedFileName) setUploadedFileName(null);
+                        }}
+                        aria-label="Resume text"
+                      />
+                      <small className="char-count">
+                        {resumeText.length.toLocaleString()} /{" "}
+                        {LIMITS.MAX_RESUME_TEXT_LENGTH.toLocaleString()}
+                      </small>
+                    </>
                   )}
                 </div>
               )}
+              <div className="input-card">
+                <label className="input-label">
+                  <Target size={16} />
+                  Job Description
+                </label>
+                <textarea
+                  className="input-textarea"
+                  placeholder="Paste the target job description here..."
+                  value={jdText}
+                  maxLength={LIMITS.MAX_JD_LENGTH}
+                  onChange={(e) => setJdText(e.target.value)}
+                  aria-label="Job description"
+                />
+                <small className="char-count">
+                  {jdText.length.toLocaleString()} /{" "}
+                  {LIMITS.MAX_JD_LENGTH.toLocaleString()}
+                </small>
+              </div>
+            </div>
 
-              {/* ═══ ANALYZING STEP ═══ */}
-              {step === "analyzing" && (
-                <div
-                  className="analyzing-step"
-                  role="status"
-                  aria-live="polite"
+            {error && (
+              <div className="error-banner" role="alert">
+                <AlertCircle size={16} />
+                {error}
+              </div>
+            )}
+
+            <div className="input-actions-row">
+              {resumeData ? (
+                <button
+                  className="analyze-btn"
+                  onClick={handleAnalyzeExisting}
+                  disabled={!jdText.trim() || isRateLimited("analyze", 30000)}
                 >
-                  <Loader2 size={48} className="spin" />
-                  <h2>{loadingMessage}</h2>
-                  <p>This may take a moment...</p>
-                </div>
+                  {isRateLimited("analyze", 30000) ? (
+                    <>
+                      <Clock size={18} />
+                      Wait{" "}
+                      {formatCooldown(
+                        getRateLimitRemaining("analyze", 30000),
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Search size={18} />
+                      Analyze with JD
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  className="analyze-btn"
+                  onClick={handleAnalyze}
+                  disabled={
+                    !resumeText.trim() ||
+                    !jdText.trim() ||
+                    isRateLimited("analyze", 30000)
+                  }
+                >
+                  {isRateLimited("analyze", 30000) ? (
+                    <>
+                      <Clock size={18} />
+                      Wait{" "}
+                      {formatCooldown(
+                        getRateLimitRemaining("analyze", 30000),
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Search size={18} />
+                      Analyze Resume
+                    </>
+                  )}
+                </button>
               )}
-
-              {/* ═══ SCORE STEP ═══ */}
-              {step === "score" && atsResult && resumeData && (
-                <div
-                  className="score-step"
-                  role="region"
-                  aria-label="ATS score results"
+              {resumeData && (
+                <button
+                  className="btn-secondary"
+                  onClick={() => setStep("editor")}
                 >
-                  <div className="score-left">
-                    <div className="score-header">
-                      <ScoreMeter score={atsResult.overallScore} />
-                      <div className="score-verdict">
-                        <h3>
-                          {jdText.trim() ? "ATS Score" : "Self ATS Score"}
-                        </h3>
-                        {!jdText.trim() && (
-                          <small className="self-score-tag">
-                            General best practices — no JD
-                          </small>
-                        )}
-                        <p>{atsResult.summaryVerdict}</p>
-                        {optimizeDone && previousScore !== null && (
-                          <div className="improvement-badge">
-                            <Trophy size={16} />
-                            Improved: {previousScore} &rarr;{" "}
-                            {atsResult.overallScore}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                  Back to Editor
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
-                    <div className="keywords-section">
-                      <h4>
-                        {jdText.trim()
-                          ? "Keywords Found"
-                          : "Industry Keywords Found"}
-                      </h4>
-                      <div className="keyword-tags">
-                        {atsResult.breakdown.keywordMatch.matchedKeywords?.map(
-                          (k) => (
-                            <span key={k} className="tag tag-match">
-                              {k}
-                            </span>
-                          ),
-                        )}
-                        {atsResult.breakdown.skillsAlignment.matchedSkills?.map(
-                          (k) => (
-                            <span key={`s-${k}`} className="tag tag-match">
-                              {k}
-                            </span>
-                          ),
-                        )}
-                      </div>
-                      <h4>
-                        {jdText.trim()
-                          ? "Missing Keywords"
-                          : "Suggested Keywords to Add"}
-                      </h4>
-                      <div className="keyword-tags">
-                        {atsResult.breakdown.keywordMatch.missingKeywords?.map(
-                          (k) => (
-                            <span key={k} className="tag tag-missing">
-                              {k}
-                            </span>
-                          ),
-                        )}
-                        {atsResult.breakdown.skillsAlignment.missingSkills?.map(
-                          (k) => (
-                            <span key={`s-${k}`} className="tag tag-missing">
-                              {k}
-                            </span>
-                          ),
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="breakdown-section">
-                      <h4>Breakdown</h4>
-                      <BreakdownBar
-                        label={
-                          jdText.trim() ? "Keyword Match" : "Industry Keywords"
-                        }
-                        score={atsResult.breakdown.keywordMatch.score}
-                        weight={atsResult.breakdown.keywordMatch.weight}
-                      />
-                      <BreakdownBar
-                        label={
-                          jdText.trim()
-                            ? "Skills Alignment"
-                            : "Skills Presentation"
-                        }
-                        score={atsResult.breakdown.skillsAlignment.score}
-                        weight={atsResult.breakdown.skillsAlignment.weight}
-                      />
-                      <BreakdownBar
-                        label={
-                          jdText.trim()
-                            ? "Experience Relevance"
-                            : "Content Quality"
-                        }
-                        score={atsResult.breakdown.experienceRelevance.score}
-                        weight={atsResult.breakdown.experienceRelevance.weight}
-                      />
-                      <BreakdownBar
-                        label="Formatting"
-                        score={atsResult.breakdown.formatting.score}
-                        weight={atsResult.breakdown.formatting.weight}
-                      />
-                      <BreakdownBar
-                        label="Impact & Metrics"
-                        score={atsResult.breakdown.impact.score}
-                        weight={atsResult.breakdown.impact.weight}
-                      />
-                    </div>
-
-                    {atsResult.topSuggestions.length > 0 && (
-                      <div className="suggestions-section">
-                        <h4>Suggestions</h4>
-                        <ul>
-                          {atsResult.topSuggestions.map((s, i) => (
-                            <li key={i}>{s}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {error && (
-                      <div className="error-banner" role="alert">
-                        <AlertCircle size={16} />
-                        {error}
-                      </div>
-                    )}
-
-                    {isOptimizing && optimizeProgress && (
-                      <div className="optimize-progress">
-                        <div className="optimize-header">
-                          <Loader2 size={18} className="spin" />
-                          <span>{optimizeProgress.message}</span>
-                        </div>
-                        <div className="optimize-timeline">
-                          {optimizeProgress.history.map((h) => (
-                            <div key={h.iteration} className="timeline-item">
-                              <div className="timeline-dot" />
-                              <span>
-                                Iteration {h.iteration}: Score{" "}
-                                {h.atsResult.overallScore}/100
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+        {/* ═══ INPUT STEP — EDIT MODE ═══ */}
+        {step === "input" && mode === "edit" && !isDbLoading && (
+          <div className="input-step" role="region" aria-label="Resume input">
+            <div className="input-hero">
+              <h2>Edit Your Resume</h2>
+              <p>
+                Paste your resume text or upload a PDF. We'll parse it with AI
+                so you can edit it in our live preview editor.
+              </p>
+            </div>
+            <div className="input-grid input-grid-single">
+              <div className="input-card">
+                <div className="input-label-row">
+                  <label className="input-label">
+                    <FileText size={16} />
+                    Your Resume
+                  </label>
+                  <div className="upload-actions">
+                    {uploadedFileName && (
+                      <span className="uploaded-file">
+                        <FileUp size={12} />
+                        {uploadedFileName}
                         <button
-                          className="btn-secondary"
-                          onClick={handleStopOptimize}
+                          className="clear-upload"
+                          onClick={handleClearUpload}
+                          aria-label="Clear upload"
                         >
-                          Stop
+                          <X size={12} />
                         </button>
-                      </div>
+                      </span>
                     )}
-
-                    {!isOptimizing && (
-                      <div className="score-actions">
-                        <button
-                          className="btn-optimize"
-                          onClick={
-                            jdText.trim() ? handleOptimize : handleSelfOptimize
-                          }
-                          disabled={isRateLimited("optimize", 30000)}
-                        >
-                          {isRateLimited("optimize", 30000) ? (
-                            <>
-                              <Clock size={18} />
-                              Wait{" "}
-                              {formatCooldown(
-                                getRateLimitRemaining("optimize", 30000),
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <Zap size={18} />
-                              {optimizeDone
-                                ? "Re-Optimize"
-                                : jdText.trim()
-                                  ? "Optimize Resume"
-                                  : "Self Optimize"}
-                            </>
-                          )}
-                        </button>
-                        <button className="btn-edit" onClick={handleEdit}>
-                          <Edit3 size={18} />
-                          {optimizeDone ? "Edit Resume" : "Edit Manually"}
-                        </button>
-                      </div>
-                    )}
+                    <label className="upload-btn">
+                      <Upload size={13} />
+                      Upload PDF
+                      <input
+                        ref={pdfInputRef}
+                        type="file"
+                        accept=".pdf"
+                        onChange={handlePdfUpload}
+                        hidden
+                        aria-label="Upload PDF"
+                      />
+                    </label>
                   </div>
+                </div>
+                {isPdfLoading ? (
+                  <div className="pdf-loading">
+                    <Loader2 size={24} className="spin" />
+                    <span>Extracting text from PDF...</span>
+                  </div>
+                ) : (
+                  <>
+                    <textarea
+                      className="input-textarea"
+                      placeholder="Paste your full resume text here or upload a PDF..."
+                      value={resumeText}
+                      maxLength={LIMITS.MAX_RESUME_TEXT_LENGTH}
+                      onChange={(e) => {
+                        setResumeText(e.target.value);
+                        if (uploadedFileName) setUploadedFileName(null);
+                      }}
+                      aria-label="Resume text"
+                    />
+                    <small className="char-count">
+                      {resumeText.length.toLocaleString()} /{" "}
+                      {LIMITS.MAX_RESUME_TEXT_LENGTH.toLocaleString()}
+                    </small>
+                  </>
+                )}
+              </div>
+            </div>
 
-                  <div className="score-right">
-                    <div className="preview-container">
-                      <ErrorBoundary>
-                        <Suspense fallback={<PreviewSkeleton />}>
-                          <ResumeTemplate ref={resumeRef} data={resumeData} />
-                        </Suspense>
-                      </ErrorBoundary>
+            {error && (
+              <div className="error-banner" role="alert">
+                <AlertCircle size={16} />
+                {error}
+              </div>
+            )}
+
+            <div className="input-actions-row">
+              <button
+                className="analyze-btn"
+                onClick={handleParseResume}
+                disabled={
+                  !resumeText.trim() || isRateLimited("analyze", 30000)
+                }
+              >
+                {isRateLimited("analyze", 30000) ? (
+                  <>
+                    <Clock size={18} />
+                    Wait{" "}
+                    {formatCooldown(
+                      getRateLimitRemaining("analyze", 30000),
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Edit3 size={18} />
+                    Parse & Edit
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ ANALYZING STEP ═══ */}
+        {step === "analyzing" && (
+          <div className="analyzing-step" role="status" aria-live="polite">
+            <Loader2 size={48} className="spin" />
+            <h2>{loadingMessage}</h2>
+            <p>This may take a moment...</p>
+          </div>
+        )}
+
+        {/* ═══ SCORE STEP ═══ */}
+        {step === "score" && atsResult && resumeData && (
+          <div
+            className="score-step"
+            role="region"
+            aria-label="ATS score results"
+          >
+            <div className="score-left">
+              <div className="score-header">
+                <ScoreMeter score={atsResult.overallScore} />
+                <div className="score-verdict">
+                  <h3>
+                    {jdText.trim() ? "ATS Score" : "Self ATS Score"}
+                  </h3>
+                  {!jdText.trim() && (
+                    <small className="self-score-tag">
+                      General best practices — no JD
+                    </small>
+                  )}
+                  <p>{atsResult.summaryVerdict}</p>
+                  {optimizeDone && previousScore !== null && (
+                    <div className="improvement-badge">
+                      <Trophy size={16} />
+                      Improved: {previousScore} &rarr;{" "}
+                      {atsResult.overallScore}
                     </div>
-                  </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="keywords-section">
+                <h4>
+                  {jdText.trim()
+                    ? "Keywords Found"
+                    : "Industry Keywords Found"}
+                </h4>
+                <div className="keyword-tags">
+                  {atsResult.breakdown.keywordMatch.matchedKeywords?.map(
+                    (k) => (
+                      <span key={k} className="tag tag-match">
+                        {k}
+                      </span>
+                    ),
+                  )}
+                  {atsResult.breakdown.skillsAlignment.matchedSkills?.map(
+                    (k) => (
+                      <span key={`s-${k}`} className="tag tag-match">
+                        {k}
+                      </span>
+                    ),
+                  )}
+                </div>
+                <h4>
+                  {jdText.trim()
+                    ? "Missing Keywords"
+                    : "Suggested Keywords to Add"}
+                </h4>
+                <div className="keyword-tags">
+                  {atsResult.breakdown.keywordMatch.missingKeywords?.map(
+                    (k) => (
+                      <span key={k} className="tag tag-missing">
+                        {k}
+                      </span>
+                    ),
+                  )}
+                  {atsResult.breakdown.skillsAlignment.missingSkills?.map(
+                    (k) => (
+                      <span key={`s-${k}`} className="tag tag-missing">
+                        {k}
+                      </span>
+                    ),
+                  )}
+                </div>
+              </div>
+
+              <div className="breakdown-section">
+                <h4>Breakdown</h4>
+                <BreakdownBar
+                  label={
+                    jdText.trim() ? "Keyword Match" : "Industry Keywords"
+                  }
+                  score={atsResult.breakdown.keywordMatch.score}
+                  weight={atsResult.breakdown.keywordMatch.weight}
+                />
+                <BreakdownBar
+                  label={
+                    jdText.trim()
+                      ? "Skills Alignment"
+                      : "Skills Presentation"
+                  }
+                  score={atsResult.breakdown.skillsAlignment.score}
+                  weight={atsResult.breakdown.skillsAlignment.weight}
+                />
+                <BreakdownBar
+                  label={
+                    jdText.trim()
+                      ? "Experience Relevance"
+                      : "Content Quality"
+                  }
+                  score={atsResult.breakdown.experienceRelevance.score}
+                  weight={atsResult.breakdown.experienceRelevance.weight}
+                />
+                <BreakdownBar
+                  label="Formatting"
+                  score={atsResult.breakdown.formatting.score}
+                  weight={atsResult.breakdown.formatting.weight}
+                />
+                <BreakdownBar
+                  label="Impact & Metrics"
+                  score={atsResult.breakdown.impact.score}
+                  weight={atsResult.breakdown.impact.weight}
+                />
+              </div>
+
+              {atsResult.topSuggestions.length > 0 && (
+                <div className="suggestions-section">
+                  <h4>Suggestions</h4>
+                  <ul>
+                    {atsResult.topSuggestions.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
-              {/* ═══ EDITOR STEP ═══ */}
-              {step === "editor" && resumeData && (
-                <div
-                  className="editor-step"
-                  role="region"
-                  aria-label="Resume editor"
-                >
-                  <div className="editor-left">
-                    <StyleDetectedBadge />
-                    <ErrorBoundary>
-                      <Suspense fallback={<EditorSkeleton />}>
-                        <ResumeEditor
-                          data={resumeData}
-                          onChange={handleResumeChange}
-                        />
-                      </Suspense>
-                    </ErrorBoundary>
-                  </div>
-                  <div className="editor-right">
-                    <div className="preview-container">
-                      <ErrorBoundary>
-                        <Suspense fallback={<PreviewSkeleton />}>
-                          <ResumeTemplate ref={resumeRef} data={resumeData} />
-                        </Suspense>
-                      </ErrorBoundary>
-                    </div>
-                  </div>
+              {error && (
+                <div className="error-banner" role="alert">
+                  <AlertCircle size={16} />
+                  {error}
                 </div>
               )}
-            </>
-          )}
-        </SignedIn>
+
+              {isOptimizing && optimizeProgress && (
+                <div className="optimize-progress">
+                  <div className="optimize-header">
+                    <Loader2 size={18} className="spin" />
+                    <span>{optimizeProgress.message}</span>
+                  </div>
+                  <div className="optimize-timeline">
+                    {optimizeProgress.history.map((h) => (
+                      <div key={h.iteration} className="timeline-item">
+                        <div className="timeline-dot" />
+                        <span>
+                          Iteration {h.iteration}: Score{" "}
+                          {h.atsResult.overallScore}/100
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    className="btn-secondary"
+                    onClick={handleStopOptimize}
+                  >
+                    Stop
+                  </button>
+                </div>
+              )}
+
+              {!isOptimizing && (
+                <div className="score-actions">
+                  <button
+                    className="btn-optimize"
+                    onClick={
+                      jdText.trim() ? handleOptimize : handleSelfOptimize
+                    }
+                    disabled={isRateLimited("optimize", 30000)}
+                  >
+                    {isRateLimited("optimize", 30000) ? (
+                      <>
+                        <Clock size={18} />
+                        Wait{" "}
+                        {formatCooldown(
+                          getRateLimitRemaining("optimize", 30000),
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={18} />
+                        {optimizeDone
+                          ? "Re-Optimize"
+                          : jdText.trim()
+                            ? "Optimize Resume"
+                            : "Self Optimize"}
+                      </>
+                    )}
+                  </button>
+                  <button className="btn-edit" onClick={handleEdit}>
+                    <Edit3 size={18} />
+                    {optimizeDone ? "Edit Resume" : "Edit Manually"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="score-right">
+              <div className="preview-container">
+                <ErrorBoundary>
+                  <Suspense fallback={<PreviewSkeleton />}>
+                    <ResumeTemplate ref={resumeRef} data={resumeData} />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ EDITOR STEP ═══ */}
+        {step === "editor" && resumeData && (
+          <div
+            className="editor-step"
+            role="region"
+            aria-label="Resume editor"
+          >
+            <div className="editor-left">
+              <StyleDetectedBadge />
+              <ErrorBoundary>
+                <Suspense fallback={<EditorSkeleton />}>
+                  <ResumeEditor
+                    data={resumeData}
+                    onChange={handleResumeChange}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            </div>
+            <div className="editor-right">
+              <div className="preview-container">
+                <ErrorBoundary>
+                  <Suspense fallback={<PreviewSkeleton />}>
+                    <ResumeTemplate ref={resumeRef} data={resumeData} />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Modals/Panels */}
-      {/* Modal panels — rendered outside main for correct focus trap */}
       {showTemplatePicker && (
         <Suspense fallback={null}>
           <TemplatePicker onClose={() => setShowTemplatePicker(false)} />

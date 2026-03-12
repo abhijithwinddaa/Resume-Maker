@@ -34,12 +34,14 @@ export interface ResumeMeta {
   templateId: TemplateId;
 }
 
-export type AppStep = "input" | "analyzing" | "score" | "editor";
+export type AppStep = "landing" | "input" | "analyzing" | "score" | "editor";
+export type AppMode = "ats" | "edit" | "create" | null;
 export type ThemeMode = "light" | "dark" | "system";
 
 interface AppState {
   // ─── Core State ─────────────────────────
   step: AppStep;
+  mode: AppMode;
   resumeText: string;
   jdText: string;
   resumeData: ResumeData | null;
@@ -85,6 +87,7 @@ interface AppState {
 
   // ─── Actions ──────────────────────────────
   setStep: (step: AppStep) => void;
+  setMode: (mode: AppMode) => void;
   setResumeText: (text: string) => void;
   setJdText: (text: string) => void;
   setResumeData: (data: ResumeData | null, recordHistory?: boolean) => void;
@@ -170,7 +173,8 @@ function loadCustomization(): TemplateCustomization {
 
 export const useAppStore = create<AppState>((set, get) => ({
   // ─── Initial State ──────────────────
-  step: "input",
+  step: "landing",
+  mode: null,
   resumeText: "",
   jdText: "",
   resumeData: null,
@@ -203,6 +207,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // ─── Simple Setters ─────────────────
   setStep: (step) => set({ step }),
+  setMode: (mode) => set({ mode }),
   setResumeText: (resumeText) => set({ resumeText }),
   setJdText: (jdText) => set({ jdText }),
   setResumeData: (data, recordHistory = true) => {
@@ -317,7 +322,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Composite
   startOver: () =>
     set({
-      step: "input",
+      step: "landing",
+      mode: null,
       resumeData: null,
       atsResult: null,
       optimizeProgress: null,
@@ -344,6 +350,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       optimizeDone: false,
       isOptimizing: false,
       step: "input",
+      mode: "ats",
       coverLetter: null,
     }),
 }));

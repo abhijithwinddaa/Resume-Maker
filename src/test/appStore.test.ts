@@ -4,7 +4,8 @@ import { useAppStore } from "../store/appStore";
 describe("appStore", () => {
   it("should have initial state", () => {
     const state = useAppStore.getState();
-    expect(state.step).toBe("input");
+    expect(state.step).toBe("landing");
+    expect(state.mode).toBeNull();
     expect(state.resumeText).toBe("");
     expect(state.jdText).toBe("");
     expect(state.resumeData).toBeNull();
@@ -68,7 +69,8 @@ describe("appStore", () => {
 
     useAppStore.getState().startOver();
     const state = useAppStore.getState();
-    expect(state.step).toBe("input");
+    expect(state.step).toBe("landing");
+    expect(state.mode).toBeNull();
     expect(state.resumeText).toBe("");
     expect(state.jdText).toBe("");
     expect(state.resumeData).toBeNull();
