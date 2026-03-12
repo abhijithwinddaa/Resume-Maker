@@ -5,6 +5,8 @@
    ────────────────────────────────────────────────────── */
 
 import * as pdfjsLib from "pdfjs-dist";
+import { RESUME_DATA_MARKER } from "./pdfExporter";
+import type { ResumeData } from "../types/resume";
 
 // Fallback: main-thread worker setup
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -15,6 +17,29 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 export interface PDFExtractResult {
   text: string;
   links: string[];
+}
+
+/**
+ * Try to extract embedded ResumeData JSON from a PDF's metadata.
+ * Returns the parsed ResumeData if found, or null otherwise.
+ * This enables lossless round-trip for PDFs exported by this app.
+ */
+export async function extractEmbeddedResumeData(
+  file: File,
+): Promise<ResumeData | null> {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const metadata = await pdf.getMetadata();
+    const subject = (metadata?.info as Record<string, unknown>)?.Subject;
+    if (typeof subject === "string" && subject.startsWith(RESUME_DATA_MARKER)) {
+      const json = subject.slice(RESUME_DATA_MARKER.length);
+      return JSON.parse(json) as ResumeData;
+    }
+  } catch {
+    // Metadata extraction failed — fall through to normal extraction
+  }
+  return null;
 }
 
 /**

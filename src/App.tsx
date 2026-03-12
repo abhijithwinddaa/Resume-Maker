@@ -28,7 +28,7 @@ import {
   selfOptimizeLoop,
 } from "./utils/aiService";
 import { detectTemplateStyle } from "./utils/templateDetector";
-import { extractTextAndLinks } from "./utils/pdfExtractorWorker";
+import { extractTextAndLinks, extractEmbeddedResumeData } from "./utils/pdfExtractorWorker";
 import { loadResume, saveResume } from "./services/resumeService";
 import {
   isRateLimited,
@@ -395,7 +395,7 @@ function App() {
       ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
       : "Resume";
     try {
-      await exportResumeToPDF(el, fileName);
+      await exportResumeToPDF(el, fileName, resumeData ?? undefined);
     } catch (err) {
       console.error("PDF export failed:", err);
       setError("PDF export failed. Please try again.");
@@ -452,6 +452,23 @@ function App() {
     setIsPdfLoading(true);
     setError(null);
     try {
+      // First, check for embedded ResumeData (from our own exported PDFs)
+      const embedded = await extractEmbeddedResumeData(file);
+      if (embedded) {
+        setUploadedFileName(file.name);
+        const pdfBlobUrl = URL.createObjectURL(file);
+        setOriginalPdfUrl(pdfBlobUrl);
+        handleResumeChange(embedded);
+
+        if (mode === "ats") {
+          setStep("input");
+        } else {
+          setStep("editor");
+        }
+        return;
+      }
+
+      // Fallback: extract text from non-app PDFs
       const { text, links } = await extractTextAndLinks(file);
       if (!text.trim()) {
         throw new Error(

@@ -1,3 +1,11 @@
+import type { ResumeData } from "../types/resume";
+
+/**
+ * Marker prefix used to identify embedded ResumeData JSON in PDF metadata.
+ * Checked during re-upload to enable perfect round-trip import.
+ */
+export const RESUME_DATA_MARKER = "%%RESUME_MAKER_DATA_V1%%";
+
 /**
  * Export a resume DOM element directly to a clean PDF file.
  * Uses html2canvas for pixel-perfect rendering + pdf-lib for A4 output.
@@ -10,6 +18,7 @@
  * - Preserves all colors, fonts, links as rendered
  * - Clickable link annotations overlaid on the image
  * - Cross-platform download (file-saver fallback for Safari/iOS)
+ * - Embeds ResumeData JSON in PDF metadata for lossless re-upload
  */
 
 interface LinkRect {
@@ -23,7 +32,9 @@ interface LinkRect {
 /** Detect iOS / Safari for platform-specific workarounds */
 function isSafariOrIOS(): boolean {
   const ua = navigator.userAgent;
-  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
   return isIOS || isSafari;
 }
@@ -56,6 +67,7 @@ function collectLinkRects(container: HTMLElement): LinkRect[] {
 export async function exportResumeToPDF(
   element: HTMLElement,
   fileName: string = "Resume",
+  resumeData?: ResumeData,
 ): Promise<void> {
   // Wait for all fonts to load before rendering
   if (document.fonts?.ready) {
@@ -157,6 +169,12 @@ export async function exportResumeToPDF(
       ),
     );
   }
+
+  // Embed ResumeData JSON in PDF metadata for lossless re-upload
+  if (resumeData) {
+    pdfDoc.setSubject(RESUME_DATA_MARKER + JSON.stringify(resumeData));
+  }
+  pdfDoc.setCreator("Resume Maker");
 
   const pdfBytes = await pdfDoc.save();
 
