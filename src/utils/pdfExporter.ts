@@ -29,6 +29,13 @@ interface LinkRect {
   height: number;
 }
 
+interface TextRect {
+  text: string;
+  x: number;
+  y: number;
+  fontSize: number;
+}
+
 /** Detect iOS / Safari for platform-specific workarounds */
 function isSafariOrIOS(): boolean {
   const ua = navigator.userAgent;
@@ -64,6 +71,51 @@ function collectLinkRects(container: HTMLElement): LinkRect[] {
   return links;
 }
 
+/** Walk DOM tree and collect visible text nodes with their positions and computed font sizes */
+function collectTextRects(container: HTMLElement): TextRect[] {
+  const containerRect = container.getBoundingClientRect();
+  const results: TextRect[] = [];
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const text = node.textContent?.trim();
+      if (!text) return NodeFilter.FILTER_REJECT;
+      // Skip <script>, <style> content
+      const parent = node.parentElement;
+      if (!parent) return NodeFilter.FILTER_REJECT;
+      const tag = parent.tagName;
+      if (tag === "SCRIPT" || tag === "STYLE") return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    const text = node.textContent?.trim();
+    if (!text) continue;
+
+    const parent = node.parentElement;
+    if (!parent) continue;
+
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+
+    const computed = getComputedStyle(parent);
+    const fontSize = parseFloat(computed.fontSize) || 10;
+
+    results.push({
+      text,
+      x: rect.left - containerRect.left,
+      y: rect.top - containerRect.top,
+      fontSize,
+    });
+  }
+
+  return results;
+}
+
 export async function exportResumeToPDF(
   element: HTMLElement,
   fileName: string = "Resume",
@@ -86,8 +138,9 @@ export async function exportResumeToPDF(
   const A4_WIDTH_PT = 595.28;
   const A4_HEIGHT_PT = 841.89;
 
-  // Collect link positions BEFORE html2canvas clones (need live DOM rects)
+  // Collect link + text positions BEFORE html2canvas clones (need live DOM rects)
   const linkRects = collectLinkRects(element);
+  const textRects = collectTextRects(element);
   const elementWidth = element.offsetWidth;
   const elementHeight = element.offsetHeight;
 
@@ -168,6 +221,37 @@ export async function exportResumeToPDF(
         }),
       ),
     );
+  }
+
+  // Overlay invisible text layer for ATS compatibility
+  // Uses TextRenderingMode.Invisible (mode 3) — the PDF standard for hidden
+  // text that is still extractable by text parsers and ATS systems.
+  if (textRects.length > 0) {
+    const font = await pdfDoc.embedFont(pdfLib.StandardFonts.Helvetica);
+
+    for (const tr of textRects) {
+      // Convert DOM coords to PDF coords
+      const pdfFontSize = Math.max(tr.fontSize * scaleX * 0.75, 1); // px→pt
+      const pdfX = tr.x * scaleX;
+      const pdfY = pageHeight - tr.y * scaleY - pdfFontSize;
+
+      // Sanitize text — pdf-lib's Helvetica can only encode WinAnsi characters
+      const safe = tr.text.replace(/[^\x20-\x7E]/g, " ");
+      if (!safe.trim()) continue;
+
+      const fontKey = page.node.newFontDictionary("Helvetica", font.ref);
+
+      page.pushOperators(
+        pdfLib.pushGraphicsState(),
+        pdfLib.beginText(),
+        pdfLib.setTextRenderingMode(pdfLib.TextRenderingMode.Invisible),
+        pdfLib.setFontAndSize(fontKey, pdfFontSize),
+        pdfLib.moveText(pdfX, pdfY),
+        pdfLib.showText(font.encodeText(safe)),
+        pdfLib.endText(),
+        pdfLib.popGraphicsState(),
+      );
+    }
   }
 
   // Embed ResumeData JSON in PDF metadata for lossless re-upload
