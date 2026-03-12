@@ -28,7 +28,11 @@ import {
   selfOptimizeLoop,
 } from "./utils/aiService";
 import { detectTemplateStyle } from "./utils/templateDetector";
-import { extractTextAndLinks, extractEmbeddedResumeData } from "./utils/pdfExtractorWorker";
+import {
+  extractTextAndLinks,
+  extractEmbeddedResumeData,
+} from "./utils/pdfExtractorWorker";
+import { extractTextWithOCR } from "./utils/pdfOcr";
 import { loadResume, saveResume } from "./services/resumeService";
 import {
   isRateLimited,
@@ -469,10 +473,26 @@ function App() {
       }
 
       // Fallback: extract text from non-app PDFs
-      const { text, links } = await extractTextAndLinks(file);
+      let { text, links } = await extractTextAndLinks(file);
+
+      // OCR fallback for image-based PDFs (e.g., old exports without metadata)
+      if (!text.trim()) {
+        setLoadingMessage(
+          "Image-based PDF detected — running OCR to extract text...",
+        );
+        setStep("analyzing");
+        const ocr = await extractTextWithOCR(file, (page, total) => {
+          setLoadingMessage(
+            `Running OCR on page ${page} of ${total}...`,
+          );
+        });
+        text = ocr.text;
+        links = [];
+      }
+
       if (!text.trim()) {
         throw new Error(
-          "Could not extract text from this PDF. It may be image-based. Try pasting the text manually.",
+          "Could not extract text from this PDF even with OCR. Try pasting the text manually.",
         );
       }
 
