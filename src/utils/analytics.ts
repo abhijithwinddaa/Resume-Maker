@@ -74,7 +74,6 @@ function initClarity(): void {
     c: Window & typeof globalThis,
     l: Document,
     a: string,
-    r: string,
     i: string,
   ) => {
     c[a as "clarity"] =
@@ -85,12 +84,12 @@ function initClarity(): void {
           args,
         );
       });
-    const script = l.createElement(r);
+    const script = l.createElement("script");
     script.async = true;
     script.src = `https://www.clarity.ms/tag/${i}`;
-    const firstScript = l.getElementsByTagName(r)[0];
+    const firstScript = l.getElementsByTagName("script")[0];
     firstScript?.parentNode?.insertBefore(script, firstScript);
-  })(window, document, "clarity", "script", CLARITY_PROJECT_ID);
+  })(window, document, "clarity", CLARITY_PROJECT_ID);
 }
 
 function initPostHog(): void {
