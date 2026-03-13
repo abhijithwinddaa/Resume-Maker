@@ -383,6 +383,28 @@ function App() {
     });
   }, [mode, step]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const source = params.get("utm_source");
+    const campaign = params.get("utm_campaign");
+    if (!source || !campaign) return;
+
+    const dedupeKey = `${source}:${campaign}:${params.get("utm_content") || ""}`;
+    const storageKey = "last_landing_campaign";
+    if (window.sessionStorage.getItem(storageKey) === dedupeKey) return;
+
+    trackEvent("landing_campaign_attribution", {
+      utm_source: source,
+      utm_medium: params.get("utm_medium") || "",
+      utm_campaign: campaign,
+      utm_content: params.get("utm_content") || "",
+      entry_path: window.location.pathname,
+    });
+
+    window.sessionStorage.setItem(storageKey, dedupeKey);
+  }, []);
+
   /* ── Debounced auto-save to Supabase (500ms) ────── */
   const debouncedSupabaseSave = useDebounce((data: ResumeData) => {
     if (!user?.id) return;
