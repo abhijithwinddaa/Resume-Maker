@@ -143,7 +143,24 @@ VITE_GITHUB_TOKEN=github_pat_your_token_1
 VITE_GITHUB_TOKEN_2=github_pat_your_token_2
 VITE_GEMINI_API_KEY=your_google_ai_studio_key
 VITE_GROQ_API_KEY=your_groq_key_optional
+
+# Site URL
+VITE_SITE_URL=https://resume.batturaj.in
+
+# Analytics
+VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+VITE_CLARITY_PROJECT_ID=your_clarity_project_id
+VITE_POSTHOG_KEY=phc_your_posthog_project_key
+VITE_POSTHOG_HOST=https://us.i.posthog.com
 ```
+
+### 3.1 Analytics Setup
+
+- **Google Analytics 4**: create a Web Data Stream and copy the `G-XXXXXXXXXX` measurement ID.
+- **Microsoft Clarity**: create a project and copy the project ID.
+- **PostHog**: create a project, copy the project key, and use the cloud host shown in your dashboard.
+
+The app tracks product events such as mode selection, PDF uploads, resume parsing, ATS analysis, optimization, exports, save/load events, and Core Web Vitals.
 
 ### 4. Set Up Supabase Database
 

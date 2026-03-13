@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/clerk-react";
 import App from "./App";
 import { ThemeProvider } from "./components/ThemeProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { initAnalytics, trackPageView } from "./utils/analytics";
 import { registerServiceWorker } from "./utils/swRegister";
 import { initPerformanceMonitoring } from "./utils/performanceMonitor";
 import "./i18n";
@@ -25,6 +26,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 
 // Register service worker for PWA/offline caching (production only)
 registerServiceWorker();
+
+// Initialize traffic and product analytics in production.
+initAnalytics();
+trackPageView(window.location.pathname);
 
 // Defer performance monitoring to idle time
 if ("requestIdleCallback" in window) {

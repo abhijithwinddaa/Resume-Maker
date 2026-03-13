@@ -57,6 +57,11 @@ import {
   clearRequestController,
   abortRequestController,
 } from "./utils/requestDedup";
+import {
+  identifyAnalyticsUser,
+  trackEvent,
+  trackPageView,
+} from "./utils/analytics";
 import { useDebounce } from "./hooks/useDebounce";
 import { validateResumeData } from "./utils/zodSchemas";
 import { exportToDocx } from "./utils/docxExporter";
@@ -311,10 +316,12 @@ function App() {
   /* ── Auto-load from Supabase when user signs in ──── */
   useEffect(() => {
     if (!user?.id) return;
+    identifyAnalyticsUser(user.id, { signed_in: true });
     setIsDbLoading(true);
     loadResume(user.id)
       .then((saved) => {
         if (saved) {
+          trackEvent("resume_loaded", { source: "supabase" });
           setResumeData(saved, false);
           // If user had a pending mode from landing page, honor it
           if (pendingMode) {
@@ -347,6 +354,7 @@ function App() {
       })
       .catch((err) => {
         console.error("Supabase load failed:", err);
+        trackEvent("resume_load_failed", { source: "supabase" });
         setError(
           "Failed to load saved resume from database. Check console for details.",
         );
@@ -366,6 +374,15 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  useEffect(() => {
+    const path = `/${mode || "landing"}/${step}`;
+    trackPageView(path, `Resume Maker - ${step}`);
+    trackEvent("app_step_viewed", {
+      mode: mode || "none",
+      step,
+    });
+  }, [mode, step]);
+
   /* ── Debounced auto-save to Supabase (500ms) ────── */
   const debouncedSupabaseSave = useDebounce((data: ResumeData) => {
     if (!user?.id) return;
@@ -374,10 +391,15 @@ function App() {
     saveResume(user.id, data)
       .then((ok) => {
         if (!ok) console.warn("Supabase save returned false");
+        trackEvent("resume_saved", {
+          destination: "supabase",
+          success: ok,
+        });
         setSaveStatus("saved");
       })
       .catch((err) => {
         console.error("Supabase save failed:", err);
+        trackEvent("resume_save_failed", { destination: "supabase" });
         setSaveStatus("idle");
       })
       .finally(() => setIsSaving(false));
@@ -408,8 +430,13 @@ function App() {
       : "Resume";
     try {
       await exportResumeToPDF(el, fileName, resumeData ?? undefined);
+      trackEvent("resume_exported", {
+        format: "pdf",
+        has_resume_data: Boolean(resumeData),
+      });
     } catch (err) {
       console.error("PDF export failed:", err);
+      trackEvent("resume_export_failed", { format: "pdf" });
       setError("PDF export failed. Please try again.");
     }
   }, [resumeData, setError]);
@@ -418,6 +445,10 @@ function App() {
 
   const handleSelectMode = useCallback(
     (selectedMode: AppMode) => {
+      trackEvent("mode_selected", {
+        mode: selectedMode,
+        signed_in: Boolean(user),
+      });
       if (!user) {
         // Not signed in → save mode and let Clerk prompt
         setPendingMode(selectedMode);
@@ -455,8 +486,14 @@ function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    trackEvent("pdf_upload_started", {
+      file_name: file.name,
+      file_size_kb: Math.round(file.size / 1024),
+    });
+
     const validation = validatePDFFile(file);
     if (!validation.valid) {
+      trackEvent("pdf_upload_failed", { reason: "validation_failed" });
       setError(validation.error || "Invalid file.");
       return;
     }
@@ -467,6 +504,7 @@ function App() {
       // First, check for embedded ResumeData (from our own exported PDFs)
       const embedded = await extractEmbeddedResumeData(file);
       if (embedded) {
+        trackEvent("pdf_upload_completed", { source: "embedded_metadata" });
         setUploadedFileName(file.name);
         const pdfBlobUrl = URL.createObjectURL(file);
         setOriginalPdfUrl(pdfBlobUrl);
@@ -485,6 +523,7 @@ function App() {
 
       // OCR fallback for image-based PDFs (e.g., old exports without metadata)
       if (!text.trim()) {
+        trackEvent("pdf_ocr_started", { file_name: file.name });
         setLoadingMessage(
           "Image-based PDF detected — running OCR to extract text...",
         );
@@ -493,6 +532,9 @@ function App() {
           setLoadingMessage(`Running OCR on page ${page} of ${total}...`);
         });
         text = ocr.text;
+        trackEvent("pdf_ocr_completed", {
+          extracted_characters: text.length,
+        });
         // Keep annotation links from extractTextAndLinks — image PDFs can still
         // have clickable link annotations (e.g., our exported PDFs do).
       }
@@ -535,6 +577,10 @@ function App() {
       recordAction("analyze");
 
       const parsed = await parseResumeFromText(aiSettings, sanitized, links);
+      trackEvent("resume_parsed", {
+        source: "pdf_upload",
+        links_found: links.length,
+      });
       handleResumeChange(parsed);
 
       if (mode === "ats") {
@@ -545,6 +591,9 @@ function App() {
         setStep("editor");
       }
     } catch (err) {
+      trackEvent("pdf_upload_failed", {
+        reason: err instanceof Error ? err.message : "unknown",
+      });
       setError(err instanceof Error ? err.message : "Failed to read PDF");
       setStep("input");
     } finally {
@@ -597,6 +646,7 @@ function App() {
           : undefined,
       );
       if (controller.signal.aborted) return;
+      trackEvent("resume_parsed", { source: "pasted_text" });
       handleResumeChange(parsed);
       setStep("editor");
     } catch (err) {
@@ -664,6 +714,10 @@ function App() {
         sanitizeText(jdText),
       );
       if (controller.signal.aborted) return;
+      trackEvent("ats_analysis_completed", {
+        mode: "ats",
+        overall_score: ats.overallScore,
+      });
       setATSResult(ats);
       setOptimizeDone(false);
       setPreviousScore(null);
@@ -710,6 +764,10 @@ function App() {
         sanitizeText(jdText),
       );
       if (controller.signal.aborted) return;
+      trackEvent("ats_analysis_completed", {
+        mode: "editor_reanalyze",
+        overall_score: ats.overallScore,
+      });
       setATSResult(ats);
       setOptimizeDone(false);
       setPreviousScore(null);
@@ -746,6 +804,9 @@ function App() {
     try {
       const ats = await selfATSScore(aiSettings, resumeData);
       if (controller.signal.aborted) return;
+      trackEvent("ats_self_score_completed", {
+        overall_score: ats.overallScore,
+      });
       setATSResult(ats);
       setOptimizeDone(false);
       setPreviousScore(null);
@@ -796,6 +857,10 @@ function App() {
         handleResumeChange(result.finalResume);
         const newAts = await selfATSScore(aiSettings, result.finalResume);
         setATSResult(newAts);
+        trackEvent("resume_optimized", {
+          mode: "self_optimize",
+          overall_score: newAts.overallScore,
+        });
       }
       setOptimizeDone(true);
     } catch (err) {
@@ -850,6 +915,10 @@ function App() {
           jdText,
         );
         setATSResult(newAts);
+        trackEvent("resume_optimized", {
+          mode: "jd_optimize",
+          overall_score: newAts.overallScore,
+        });
       }
       setOptimizeDone(true);
     } catch (err) {
@@ -932,6 +1001,7 @@ function App() {
     a.download = "resume-data.json";
     a.click();
     URL.revokeObjectURL(url);
+    trackEvent("resume_exported", { format: "json" });
   };
 
   const handleLoadJSON = () => {
@@ -952,6 +1022,7 @@ function App() {
             }
             handleResumeChange(raw as ResumeData);
             setStep("editor");
+            trackEvent("resume_imported", { format: "json" });
           } catch {
             setError("Invalid JSON file. Please check the file format.");
           }
@@ -971,7 +1042,9 @@ function App() {
     }
     try {
       await exportToDocx(resumeData);
+      trackEvent("resume_exported", { format: "docx" });
     } catch (err) {
+      trackEvent("resume_export_failed", { format: "docx" });
       setError(err instanceof Error ? err.message : "DOCX export failed");
     }
   };

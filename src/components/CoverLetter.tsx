@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useAppStore } from "../store/appStore";
 import { generateCoverLetter } from "../utils/coverLetterService";
+import { trackEvent } from "../utils/analytics";
 import { FileText, Loader2, Copy, Download, X, Sparkles } from "lucide-react";
 import "./CoverLetter.css";
 
@@ -37,6 +38,10 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
 
     setIsGenerating(true);
     setError(null);
+    trackEvent("cover_letter_generation_started", {
+      company_name: companyName.trim(),
+      position: position.trim(),
+    });
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -59,8 +64,15 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
         companyName: companyName.trim(),
         position: position.trim(),
       });
+      trackEvent("cover_letter_generated", {
+        company_name: companyName.trim(),
+        position: position.trim(),
+      });
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      trackEvent("cover_letter_generation_failed", {
+        reason: err instanceof Error ? err.message : "unknown",
+      });
       setError(
         err instanceof Error ? err.message : "Failed to generate cover letter",
       );
@@ -72,12 +84,14 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
 
   const handleCancel = () => {
     abortRef.current?.abort();
+    trackEvent("cover_letter_generation_cancelled");
     setIsGenerating(false);
   };
 
   const handleCopy = async () => {
     if (coverLetter?.content) {
       await navigator.clipboard.writeText(coverLetter.content);
+      trackEvent("cover_letter_copied");
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -92,6 +106,7 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
     a.download = `Cover_Letter_${companyName.replace(/\s+/g, "_")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+    trackEvent("cover_letter_downloaded");
   };
 
   return (

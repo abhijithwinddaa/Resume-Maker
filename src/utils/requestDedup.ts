@@ -40,5 +40,3 @@ export function abortRequestController(key: string): void {
     activeRequests.delete(key);
   }
 }
-
-

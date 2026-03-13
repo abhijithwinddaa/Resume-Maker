@@ -4,6 +4,8 @@
    Can be extended to send to an analytics endpoint.
    ────────────────────────────────────────────────────── */
 
+import { trackEvent } from "./analytics";
+
 interface PerformanceMetric {
   name: string;
   value: number;
@@ -26,6 +28,14 @@ function rateMetric(
 
 function recordMetric(metric: PerformanceMetric) {
   metrics.push(metric);
+
+  if (import.meta.env.PROD) {
+    trackEvent("web_vital_recorded", {
+      metric_name: metric.name,
+      metric_value: Number(metric.value.toFixed(2)),
+      metric_rating: metric.rating,
+    });
+  }
 
   if (import.meta.env.DEV) {
     const color =

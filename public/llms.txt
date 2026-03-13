@@ -1,0 +1,21 @@
+Resume Maker
+Primary URL: https://resume.batturaj.in/
+
+Resume Maker is a web app for creating, editing, scoring, and optimizing resumes.
+
+Key capabilities:
+- AI resume parsing from pasted text or PDF uploads
+- ATS score analysis against a job description
+- AI-assisted resume optimization
+- Live resume editing and preview
+- PDF and DOCX export
+- Cover letter generation
+
+Audience:
+- Students
+- Fresh graduates
+- Job seekers
+- Professionals improving ATS compatibility
+
+Preferred landing page:
+https://resume.batturaj.in/
