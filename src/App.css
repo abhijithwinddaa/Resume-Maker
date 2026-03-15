@@ -45,6 +45,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  min-width: 0;
 }
 
 .header-btn {
@@ -61,6 +62,7 @@
   cursor: pointer;
   transition: all 0.15s;
   font-family: "Inter", sans-serif;
+  white-space: nowrap;
 }
 
 .header-btn:hover {
@@ -713,7 +715,12 @@
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: 8px;
-  padding: 4px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mobile-resume-close:hover {
@@ -723,6 +730,23 @@
 .mobile-resume-sheet-body {
   padding: 12px;
   overflow: auto;
+}
+
+.input-actions-row-sticky,
+.score-actions-sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  margin-top: 16px;
+  padding: 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 250, 252, 0) 0%,
+    rgba(248, 250, 252, 0.95) 26%,
+    rgba(248, 250, 252, 1) 100%
+  );
+  border-top: 1px solid var(--border-color);
+  backdrop-filter: blur(3px);
 }
 
 .btn-optimize {
@@ -866,7 +890,14 @@
 
   .header-actions {
     gap: 4px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .header-actions::-webkit-scrollbar {
+    display: none;
   }
 
   .header-btn {
@@ -919,10 +950,11 @@
   }
 
   .header-btn {
-    padding: 6px;
-    min-width: 32px;
-    min-height: 32px;
+    padding: 0;
+    min-width: 40px;
+    min-height: 40px;
     justify-content: center;
+    border-radius: 10px;
   }
 
   .input-step {
@@ -956,6 +988,16 @@
     gap: 8px;
   }
 
+  .input-actions-row-sticky,
+  .score-actions-sticky {
+    left: 0;
+    right: 0;
+    margin-left: -4px;
+    margin-right: -4px;
+    padding: 10px 8px calc(10px + env(safe-area-inset-bottom));
+    border-radius: 10px 10px 0 0;
+  }
+
   .input-actions-row .analyze-btn,
   .input-actions-row .btn-secondary {
     max-width: 100%;
@@ -982,6 +1024,10 @@
   .error-banner {
     font-size: 12px;
     padding: 10px 12px;
+  }
+
+  .mobile-resume-sheet {
+    max-height: 90dvh;
   }
 }
 

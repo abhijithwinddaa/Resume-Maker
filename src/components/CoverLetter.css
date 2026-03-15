@@ -194,3 +194,38 @@
   border-radius: 8px;
   border: 1px solid var(--border-color, #e2e8f0);
 }
+
+@media (max-width: 700px) {
+  .cl-overlay {
+    align-items: flex-end;
+  }
+
+  .cl-panel {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92dvh;
+    border-radius: 16px 16px 0 0;
+    padding: 16px;
+  }
+
+  .cl-actions-row {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: linear-gradient(
+      180deg,
+      rgba(248, 250, 252, 0) 0%,
+      rgba(248, 250, 252, 0.95) 28%,
+      rgba(248, 250, 252, 1) 100%
+    );
+    padding-top: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .cl-generate-btn,
+  .cl-cancel-btn,
+  .cl-action-btn,
+  .cl-close {
+    min-height: 42px;
+  }
+}

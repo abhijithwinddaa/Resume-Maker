@@ -209,15 +209,18 @@ function getAnalyzeProgressPercent(message: string): number {
   return 35;
 }
 
-function getOptimizeProgressPercent(progress: {
-  currentIteration: number;
-  maxIterations: number;
-  phase: string;
-} | null): number {
+function getOptimizeProgressPercent(
+  progress: {
+    currentIteration: number;
+    maxIterations: number;
+    phase: string;
+  } | null,
+): number {
   if (!progress) return 0;
   const { currentIteration, maxIterations, phase } = progress;
   const completedIterations = Math.max(0, currentIteration - 1);
-  const base = maxIterations > 0 ? (completedIterations / maxIterations) * 100 : 0;
+  const base =
+    maxIterations > 0 ? (completedIterations / maxIterations) * 100 : 0;
 
   if (phase === "target-reached" || phase === "done") return 100;
   if (phase === "error") return clampPercent(base);
@@ -1732,13 +1735,18 @@ function App() {
                       <div className="loading-progress-number">
                         {pdfLoadPercent}%
                       </div>
-                      <div className="loading-progress-track" aria-hidden="true">
+                      <div
+                        className="loading-progress-track"
+                        aria-hidden="true"
+                      >
                         <div
                           className="loading-progress-fill"
                           style={{ width: `${pdfLoadPercent}%` }}
                         />
                       </div>
-                      <span>{loadingMessage || "Extracting text from PDF..."}</span>
+                      <span>
+                        {loadingMessage || "Extracting text from PDF..."}
+                      </span>
                     </div>
                   ) : (
                     <>
@@ -1788,7 +1796,9 @@ function App() {
               </div>
             )}
 
-            <div className="input-actions-row">
+            <div
+              className={`input-actions-row ${isCompactScreen ? "input-actions-row-sticky" : ""}`}
+            >
               {resumeData ? (
                 <button
                   className="analyze-btn"
@@ -1905,7 +1915,9 @@ function App() {
                         style={{ width: `${pdfLoadPercent}%` }}
                       />
                     </div>
-                    <span>{loadingMessage || "Extracting text from PDF..."}</span>
+                    <span>
+                      {loadingMessage || "Extracting text from PDF..."}
+                    </span>
                   </div>
                 ) : (
                   <>
@@ -1936,7 +1948,9 @@ function App() {
               </div>
             )}
 
-            <div className="input-actions-row">
+            <div
+              className={`input-actions-row ${isCompactScreen ? "input-actions-row-sticky" : ""}`}
+            >
               <button
                 className="analyze-btn"
                 onClick={handleParseResume}
@@ -2128,7 +2142,9 @@ function App() {
               )}
 
               {!isOptimizing && (
-                <div className="score-actions">
+                <div
+                  className={`score-actions ${isCompactScreen ? "score-actions-sticky" : ""}`}
+                >
                   <button
                     className="btn-optimize"
                     onClick={
@@ -2221,11 +2237,15 @@ function App() {
           showMobileResumePreview && (
             <div
               className="mobile-resume-overlay"
+              onClick={() => setShowMobileResumePreview(false)}
               role="dialog"
               aria-modal="true"
               aria-label="Resume preview"
             >
-              <div className="mobile-resume-sheet">
+              <div
+                className="mobile-resume-sheet"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div className="mobile-resume-sheet-header">
                   <h3>Resume Preview</h3>
                   <button
