@@ -1468,6 +1468,13 @@ function App() {
     return "";
   };
 
+  const getModeTitle = (selectedMode: AppMode): string => {
+    if (selectedMode === "ats") return "ATS Score & Optimize";
+    if (selectedMode === "edit") return "Edit My Resume";
+    if (selectedMode === "create") return "Create New Resume";
+    return "Choose an option";
+  };
+
   /* ─── Render ─────────────────────────────────────────── */
 
   return (
@@ -1695,10 +1702,11 @@ function App() {
             <div className="landing-cards">
               {/* Card 1: ATS Score & Optimize */}
               <div
-                className="landing-card"
+                className={`landing-card ${!user && pendingMode === "ats" ? "landing-card-selected" : ""}`}
                 onClick={() => handleSelectMode("ats")}
                 role="button"
                 tabIndex={0}
+                aria-pressed={!user && pendingMode === "ats"}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -1715,38 +1723,22 @@ function App() {
                   Have a resume and a job description? Get your ATS score and
                   optimize your resume to match the job requirements.
                 </p>
-                <SignedOut>
-                  <SignInButton mode="modal">
-                    <button
-                      className="landing-card-btn"
-                      disabled={isAuthStarting}
-                      aria-busy={isAuthStarting}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startSignInFlow("ats");
-                      }}
-                    >
-                      <LogIn size={16} />
-                      {isAuthStarting
-                        ? "Opening Sign In..."
-                        : "Sign In & Start"}
-                    </button>
-                  </SignInButton>
-                </SignedOut>
-                <SignedIn>
-                  <button className="landing-card-btn">
-                    <Search size={16} />
-                    Get Started
-                  </button>
-                </SignedIn>
+                <span className="landing-card-hint">
+                  {!user && pendingMode === "ats"
+                    ? "Selected"
+                    : user
+                      ? "Click to continue"
+                      : "Choose this option"}
+                </span>
               </div>
 
               {/* Card 2: Edit My Resume */}
               <div
-                className="landing-card"
+                className={`landing-card ${!user && pendingMode === "edit" ? "landing-card-selected" : ""}`}
                 onClick={() => handleSelectMode("edit")}
                 role="button"
                 tabIndex={0}
+                aria-pressed={!user && pendingMode === "edit"}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -1763,38 +1755,22 @@ function App() {
                   Already have a resume? Upload or paste it to parse with AI and
                   edit in our live preview editor.
                 </p>
-                <SignedOut>
-                  <SignInButton mode="modal">
-                    <button
-                      className="landing-card-btn"
-                      disabled={isAuthStarting}
-                      aria-busy={isAuthStarting}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startSignInFlow("edit");
-                      }}
-                    >
-                      <LogIn size={16} />
-                      {isAuthStarting
-                        ? "Opening Sign In..."
-                        : "Sign In & Start"}
-                    </button>
-                  </SignInButton>
-                </SignedOut>
-                <SignedIn>
-                  <button className="landing-card-btn">
-                    <Edit3 size={16} />
-                    Get Started
-                  </button>
-                </SignedIn>
+                <span className="landing-card-hint">
+                  {!user && pendingMode === "edit"
+                    ? "Selected"
+                    : user
+                      ? "Click to continue"
+                      : "Choose this option"}
+                </span>
               </div>
 
               {/* Card 3: Create Resume */}
               <div
-                className="landing-card"
+                className={`landing-card ${!user && pendingMode === "create" ? "landing-card-selected" : ""}`}
                 onClick={() => handleSelectMode("create")}
                 role="button"
                 tabIndex={0}
+                aria-pressed={!user && pendingMode === "create"}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -1811,32 +1787,50 @@ function App() {
                   Don't have a resume yet? Start from scratch using our
                   templates and fill in your details.
                 </p>
-                <SignedOut>
-                  <SignInButton mode="modal">
-                    <button
-                      className="landing-card-btn"
-                      disabled={isAuthStarting}
-                      aria-busy={isAuthStarting}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startSignInFlow("create");
-                      }}
-                    >
-                      <LogIn size={16} />
-                      {isAuthStarting
-                        ? "Opening Sign In..."
-                        : "Sign In & Start"}
-                    </button>
-                  </SignInButton>
-                </SignedOut>
-                <SignedIn>
-                  <button className="landing-card-btn">
-                    <PlusCircle size={16} />
-                    Get Started
-                  </button>
-                </SignedIn>
+                <span className="landing-card-hint">
+                  {!user && pendingMode === "create"
+                    ? "Selected"
+                    : user
+                      ? "Click to continue"
+                      : "Choose this option"}
+                </span>
               </div>
             </div>
+
+            <SignedOut>
+              <div className="landing-shared-action">
+                <p className="landing-selection-copy">
+                  {pendingMode
+                    ? `Selected: ${getModeTitle(pendingMode)}`
+                    : "Choose one option above, then sign in to continue."}
+                </p>
+                <SignInButton mode="modal">
+                  <button
+                    className="landing-primary-btn"
+                    disabled={!pendingMode || isAuthStarting}
+                    aria-busy={isAuthStarting}
+                    onClick={() => {
+                      if (!pendingMode) return;
+                      startSignInFlow(pendingMode);
+                    }}
+                  >
+                    <LogIn size={16} />
+                    {isAuthStarting
+                      ? "Opening Sign In..."
+                      : pendingMode
+                        ? "Sign In & Continue"
+                        : "Select an Option First"}
+                  </button>
+                </SignInButton>
+              </div>
+            </SignedOut>
+            <SignedIn>
+              <div className="landing-shared-action landing-shared-action-signed-in">
+                <p className="landing-selection-copy">
+                  Choose any option above to continue.
+                </p>
+              </div>
+            </SignedIn>
 
             {/* Restore backup hint */}
             {hasBackup && privacySettings.saveLocalBackups && (
