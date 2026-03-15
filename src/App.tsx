@@ -299,6 +299,8 @@ function App() {
       ? window.matchMedia("(max-width: 900px)").matches
       : false,
   );
+  const [isMobileKeyboardOpen, setIsMobileKeyboardOpen] = useState(false);
+  const [isTextEntryFocused, setIsTextEntryFocused] = useState(false);
   const [showMobileResumePreview, setShowMobileResumePreview] = useState(false);
   const [dbLoadPercent, setDbLoadPercent] = useState(18);
   const [pdfLoadPercent, setPdfLoadPercent] = useState(12);
@@ -313,6 +315,9 @@ function App() {
   const resumeRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const authStartTimeoutRef = useRef<number | null>(null);
+  const initialViewportHeightRef = useRef<number>(
+    typeof window !== "undefined" ? window.innerHeight : 0,
+  );
 
   /* ── Keyboard shortcuts (Ctrl+Z / Ctrl+Y / Escape) ── */
   useEffect(() => {
@@ -397,7 +402,88 @@ function App() {
   useEffect(() => {
     if (!isCompactScreen) {
       setShowMobileResumePreview(false);
+      setIsMobileKeyboardOpen(false);
+      setIsTextEntryFocused(false);
+      document.documentElement.style.setProperty("--vk-offset", "0px");
     }
+  }, [isCompactScreen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !isCompactScreen) return;
+
+    const isTextEntryElement = (target: EventTarget | null): target is HTMLInputElement | HTMLTextAreaElement => {
+      if (!(target instanceof HTMLElement)) return false;
+      if (target instanceof HTMLTextAreaElement) return true;
+      if (target instanceof HTMLInputElement) {
+        const blockedTypes = new Set([
+          "button",
+          "submit",
+          "reset",
+          "checkbox",
+          "radio",
+          "file",
+        ]);
+        return !blockedTypes.has(target.type);
+      }
+      return false;
+    };
+
+    const handleFocusIn = (event: FocusEvent) => {
+      if (!isTextEntryElement(event.target)) return;
+      const activeTarget = event.target;
+      setIsTextEntryFocused(true);
+      window.setTimeout(() => {
+        activeTarget.scrollIntoView({ block: "center", behavior: "smooth" });
+      }, 140);
+    };
+
+    const handleFocusOut = () => {
+      window.setTimeout(() => {
+        const active = document.activeElement;
+        if (!(active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)) {
+          setIsTextEntryFocused(false);
+        }
+      }, 90);
+    };
+
+    window.addEventListener("focusin", handleFocusIn);
+    window.addEventListener("focusout", handleFocusOut);
+    return () => {
+      window.removeEventListener("focusin", handleFocusIn);
+      window.removeEventListener("focusout", handleFocusOut);
+    };
+  }, [isCompactScreen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport || !isCompactScreen) return;
+    const viewport = window.visualViewport;
+    initialViewportHeightRef.current = Math.max(
+      initialViewportHeightRef.current || 0,
+      window.innerHeight,
+      viewport.height,
+    );
+
+    const updateViewportState = () => {
+      const baseline = initialViewportHeightRef.current || window.innerHeight;
+      const currentHeight = viewport.height;
+      const keyboardOpen = currentHeight < baseline * 0.78;
+      setIsMobileKeyboardOpen(keyboardOpen);
+
+      const offset = Math.max(0, window.innerHeight - currentHeight - viewport.offsetTop);
+      document.documentElement.style.setProperty("--vk-offset", `${Math.round(offset)}px`);
+    };
+
+    updateViewportState();
+    viewport.addEventListener("resize", updateViewportState);
+    viewport.addEventListener("scroll", updateViewportState);
+    window.addEventListener("orientationchange", updateViewportState);
+
+    return () => {
+      viewport.removeEventListener("resize", updateViewportState);
+      viewport.removeEventListener("scroll", updateViewportState);
+      window.removeEventListener("orientationchange", updateViewportState);
+      document.documentElement.style.setProperty("--vk-offset", "0px");
+    };
   }, [isCompactScreen]);
 
   useEffect(() => {
@@ -436,6 +522,8 @@ function App() {
     () => getOptimizeProgressPercent(optimizeProgress),
     [optimizeProgress],
   );
+  const useStickyMobileActions =
+    isCompactScreen && !isMobileKeyboardOpen && !isTextEntryFocused;
 
   /* ── Auto-load from Supabase when user signs in ──── */
   useEffect(() => {
@@ -1263,7 +1351,9 @@ function App() {
   /* ─── Render ─────────────────────────────────────────── */
 
   return (
-    <div className="app">
+    <div
+      className={`app${isMobileKeyboardOpen ? " keyboard-open" : ""}${isTextEntryFocused ? " text-entry-focused" : ""}`}
+    >
       {/* Skip Navigation */}
       <a href="#main-content" className="skip-link">
         Skip to main content
@@ -1797,7 +1887,7 @@ function App() {
             )}
 
             <div
-              className={`input-actions-row ${isCompactScreen ? "input-actions-row-sticky" : ""}`}
+              className={`input-actions-row ${useStickyMobileActions ? "input-actions-row-sticky" : ""}`}
             >
               {resumeData ? (
                 <button
@@ -1949,7 +2039,7 @@ function App() {
             )}
 
             <div
-              className={`input-actions-row ${isCompactScreen ? "input-actions-row-sticky" : ""}`}
+              className={`input-actions-row ${useStickyMobileActions ? "input-actions-row-sticky" : ""}`}
             >
               <button
                 className="analyze-btn"
@@ -2143,7 +2233,7 @@ function App() {
 
               {!isOptimizing && (
                 <div
-                  className={`score-actions ${isCompactScreen ? "score-actions-sticky" : ""}`}
+                  className={`score-actions ${useStickyMobileActions ? "score-actions-sticky" : ""}`}
                 >
                   <button
                     className="btn-optimize"

@@ -1,6 +1,7 @@
 /* ─── App Layout ─────────────────────────────────────── */
 
 .app {
+  --vk-offset: 0px;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -735,7 +736,7 @@
 .input-actions-row-sticky,
 .score-actions-sticky {
   position: sticky;
-  bottom: 0;
+  bottom: var(--vk-offset);
   z-index: 6;
   margin-top: 16px;
   padding: 10px;
@@ -747,6 +748,15 @@
   );
   border-top: 1px solid var(--border-color);
   backdrop-filter: blur(3px);
+}
+
+.app.keyboard-open .input-actions-row-sticky,
+.app.keyboard-open .score-actions-sticky {
+  position: static;
+  border-top: none;
+  background: transparent;
+  backdrop-filter: none;
+  padding: 0;
 }
 
 .btn-optimize {
@@ -961,6 +971,10 @@
     padding: 20px 12px;
   }
 
+  .app.keyboard-open .input-step {
+    padding-bottom: calc(16px + var(--vk-offset));
+  }
+
   .input-textarea {
     min-height: 180px;
   }
@@ -1028,6 +1042,10 @@
 
   .mobile-resume-sheet {
     max-height: 90dvh;
+  }
+
+  .app.keyboard-open .step-indicator {
+    display: none;
   }
 }
 
