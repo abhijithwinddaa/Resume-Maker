@@ -7,10 +7,17 @@ import { buildSelfATSPrompt } from "./selfATSPrompt";
 import { buildSelfOptimizePrompt } from "./selfOptimizePrompt";
 import { buildResumeParsePrompt } from "./resumeParser";
 import { getCacheKey, getCached, setCache } from "./aiCache";
+import { loadPrivacySettings } from "../types/privacySettings";
 import {
   analyzeResumeFeedback,
   type ResumeFeedbackInsights,
 } from "./resumeFeedback";
+import type {
+  AnalyzeATSRequest,
+  AnalyzeATSResponse,
+  RewriteResumeRequest,
+  RewriteResumeResponse,
+} from "../types/serverAI";
 
 export interface ATSBreakdownItem {
   score: number;
@@ -45,8 +52,25 @@ function normalizeKeywordValue(value: string): string {
     .trim();
 }
 
+function canonicalizeKeywordValue(value: string): string {
+  return normalizeKeywordValue(value)
+    .replace(/\bnode\s+js\b/g, "nodejs")
+    .replace(/\breact\s+js\b/g, "reactjs")
+    .replace(/\bnext\s+js\b/g, "nextjs")
+    .replace(/\bexpress\s+js\b/g, "expressjs")
+    .replace(/\bnest\s+js\b/g, "nestjs")
+    .replace(/\bvue\s+js\b/g, "vuejs")
+    .replace(/\bweb\s+sockets?\b/g, "websocket")
+    .replace(/\bwebsockets\b/g, "websocket")
+    .replace(/\brest\s+apis?\b/g, "rest api")
+    .replace(/\bapis\b/g, "api")
+    .replace(/\bllms\b/g, "llm")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function compactKeywordValue(value: string): string {
-  return normalizeKeywordValue(value).replace(/\s+/g, "");
+  return canonicalizeKeywordValue(value).replace(/\s+/g, "");
 }
 
 function escapeRegExp(value: string): string {
@@ -58,7 +82,7 @@ function buildResumeSearchIndex(resumeData: ResumeData): {
   compact: string;
 } {
   const serialized = JSON.stringify(resumeData);
-  const normalized = ` ${normalizeKeywordValue(serialized)} `;
+  const normalized = ` ${canonicalizeKeywordValue(serialized)} `;
   return {
     normalized,
     compact: normalized.replace(/\s+/g, ""),
@@ -69,7 +93,7 @@ function resumeContainsKeyword(
   searchIndex: { normalized: string; compact: string },
   value: string,
 ): boolean {
-  const normalizedValue = normalizeKeywordValue(value);
+  const normalizedValue = canonicalizeKeywordValue(value);
   if (!normalizedValue) return false;
 
   const compactValue = normalizedValue.replace(/\s+/g, "");
@@ -178,9 +202,15 @@ function sanitizeATSResultLists(
 
 export const atsResultTestUtils = {
   sanitizeATSResultLists,
+  countOutstandingKeywords: (atsResult: ATSResult) =>
+    countOutstandingKeywords(atsResult),
+  evaluateOptimizationStep: (
+    beforeRewrite: ATSResult,
+    afterRewrite: ATSResult,
+  ) => evaluateOptimizationStep(beforeRewrite, afterRewrite),
 };
 
-function enrichATSResult(
+export function enrichATSResult(
   result: ATSResult,
   resumeData: ResumeData,
 ): ATSResult {
@@ -215,7 +245,7 @@ interface ChatAPIResponse {
   choices: { message: { content: string } }[];
 }
 
-function extractJSON(text: string): string {
+export function extractJSON(text: string): string {
   // Try to extract JSON from response (handles markdown code fences, extra text, etc.)
   // First try: direct parse
   // First: trim whitespace
@@ -639,23 +669,7 @@ export async function generateAIResume(
     );
   }
 
-  // Preserve contact info from original (AI shouldn't change it)
-  parsed.contact = resumeData.contact;
-  // Preserve education
-  parsed.education = resumeData.education;
-  // Preserve certificates
-  parsed.certificates = resumeData.certificates;
-  parsed.showCertificates = resumeData.showCertificates;
-  // Preserve section order
-  parsed.sectionOrder = resumeData.sectionOrder;
-  // Preserve experience immutables
-  if (!parsed.experience) parsed.experience = resumeData.experience;
-  parsed.showExperience = resumeData.showExperience;
-
-  // Restore links that AI may have dropped
-  restoreLinks(parsed, resumeData);
-
-  return parsed;
+  return finalizeOptimizedResume(parsed, resumeData);
 }
 
 /**
@@ -698,10 +712,319 @@ function restoreLinks(parsed: ResumeData, original: ResumeData): void {
   }
 }
 
+export function finalizeOptimizedResume(
+  parsed: ResumeData,
+  originalResume: ResumeData,
+): ResumeData {
+  parsed.contact = originalResume.contact;
+  parsed.education = originalResume.education;
+  parsed.certificates = originalResume.certificates;
+  parsed.showCertificates = originalResume.showCertificates;
+  parsed.sectionOrder = originalResume.sectionOrder;
+  if (!parsed.experience) parsed.experience = originalResume.experience;
+  parsed.showExperience = originalResume.showExperience;
+  restoreLinks(parsed, originalResume);
+  return parsed;
+}
+
+export function parseATSResultResponse(
+  rawResponse: string,
+  resumeData: ResumeData,
+  errorLabel: string,
+): ATSResult {
+  const jsonStr = extractJSON(rawResponse);
+
+  let parsed: ATSResult;
+  try {
+    parsed = JSON.parse(jsonStr) as ATSResult;
+  } catch {
+    throw new Error(
+      `AI returned invalid JSON for ${errorLabel}. Try again.\n\nRaw response preview: ${rawResponse.substring(0, 300)}...`,
+    );
+  }
+
+  if (
+    typeof parsed.overallScore !== "number" ||
+    !parsed.breakdown ||
+    !parsed.topSuggestions
+  ) {
+    throw new Error(`AI response is missing required fields for ${errorLabel}.`);
+  }
+
+  parsed.overallScore = Math.max(
+    0,
+    Math.min(100, Math.round(parsed.overallScore)),
+  );
+
+  return enrichATSResult(parsed, resumeData);
+}
+
+export function parseOptimizedResumeResponse(
+  rawResponse: string,
+  originalResume: ResumeData,
+  errorLabel: string,
+): ResumeData {
+  const jsonStr = extractJSON(rawResponse);
+
+  let parsed: ResumeData;
+  try {
+    parsed = JSON.parse(jsonStr) as ResumeData;
+  } catch {
+    throw new Error(
+      `AI returned invalid JSON for ${errorLabel}. Try again.\n\nRaw response preview: ${rawResponse.substring(0, 300)}...`,
+    );
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !parsed.summary ||
+    !parsed.projects ||
+    !parsed.skills
+  ) {
+    throw new Error(`AI response is missing required fields for ${errorLabel}.`);
+  }
+
+  return finalizeOptimizedResume(parsed, originalResume);
+}
+
+async function postServerAIRequest<TRequest, TResponse>(
+  path: string,
+  payload: TRequest,
+  signal?: AbortSignal,
+): Promise<TResponse> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (body.error) {
+        message = body.error;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  return (await response.json()) as TResponse;
+}
+
+function canUseClientFallback(settings: AISettings): boolean {
+  return Boolean(
+    settings.githubToken ||
+      settings.githubTokens.length > 0 ||
+      settings.geminiApiKey ||
+      settings.groqApiKey,
+  );
+}
+
+async function analyzeATSScoreDirect(
+  settings: AISettings,
+  resumeData: ResumeData,
+  jobDescription: string,
+  signal?: AbortSignal,
+): Promise<ATSResult> {
+  const prompt = buildATSPrompt(resumeData, jobDescription);
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You are an expert ATS analyzer. You output ONLY valid JSON. No markdown, no explanation, no code fences.",
+    },
+    {
+      role: "user",
+      content: prompt,
+    },
+  ];
+
+  const rawResponse = await callAI(settings, messages, signal);
+  return parseATSResultResponse(rawResponse, resumeData, "ATS analysis");
+}
+
+async function selfATSScoreDirect(
+  settings: AISettings,
+  resumeData: ResumeData,
+  signal?: AbortSignal,
+): Promise<ATSResult> {
+  const prompt = buildSelfATSPrompt(resumeData);
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You are an expert ATS resume auditor. You output ONLY valid JSON. No markdown, no explanation, no code fences.",
+    },
+    {
+      role: "user",
+      content: prompt,
+    },
+  ];
+
+  const rawResponse = await callAI(settings, messages, signal);
+  return parseATSResultResponse(rawResponse, resumeData, "self ATS analysis");
+}
+
+async function rewriteResumeDirect(
+  settings: AISettings,
+  resumeData: ResumeData,
+  jobDescription: string,
+  atsResult: ATSResult,
+  iteration: number,
+  signal?: AbortSignal,
+): Promise<ResumeData> {
+  const optimizePrompt = buildOptimizePrompt(
+    resumeData,
+    jobDescription,
+    atsResult,
+    iteration,
+  );
+
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. You must incorporate ALL missing keywords and skills from the ATS report.",
+    },
+    { role: "user", content: optimizePrompt },
+  ];
+
+  const rawResponse = await callAI(settings, messages, signal);
+  return parseOptimizedResumeResponse(
+    rawResponse,
+    resumeData,
+    "resume optimization",
+  );
+}
+
+async function rewriteSelfResumeDirect(
+  settings: AISettings,
+  resumeData: ResumeData,
+  atsResult: ATSResult,
+  iteration: number,
+  signal?: AbortSignal,
+): Promise<ResumeData> {
+  const optimizePrompt = buildSelfOptimizePrompt(
+    resumeData,
+    atsResult,
+    iteration,
+  );
+
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. You must improve the resume based on general best practices.",
+    },
+    { role: "user", content: optimizePrompt },
+  ];
+
+  const rawResponse = await callAI(settings, messages, signal);
+  return parseOptimizedResumeResponse(
+    rawResponse,
+    resumeData,
+    "self resume optimization",
+  );
+}
+
+async function analyzeATSViaServer(
+  resumeData: ResumeData,
+  jobDescription: string,
+  signal?: AbortSignal,
+): Promise<ATSResult> {
+  const cacheAllowed = loadPrivacySettings().cacheAIResponses;
+  const response = await postServerAIRequest<AnalyzeATSRequest, AnalyzeATSResponse>(
+    "/api/ats/analyze",
+    {
+      resumeData,
+      jobDescription,
+      mode: "jd",
+      cacheAllowed,
+    },
+    signal,
+  );
+  return response.atsResult;
+}
+
+async function selfATSViaServer(
+  resumeData: ResumeData,
+  signal?: AbortSignal,
+): Promise<ATSResult> {
+  const cacheAllowed = loadPrivacySettings().cacheAIResponses;
+  const response = await postServerAIRequest<AnalyzeATSRequest, AnalyzeATSResponse>(
+    "/api/ats/analyze",
+    {
+      resumeData,
+      mode: "self",
+      cacheAllowed,
+    },
+    signal,
+  );
+  return response.atsResult;
+}
+
+async function rewriteResumeViaServer(
+  resumeData: ResumeData,
+  jobDescription: string,
+  atsResult: ATSResult,
+  iteration: number,
+  signal?: AbortSignal,
+): Promise<ResumeData> {
+  const cacheAllowed = loadPrivacySettings().cacheAIResponses;
+  const response = await postServerAIRequest<
+    RewriteResumeRequest,
+    RewriteResumeResponse
+  >(
+    "/api/optimize/rewrite",
+    {
+      resumeData,
+      jobDescription,
+      atsResult,
+      iteration,
+      mode: "jd",
+      cacheAllowed,
+    },
+    signal,
+  );
+  return response.resumeData;
+}
+
+async function rewriteSelfResumeViaServer(
+  resumeData: ResumeData,
+  atsResult: ATSResult,
+  iteration: number,
+  signal?: AbortSignal,
+): Promise<ResumeData> {
+  const cacheAllowed = loadPrivacySettings().cacheAIResponses;
+  const response = await postServerAIRequest<
+    RewriteResumeRequest,
+    RewriteResumeResponse
+  >(
+    "/api/optimize/rewrite",
+    {
+      resumeData,
+      atsResult,
+      iteration,
+      mode: "self",
+      cacheAllowed,
+    },
+    signal,
+  );
+  return response.resumeData;
+}
+
 export async function analyzeATSScore(
   settings: AISettings,
   resumeData: ResumeData,
   jobDescription: string,
+  signal?: AbortSignal,
 ): Promise<ATSResult> {
   // Check cache first
   const cacheKey = getCacheKey(
@@ -717,54 +1040,24 @@ export async function analyzeATSScore(
     return enrichedCached;
   }
 
-  const prompt = buildATSPrompt(resumeData, jobDescription);
-
-  const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content:
-        "You are an expert ATS analyzer. You output ONLY valid JSON. No markdown, no explanation, no code fences.",
-    },
-    {
-      role: "user",
-      content: prompt,
-    },
-  ];
-
-  let rawResponse: string;
-  rawResponse = await callAI(settings, messages);
-
-  const jsonStr = extractJSON(rawResponse);
-
-  let parsed: ATSResult;
   try {
-    parsed = JSON.parse(jsonStr) as ATSResult;
-  } catch {
-    throw new Error(
-      `AI returned invalid JSON for ATS analysis. Try again.\n\nRaw response preview: ${rawResponse.substring(0, 300)}...`,
+    const parsed = await analyzeATSViaServer(resumeData, jobDescription, signal);
+    setCache(cacheKey, parsed);
+    return parsed;
+  } catch (error) {
+    if (!canUseClientFallback(settings)) {
+      throw error;
+    }
+
+    const parsed = await analyzeATSScoreDirect(
+      settings,
+      resumeData,
+      jobDescription,
+      signal,
     );
+    setCache(cacheKey, parsed);
+    return parsed;
   }
-
-  if (
-    typeof parsed.overallScore !== "number" ||
-    !parsed.breakdown ||
-    !parsed.topSuggestions
-  ) {
-    throw new Error("AI response is missing required ATS fields. Try again.");
-  }
-
-  // Clamp score to 0-100
-  parsed.overallScore = Math.max(
-    0,
-    Math.min(100, Math.round(parsed.overallScore)),
-  );
-
-  parsed = enrichATSResult(parsed, resumeData);
-
-  // Cache the result
-  setCache(cacheKey, parsed);
-
-  return parsed;
 }
 
 // ─── Self ATS Score (No JD) ─────────────────────────────
@@ -772,6 +1065,7 @@ export async function analyzeATSScore(
 export async function selfATSScore(
   settings: AISettings,
   resumeData: ResumeData,
+  signal?: AbortSignal,
 ): Promise<ATSResult> {
   // Check cache first
   const cacheKey = getCacheKey("self-ats", JSON.stringify(resumeData));
@@ -783,52 +1077,19 @@ export async function selfATSScore(
     return enrichedCached;
   }
 
-  const prompt = buildSelfATSPrompt(resumeData);
-
-  const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content:
-        "You are an expert ATS resume auditor. You output ONLY valid JSON. No markdown, no explanation, no code fences.",
-    },
-    {
-      role: "user",
-      content: prompt,
-    },
-  ];
-
-  const rawResponse = await callAI(settings, messages);
-  const jsonStr = extractJSON(rawResponse);
-
-  let parsed: ATSResult;
   try {
-    parsed = JSON.parse(jsonStr) as ATSResult;
-  } catch {
-    throw new Error(
-      `AI returned invalid JSON for self ATS analysis. Try again.\n\nRaw response preview: ${rawResponse.substring(0, 300)}...`,
-    );
+    const parsed = await selfATSViaServer(resumeData, signal);
+    setCache(cacheKey, parsed);
+    return parsed;
+  } catch (error) {
+    if (!canUseClientFallback(settings)) {
+      throw error;
+    }
+
+    const parsed = await selfATSScoreDirect(settings, resumeData, signal);
+    setCache(cacheKey, parsed);
+    return parsed;
   }
-
-  if (
-    typeof parsed.overallScore !== "number" ||
-    !parsed.breakdown ||
-    !parsed.topSuggestions
-  ) {
-    throw new Error("AI response is missing required ATS fields. Try again.");
-  }
-
-  // Clamp score to 0-100
-  parsed.overallScore = Math.max(
-    0,
-    Math.min(100, Math.round(parsed.overallScore)),
-  );
-
-  parsed = enrichATSResult(parsed, resumeData);
-
-  // Cache the result
-  setCache(cacheKey, parsed);
-
-  return parsed;
 }
 
 // ─── Auto-Optimize Loop ─────────────────────────────────
@@ -852,6 +1113,35 @@ export interface OptimizeProgress {
   error?: string;
 }
 
+interface OptimizationStepDecision {
+  scoreGain: number;
+  missingKeywordImprovement: number;
+  shouldContinue: boolean;
+}
+
+function countOutstandingKeywords(atsResult: ATSResult): number {
+  return uniqueKeywordList([
+    ...(atsResult.breakdown.keywordMatch.missingKeywords || []),
+    ...(atsResult.breakdown.skillsAlignment.missingSkills || []),
+  ]).length;
+}
+
+function evaluateOptimizationStep(
+  beforeRewrite: ATSResult,
+  afterRewrite: ATSResult,
+): OptimizationStepDecision {
+  const scoreGain = afterRewrite.overallScore - beforeRewrite.overallScore;
+  const missingKeywordImprovement =
+    countOutstandingKeywords(beforeRewrite) -
+    countOutstandingKeywords(afterRewrite);
+
+  return {
+    scoreGain,
+    missingKeywordImprovement,
+    shouldContinue: scoreGain >= 3 && missingKeywordImprovement > 0,
+  };
+}
+
 export async function optimizeResumeLoop(
   settings: AISettings,
   resumeData: ResumeData,
@@ -863,6 +1153,7 @@ export async function optimizeResumeLoop(
 ): Promise<OptimizeProgress> {
   const history: OptimizeIteration[] = [];
   let currentResume = { ...resumeData };
+  let currentATSResult: ATSResult | null = null;
   let bestScore = 0;
   let bestResume = currentResume;
   let bestATSResult: ATSResult | null = null;
@@ -885,66 +1176,64 @@ export async function optimizeResumeLoop(
       return progress;
     }
 
-    // Phase 1: ATS Scan
-    onProgress({
-      currentIteration: i,
-      maxIterations,
-      phase: "scanning",
-      message: `Iteration ${i}/${maxIterations}: Scanning resume with ATS...`,
-      history,
-      finalResume: null,
-      finalATSResult: null,
-      finalScore: bestScore,
-    });
-
-    let atsResult: ATSResult;
-    try {
-      atsResult = await analyzeATSScore(
-        settings,
-        currentResume,
-        jobDescription,
-      );
-    } catch (err) {
-      const progress: OptimizeProgress = {
+    if (!currentATSResult) {
+      onProgress({
         currentIteration: i,
         maxIterations,
-        phase: "error",
-        message: `ATS scan failed on iteration ${i}.`,
+        phase: "scanning",
+        message: `Iteration ${i}/${maxIterations}: Scanning resume with ATS...`,
         history,
-        finalResume: bestResume,
-        finalATSResult: bestATSResult,
+        finalResume: null,
+        finalATSResult: null,
         finalScore: bestScore,
-        error: err instanceof Error ? err.message : "ATS scan failed",
-      };
-      onProgress(progress);
-      return progress;
-    }
+      });
 
-    // Track best
-    if (atsResult.overallScore > bestScore) {
-      bestScore = atsResult.overallScore;
+      try {
+        currentATSResult = await analyzeATSScore(
+          settings,
+          currentResume,
+          jobDescription,
+          abortSignal,
+        );
+      } catch (err) {
+        const progress: OptimizeProgress = {
+          currentIteration: i,
+          maxIterations,
+          phase: "error",
+          message: `ATS scan failed on iteration ${i}.`,
+          history,
+          finalResume: bestResume,
+          finalATSResult: bestATSResult,
+          finalScore: bestScore,
+          error: err instanceof Error ? err.message : "ATS scan failed",
+        };
+        onProgress(progress);
+        return progress;
+      }
+
+      bestScore = currentATSResult.overallScore;
       bestResume = currentResume;
-      bestATSResult = atsResult;
+      bestATSResult = currentATSResult;
     }
 
-    history.push({
-      iteration: i,
-      atsResult,
-      resumeData: currentResume,
-      phase: "done",
-    });
-
-    // Check if target reached
-    if (atsResult.overallScore >= targetScore) {
+    if (currentATSResult.overallScore >= targetScore) {
       const progress: OptimizeProgress = {
         currentIteration: i,
         maxIterations,
         phase: "target-reached",
-        message: `Target reached! Score: ${atsResult.overallScore}/100 after ${i} iteration(s).`,
-        history,
+        message: `Target reached! Score: ${currentATSResult.overallScore}/100 after ${i} iteration(s).`,
+        history: [
+          ...history,
+          {
+            iteration: i,
+            atsResult: currentATSResult,
+            resumeData: currentResume,
+            phase: "done",
+          },
+        ],
         finalResume: currentResume,
-        finalATSResult: atsResult,
-        finalScore: atsResult.overallScore,
+        finalATSResult: currentATSResult,
+        finalScore: currentATSResult.overallScore,
       };
       onProgress(progress);
       return progress;
@@ -957,32 +1246,87 @@ export async function optimizeResumeLoop(
       currentIteration: i,
       maxIterations,
       phase: "rewriting",
-      message: `Iteration ${i}/${maxIterations}: Score ${atsResult.overallScore}/100 — AI is rewriting to fix gaps...`,
+      message: `Iteration ${i}/${maxIterations}: Score ${currentATSResult.overallScore}/100 - AI is rewriting to fix gaps...`,
       history,
       finalResume: null,
       finalATSResult: null,
       finalScore: bestScore,
     });
 
-    const optimizePrompt = buildOptimizePrompt(
-      currentResume,
-      jobDescription,
-      atsResult,
-      i,
-    );
-
-    const messages: ChatMessage[] = [
-      {
-        role: "system",
-        content:
-          "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. You must incorporate ALL missing keywords and skills from the ATS report.",
-      },
-      { role: "user", content: optimizePrompt },
-    ];
-
-    let rawResponse: string;
+    let rewrittenResume: ResumeData;
     try {
-      rawResponse = await callAI(settings, messages);
+      rewrittenResume = await rewriteResumeViaServer(
+        currentResume,
+        jobDescription,
+        currentATSResult,
+        i,
+        abortSignal,
+      );
+    } catch (serverError) {
+      if (!canUseClientFallback(settings)) {
+        const progress: OptimizeProgress = {
+          currentIteration: i,
+          maxIterations,
+          phase: "error",
+          message: `AI rewrite failed on iteration ${i}.`,
+          history,
+          finalResume: bestResume,
+          finalATSResult: bestATSResult,
+          finalScore: bestScore,
+          error:
+            serverError instanceof Error
+              ? serverError.message
+              : "AI rewrite failed",
+        };
+        onProgress(progress);
+        return progress;
+      }
+
+      try {
+        rewrittenResume = await rewriteResumeDirect(
+          settings,
+          currentResume,
+          jobDescription,
+          currentATSResult,
+          i,
+          abortSignal,
+        );
+      } catch (err) {
+        const progress: OptimizeProgress = {
+          currentIteration: i,
+          maxIterations,
+          phase: "error",
+          message: `AI rewrite failed on iteration ${i}.`,
+          history,
+          finalResume: bestResume,
+          finalATSResult: bestATSResult,
+          finalScore: bestScore,
+          error: err instanceof Error ? err.message : "AI rewrite failed",
+        };
+        onProgress(progress);
+        return progress;
+      }
+    }
+
+    onProgress({
+      currentIteration: i,
+      maxIterations,
+      phase: "scanning",
+      message: `Iteration ${i}/${maxIterations}: Verifying rewritten resume...`,
+      history,
+      finalResume: null,
+      finalATSResult: null,
+      finalScore: bestScore,
+    });
+
+    let verifiedATSResult: ATSResult;
+    try {
+      verifiedATSResult = await analyzeATSScore(
+        settings,
+        rewrittenResume,
+        jobDescription,
+        abortSignal,
+      );
     } catch (err) {
       const progress: OptimizeProgress = {
         currentIteration: i,
@@ -999,46 +1343,55 @@ export async function optimizeResumeLoop(
       return progress;
     }
 
-    const jsonStr = extractJSON(rawResponse);
+    history.push({
+      iteration: i,
+      atsResult: verifiedATSResult,
+      resumeData: rewrittenResume,
+      phase: "done",
+    });
 
-    let parsed: ResumeData;
-    try {
-      parsed = JSON.parse(jsonStr) as ResumeData;
-    } catch {
-      // If parse fails, skip this iteration and use previous best
-      continue;
+    if (verifiedATSResult.overallScore > bestScore) {
+      bestScore = verifiedATSResult.overallScore;
+      bestResume = rewrittenResume;
+      bestATSResult = verifiedATSResult;
     }
 
-    // Preserve immutable fields
-    parsed.contact = resumeData.contact;
-    parsed.education = resumeData.education;
-    parsed.certificates = resumeData.certificates;
-    parsed.showCertificates = resumeData.showCertificates;
-    parsed.sectionOrder = resumeData.sectionOrder;
-    if (!parsed.experience) parsed.experience = resumeData.experience;
-    parsed.showExperience = resumeData.showExperience;
-    restoreLinks(parsed, resumeData);
+    if (verifiedATSResult.overallScore >= targetScore) {
+      const progress: OptimizeProgress = {
+        currentIteration: i,
+        maxIterations,
+        phase: "target-reached",
+        message: `Target reached! Score: ${verifiedATSResult.overallScore}/100 after ${i} iteration(s).`,
+        history,
+        finalResume: rewrittenResume,
+        finalATSResult: verifiedATSResult,
+        finalScore: verifiedATSResult.overallScore,
+      };
+      onProgress(progress);
+      return progress;
+    }
 
-    currentResume = parsed;
-  }
+    const stepDecision = evaluateOptimizationStep(
+      currentATSResult,
+      verifiedATSResult,
+    );
 
-  const currentResumeSnapshot = JSON.stringify(currentResume);
-  const bestResumeSnapshot = JSON.stringify(bestResume);
+    currentResume = rewrittenResume;
+    currentATSResult = verifiedATSResult;
 
-  if (currentResumeSnapshot !== bestResumeSnapshot) {
-    try {
-      const finalATSResult = await analyzeATSScore(
-        settings,
-        currentResume,
-        jobDescription,
-      );
-      if (finalATSResult.overallScore >= bestScore) {
-        bestScore = finalATSResult.overallScore;
-        bestResume = currentResume;
-        bestATSResult = finalATSResult;
-      }
-    } catch {
-      // Fall back to the best analyzed resume if the final verification scan fails.
+    if (i < maxIterations && !stepDecision.shouldContinue) {
+      const progress: OptimizeProgress = {
+        currentIteration: i,
+        maxIterations,
+        phase: "done",
+        message: `Stopped after ${i} iteration(s) because improvements plateaued (score change ${stepDecision.scoreGain >= 0 ? "+" : ""}${stepDecision.scoreGain}, missing-keyword improvement ${stepDecision.missingKeywordImprovement}).`,
+        history,
+        finalResume: bestResume,
+        finalATSResult: bestATSResult,
+        finalScore: bestScore,
+      };
+      onProgress(progress);
+      return progress;
     }
   }
 
@@ -1069,6 +1422,7 @@ export async function selfOptimizeLoop(
 ): Promise<OptimizeProgress> {
   const history: OptimizeIteration[] = [];
   let currentResume = { ...resumeData };
+  let currentATSResult: ATSResult | null = null;
   let bestScore = 0;
   let bestResume = currentResume;
   let bestATSResult: ATSResult | null = null;
@@ -1091,62 +1445,59 @@ export async function selfOptimizeLoop(
       return progress;
     }
 
-    // Phase 1: Self ATS Scan
-    onProgress({
-      currentIteration: i,
-      maxIterations,
-      phase: "scanning",
-      message: `Iteration ${i}/${maxIterations}: Self-scoring resume...`,
-      history,
-      finalResume: null,
-      finalATSResult: null,
-      finalScore: bestScore,
-    });
-
-    let atsResult: ATSResult;
-    try {
-      atsResult = await selfATSScore(settings, currentResume);
-    } catch (err) {
-      const progress: OptimizeProgress = {
+    if (!currentATSResult) {
+      onProgress({
         currentIteration: i,
         maxIterations,
-        phase: "error",
-        message: `Self ATS scan failed on iteration ${i}.`,
+        phase: "scanning",
+        message: `Iteration ${i}/${maxIterations}: Self-scoring resume...`,
         history,
-        finalResume: bestResume,
-        finalATSResult: bestATSResult,
+        finalResume: null,
+        finalATSResult: null,
         finalScore: bestScore,
-        error: err instanceof Error ? err.message : "Self ATS scan failed",
-      };
-      onProgress(progress);
-      return progress;
-    }
+      });
 
-    // Track best
-    if (atsResult.overallScore > bestScore) {
-      bestScore = atsResult.overallScore;
+      try {
+        currentATSResult = await selfATSScore(settings, currentResume, abortSignal);
+      } catch (err) {
+        const progress: OptimizeProgress = {
+          currentIteration: i,
+          maxIterations,
+          phase: "error",
+          message: `Self ATS scan failed on iteration ${i}.`,
+          history,
+          finalResume: bestResume,
+          finalATSResult: bestATSResult,
+          finalScore: bestScore,
+          error: err instanceof Error ? err.message : "Self ATS scan failed",
+        };
+        onProgress(progress);
+        return progress;
+      }
+
+      bestScore = currentATSResult.overallScore;
       bestResume = currentResume;
-      bestATSResult = atsResult;
+      bestATSResult = currentATSResult;
     }
 
-    history.push({
-      iteration: i,
-      atsResult,
-      resumeData: currentResume,
-      phase: "done",
-    });
-
-    // Check if target reached
-    if (atsResult.overallScore >= targetScore) {
+    if (currentATSResult.overallScore >= targetScore) {
       const progress: OptimizeProgress = {
         currentIteration: i,
         maxIterations,
         phase: "target-reached",
-        message: `Target reached! Score: ${atsResult.overallScore}/100 after ${i} iteration(s).`,
-        history,
+        message: `Target reached! Score: ${currentATSResult.overallScore}/100 after ${i} iteration(s).`,
+        history: [
+          ...history,
+          {
+            iteration: i,
+            atsResult: currentATSResult,
+            resumeData: currentResume,
+            phase: "done",
+          },
+        ],
         finalResume: currentResume,
-        finalATSResult: atsResult,
-        finalScore: atsResult.overallScore,
+        finalATSResult: currentATSResult,
+        finalScore: currentATSResult.overallScore,
       };
       onProgress(progress);
       return progress;
@@ -1159,27 +1510,84 @@ export async function selfOptimizeLoop(
       currentIteration: i,
       maxIterations,
       phase: "rewriting",
-      message: `Iteration ${i}/${maxIterations}: Score ${atsResult.overallScore}/100 — AI is improving resume...`,
+      message: `Iteration ${i}/${maxIterations}: Score ${currentATSResult.overallScore}/100 - AI is improving resume...`,
       history,
       finalResume: null,
       finalATSResult: null,
       finalScore: bestScore,
     });
 
-    const optimizePrompt = buildSelfOptimizePrompt(currentResume, atsResult, i);
-
-    const messages: ChatMessage[] = [
-      {
-        role: "system",
-        content:
-          "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. You must improve the resume based on general best practices.",
-      },
-      { role: "user", content: optimizePrompt },
-    ];
-
-    let rawResponse: string;
+    let rewrittenResume: ResumeData;
     try {
-      rawResponse = await callAI(settings, messages);
+      rewrittenResume = await rewriteSelfResumeViaServer(
+        currentResume,
+        currentATSResult,
+        i,
+        abortSignal,
+      );
+    } catch (serverError) {
+      if (!canUseClientFallback(settings)) {
+        const progress: OptimizeProgress = {
+          currentIteration: i,
+          maxIterations,
+          phase: "error",
+          message: `AI rewrite failed on iteration ${i}.`,
+          history,
+          finalResume: bestResume,
+          finalATSResult: bestATSResult,
+          finalScore: bestScore,
+          error:
+            serverError instanceof Error
+              ? serverError.message
+              : "AI rewrite failed",
+        };
+        onProgress(progress);
+        return progress;
+      }
+
+      try {
+        rewrittenResume = await rewriteSelfResumeDirect(
+          settings,
+          currentResume,
+          currentATSResult,
+          i,
+          abortSignal,
+        );
+      } catch (err) {
+        const progress: OptimizeProgress = {
+          currentIteration: i,
+          maxIterations,
+          phase: "error",
+          message: `AI rewrite failed on iteration ${i}.`,
+          history,
+          finalResume: bestResume,
+          finalATSResult: bestATSResult,
+          finalScore: bestScore,
+          error: err instanceof Error ? err.message : "AI rewrite failed",
+        };
+        onProgress(progress);
+        return progress;
+      }
+    }
+
+    onProgress({
+      currentIteration: i,
+      maxIterations,
+      phase: "scanning",
+      message: `Iteration ${i}/${maxIterations}: Verifying rewritten resume...`,
+      history,
+      finalResume: null,
+      finalATSResult: null,
+      finalScore: bestScore,
+    });
+
+    let verifiedATSResult: ATSResult;
+    try {
+      verifiedATSResult = await selfATSScore(
+        settings,
+        rewrittenResume,
+        abortSignal,
+      );
     } catch (err) {
       const progress: OptimizeProgress = {
         currentIteration: i,
@@ -1196,44 +1604,59 @@ export async function selfOptimizeLoop(
       return progress;
     }
 
-    const jsonStr = extractJSON(rawResponse);
+    history.push({
+      iteration: i,
+      atsResult: verifiedATSResult,
+      resumeData: rewrittenResume,
+      phase: "done",
+    });
 
-    let parsed: ResumeData;
-    try {
-      parsed = JSON.parse(jsonStr) as ResumeData;
-    } catch {
-      // If parse fails, skip this iteration and use previous best
-      continue;
+    if (verifiedATSResult.overallScore > bestScore) {
+      bestScore = verifiedATSResult.overallScore;
+      bestResume = rewrittenResume;
+      bestATSResult = verifiedATSResult;
     }
 
-    // Preserve immutable fields
-    parsed.contact = resumeData.contact;
-    parsed.education = resumeData.education;
-    parsed.certificates = resumeData.certificates;
-    parsed.showCertificates = resumeData.showCertificates;
-    parsed.sectionOrder = resumeData.sectionOrder;
-    if (!parsed.experience) parsed.experience = resumeData.experience;
-    parsed.showExperience = resumeData.showExperience;
-    restoreLinks(parsed, resumeData);
+    if (verifiedATSResult.overallScore >= targetScore) {
+      const progress: OptimizeProgress = {
+        currentIteration: i,
+        maxIterations,
+        phase: "target-reached",
+        message: `Target reached! Score: ${verifiedATSResult.overallScore}/100 after ${i} iteration(s).`,
+        history,
+        finalResume: rewrittenResume,
+        finalATSResult: verifiedATSResult,
+        finalScore: verifiedATSResult.overallScore,
+      };
+      onProgress(progress);
+      return progress;
+    }
 
-    currentResume = parsed;
-  }
+    const stepDecision = evaluateOptimizationStep(
+      currentATSResult,
+      verifiedATSResult,
+    );
 
-  const currentResumeSnapshot = JSON.stringify(currentResume);
-  const bestResumeSnapshot = JSON.stringify(bestResume);
+    currentResume = rewrittenResume;
+    currentATSResult = verifiedATSResult;
 
-  if (currentResumeSnapshot !== bestResumeSnapshot) {
-    try {
-      const finalATSResult = await selfATSScore(settings, currentResume);
-      if (finalATSResult.overallScore >= bestScore) {
-        bestScore = finalATSResult.overallScore;
-        bestResume = currentResume;
-        bestATSResult = finalATSResult;
-      }
-    } catch {
-      // Fall back to the best analyzed resume if the final verification scan fails.
+    if (i < maxIterations && !stepDecision.shouldContinue) {
+      const progress: OptimizeProgress = {
+        currentIteration: i,
+        maxIterations,
+        phase: "done",
+        message: `Stopped after ${i} iteration(s) because improvements plateaued (score change ${stepDecision.scoreGain >= 0 ? "+" : ""}${stepDecision.scoreGain}, missing-keyword improvement ${stepDecision.missingKeywordImprovement}).`,
+        history,
+        finalResume: bestResume,
+        finalATSResult: bestATSResult,
+        finalScore: bestScore,
+      };
+      onProgress(progress);
+      return progress;
     }
   }
+
+
 
   // Exhausted all iterations — return best result
   const progress: OptimizeProgress = {

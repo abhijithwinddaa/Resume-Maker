@@ -104,7 +104,10 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({ onClose }) => {
             <Settings size={16} />
             <div>
               <h3>AI Provider</h3>
-              <p>Choose how parsing, scoring, and optimization requests run.</p>
+              <p>
+                Choose how parsing and client-side generation run. ATS scoring
+                and optimization use the secure server proxy when available.
+              </p>
             </div>
           </div>
 

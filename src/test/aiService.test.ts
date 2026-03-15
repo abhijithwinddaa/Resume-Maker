@@ -120,4 +120,108 @@ describe("atsResult keyword sanitization", () => {
     ]);
     expect(sanitized.breakdown.keywordMatch.missingKeywords).toEqual([]);
   });
+
+  it("matches common formatting variants like Node JS, REST APIs, and WebSocket", () => {
+    const sanitized = atsResultTestUtils.sanitizeATSResultLists(
+      buildATSResult({
+        breakdown: {
+          ...buildATSResult().breakdown,
+          keywordMatch: {
+            ...buildATSResult().breakdown.keywordMatch,
+            matchedKeywords: [],
+            missingKeywords: ["Node JS", "REST APIs", "WebSocket"],
+          },
+        },
+      }),
+      buildResume({
+        summary:
+          "Engineer working with Node.js, REST API integrations, and WebSockets for real-time systems.",
+      }),
+    );
+
+    expect(sanitized.breakdown.keywordMatch.matchedKeywords).toEqual([
+      "Node JS",
+      "REST APIs",
+      "WebSocket",
+    ]);
+    expect(sanitized.breakdown.keywordMatch.missingKeywords).toEqual([]);
+  });
+});
+
+describe("optimization step evaluation", () => {
+  it("continues only when score and missing keywords both improve materially", () => {
+    const before = buildATSResult({
+      overallScore: 82,
+      breakdown: {
+        ...buildATSResult().breakdown,
+        keywordMatch: {
+          ...buildATSResult().breakdown.keywordMatch,
+          missingKeywords: ["Redis", "WebSockets", "PM2"],
+        },
+        skillsAlignment: {
+          ...buildATSResult().breakdown.skillsAlignment,
+          missingSkills: ["TypeScript"],
+        },
+      },
+    });
+
+    const after = buildATSResult({
+      overallScore: 86,
+      breakdown: {
+        ...buildATSResult().breakdown,
+        keywordMatch: {
+          ...buildATSResult().breakdown.keywordMatch,
+          missingKeywords: ["PM2"],
+        },
+        skillsAlignment: {
+          ...buildATSResult().breakdown.skillsAlignment,
+          missingSkills: [],
+        },
+      },
+    });
+
+    expect(atsResultTestUtils.evaluateOptimizationStep(before, after)).toEqual({
+      scoreGain: 4,
+      missingKeywordImprovement: 3,
+      shouldContinue: true,
+    });
+  });
+
+  it("stops when keyword gaps do not improve even if the score nudges up", () => {
+    const before = buildATSResult({
+      overallScore: 88,
+      breakdown: {
+        ...buildATSResult().breakdown,
+        keywordMatch: {
+          ...buildATSResult().breakdown.keywordMatch,
+          missingKeywords: ["Redis", "WebSockets"],
+        },
+        skillsAlignment: {
+          ...buildATSResult().breakdown.skillsAlignment,
+          missingSkills: ["TypeScript"],
+        },
+      },
+    });
+
+    const after = buildATSResult({
+      overallScore: 90,
+      breakdown: {
+        ...buildATSResult().breakdown,
+        keywordMatch: {
+          ...buildATSResult().breakdown.keywordMatch,
+          missingKeywords: ["Redis", "WebSockets"],
+        },
+        skillsAlignment: {
+          ...buildATSResult().breakdown.skillsAlignment,
+          missingSkills: ["TypeScript"],
+        },
+      },
+    });
+
+    expect(atsResultTestUtils.evaluateOptimizationStep(before, after)).toEqual({
+      scoreGain: 2,
+      missingKeywordImprovement: 0,
+      shouldContinue: false,
+    });
+  });
 });

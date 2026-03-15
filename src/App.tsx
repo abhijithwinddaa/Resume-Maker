@@ -1157,6 +1157,7 @@ function App() {
         aiSettings,
         parsed,
         sanitizeText(jdText),
+        controller.signal,
       );
       if (controller.signal.aborted) return;
       trackEvent("ats_analysis_completed", {
@@ -1207,6 +1208,7 @@ function App() {
         aiSettings,
         resumeData,
         sanitizeText(jdText),
+        controller.signal,
       );
       if (controller.signal.aborted) return;
       trackEvent("ats_analysis_completed", {
@@ -1247,7 +1249,7 @@ function App() {
     const controller = getRequestController("self-score");
 
     try {
-      const ats = await selfATSScore(aiSettings, resumeData);
+      const ats = await selfATSScore(aiSettings, resumeData, controller.signal);
       if (controller.signal.aborted) return;
       trackEvent("ats_self_score_completed", {
         overall_score: ats.overallScore,
@@ -1292,7 +1294,7 @@ function App() {
         aiSettings,
         resumeData,
         90,
-        5,
+        2,
         (p) => setOptimizeProgress({ ...p }),
         controller.signal,
       );
@@ -1348,7 +1350,7 @@ function App() {
         resumeData,
         jdText,
         95,
-        5,
+        2,
         (p) => setOptimizeProgress({ ...p }),
         controller.signal,
       );

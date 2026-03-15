@@ -38,7 +38,14 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 # Optional legacy fallback. Leave empty when using Clerk's native Supabase integration.
 VITE_CLERK_SUPABASE_TEMPLATE=
 
-# AI
+# Server-side AI for ATS analyze + optimize
+GITHUB_TOKEN=github_pat_server_token_1
+GITHUB_TOKENS=github_pat_server_token_1,github_pat_server_token_2
+GEMINI_API_KEY=your_server_google_ai_studio_key
+GROQ_API_KEY=your_server_groq_key_optional
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# Client-side AI for parsing / template detection / cover letters
 VITE_GITHUB_TOKEN=github_pat_your_token_1
 VITE_GITHUB_TOKEN_2=github_pat_your_token_2
 VITE_GEMINI_API_KEY=your_google_ai_studio_key
@@ -65,8 +72,15 @@ npm run dev
 2. Configure Clerk as a third-party auth provider for Supabase.
 3. Run [`supabase-schema.sql`](./supabase-schema.sql).
 4. For existing projects, run [`supabase-rls-migration.sql`](./supabase-rls-migration.sql).
+5. Run [`supabase-ai-cache-migration.sql`](./supabase-ai-cache-migration.sql) to enable server-side ATS and optimize caching.
 
 The app now expects JWT-backed RLS with `auth.jwt()->>'sub'` matching the Clerk user ID.
+
+## Vercel Notes
+
+- ATS analysis and optimize requests now go through Vercel Functions in [`api/ats/analyze.ts`](./api/ats/analyze.ts) and [`api/optimize/rewrite.ts`](./api/optimize/rewrite.ts).
+- Provider secrets for those flows should be set as server env vars in Vercel.
+- Parsing, template detection, and cover letters still use the client-side provider settings in this phase.
 
 ## Useful Commands
 

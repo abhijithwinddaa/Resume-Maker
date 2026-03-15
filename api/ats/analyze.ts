@@ -1,0 +1,119 @@
+import { buildATSPrompt } from "../../src/utils/atsPrompt";
+import {
+  parseATSResultResponse,
+  type ATSResult,
+} from "../../src/utils/aiService";
+import { buildSelfATSPrompt } from "../../src/utils/selfATSPrompt";
+import {
+  buildAnalyzeCacheKey,
+  readServerCache,
+  withInFlightDedup,
+  writeServerCache,
+} from "../../src/server/aiCacheStore";
+import { callServerAI } from "../../src/server/aiRuntime";
+import type {
+  AnalyzeATSRequest,
+  AnalyzeATSResponse,
+} from "../../src/types/serverAI";
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+function validateRequest(body: Partial<AnalyzeATSRequest>): string | null {
+  if (!body.resumeData || typeof body.resumeData !== "object") {
+    return "resumeData is required.";
+  }
+  if (body.mode !== "jd" && body.mode !== "self") {
+    return 'mode must be "jd" or "self".';
+  }
+  if (body.mode === "jd" && !body.jobDescription?.trim()) {
+    return "jobDescription is required for JD mode.";
+  }
+  return null;
+}
+
+export default async function handler(request: Request): Promise<Response> {
+  if (request.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed." }, 405);
+  }
+
+  let body: AnalyzeATSRequest;
+  try {
+    body = (await request.json()) as AnalyzeATSRequest;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON request body." }, 400);
+  }
+
+  const validationError = validateRequest(body);
+  if (validationError) {
+    return jsonResponse({ error: validationError }, 400);
+  }
+
+  const { resumeData, jobDescription, mode, cacheAllowed } = body;
+  const cacheKey = buildAnalyzeCacheKey(mode, resumeData, jobDescription);
+  const operation = mode === "jd" ? "ats-analyze" : "self-ats-analyze";
+
+  try {
+    const atsResult = await withInFlightDedup<ATSResult>(cacheKey, async () => {
+      if (cacheAllowed) {
+        const cached = await readServerCache<ATSResult>(cacheKey);
+        if (cached) {
+          return cached;
+        }
+      }
+
+      const prompt =
+        mode === "jd"
+          ? buildATSPrompt(resumeData, jobDescription || "")
+          : buildSelfATSPrompt(resumeData);
+
+      const rawResponse = await callServerAI(
+        [
+          {
+            role: "system",
+            content:
+              "You are an expert ATS analyzer. You output ONLY valid JSON. No markdown, no explanation, no code fences.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        request.signal,
+      );
+
+      const parsed = parseATSResultResponse(
+        rawResponse,
+        resumeData,
+        mode === "jd" ? "ATS analysis" : "self ATS analysis",
+      );
+
+      if (cacheAllowed) {
+        await writeServerCache(operation, cacheKey, parsed);
+      }
+
+      return parsed;
+    });
+
+    const response: AnalyzeATSResponse = {
+      atsResult,
+      cached: cacheAllowed,
+    };
+
+    return jsonResponse(response);
+  } catch (error) {
+    return jsonResponse(
+      {
+        error:
+          error instanceof Error ? error.message : "ATS analysis failed on the server.",
+      },
+      500,
+    );
+  }
+}

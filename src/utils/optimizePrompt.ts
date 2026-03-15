@@ -1,5 +1,10 @@
 import type { ResumeData } from "../types/resume";
 import type { ATSResult } from "./aiService";
+import {
+  buildOptimizationWritingContract,
+  buildQualitySignalsBlock,
+  OPTIMIZE_PROMPT_VERSION,
+} from "./optimizePromptShared";
 
 export function buildOptimizePrompt(
   resumeData: ResumeData,
@@ -14,8 +19,11 @@ export function buildOptimizePrompt(
   const suggestions = atsReport.topSuggestions
     .map((s, i) => `${i + 1}. ${s}`)
     .join("\n");
+  const qualitySignals = buildQualitySignalsBlock(atsReport);
+  const writingContract = buildOptimizationWritingContract();
 
   return `You are an expert ATS resume optimizer. This is optimization iteration #${iteration}.
+Prompt version: ${OPTIMIZE_PROMPT_VERSION}.
 
 ## CONTEXT
 The resume was scanned against an ATS system and scored **${atsReport.overallScore}/100**.
@@ -38,18 +46,24 @@ ${missingSkills}
 ## SUGGESTIONS TO IMPLEMENT
 ${suggestions}
 
+## LOCAL QUALITY SIGNALS (DETERMINISTIC CHECKS)
+${qualitySignals}
+
+## WRITING CONTRACT
+${writingContract}
+
 ## CRITICAL INSTRUCTIONS
 1. **Add ALL missing keywords** — Incorporate every missing keyword naturally into summary, project bullets, experience bullets, or skills.
 2. **Add ALL missing skills** — Add them to the appropriate skill categories. If a skill is reasonable given the candidate's background, add it.
 3. **Implement ALL suggestions** — Follow every suggestion from the ATS report.
-4. **Use strong action verbs** — Started, Built, Designed, Implemented, Optimized, Deployed, Architected, etc.
-5. **Quantify impact** — Add numbers, percentages, metrics wherever possible (e.g., "reduced load time by 40%", "served 10K+ users").
+4. **Use strong action verbs** — Started, Built, Designed, Implemented, Optimized, Deployed, Architected, Led, Scaled, Reduced, Automated, etc.
+5. **Quantify impact** — Add numbers, percentages, metrics wherever the resume provides enough evidence to do so truthfully.
 6. **Summary must be keyword-rich** — Front-load the summary with JD-relevant terms.
-7. **Keep it truthful** — Rephrase and enhance, but don't fabricate experience the candidate doesn't have. Adding related skills they COULD know is fine.
+7. **Keep it truthful** — Rephrase and enhance, but don't fabricate experience the candidate doesn't have.
 8. **Education & Contact** — Keep as-is. NEVER remove or change any URLs/links.
 9. **The resume MUST fit on a single page** — Be concise. Each bullet point should be 1-2 lines max.
 10. **Every single missing keyword from the ATS report MUST appear somewhere in the output** — This is the #1 priority.
-11. **Experience section** — If present, optimize bullets to include JD keywords.
+11. **Experience section** — If present, optimize bullets to include JD keywords using the writing contract rather than keyword stuffing.
 12. **sectionOrder** — Keep the same section order.
 13. **PRESERVE ALL LINKS** — Keep ALL githubLink, liveLink, linkedin, github, portfolio, and certificate link values EXACTLY as they are. Never empty or modify URLs.
 14. **Output ONLY valid JSON** — No markdown, no code fences, no explanation.
