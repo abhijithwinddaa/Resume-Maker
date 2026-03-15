@@ -49,9 +49,34 @@
   font-size: 18px;
   font-weight: 700;
   color: #1a5276;
-  margin: 0 0 16px 0;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #2980b9;
+  margin: 0;
+}
+
+.settings-section {
+  border: 1px solid #dbe4ea;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: linear-gradient(180deg, #ffffff, #f8fbfd);
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: #1a5276;
+}
+
+.settings-section-header h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.settings-section-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
 }
 
 /* Provider Toggle */
@@ -240,4 +265,90 @@
   border-radius: 3px;
   font-size: 11px;
   font-family: monospace;
+}
+
+.privacy-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px;
+  margin-top: 12px;
+}
+
+.privacy-toggle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #334155;
+  margin-bottom: 14px;
+}
+
+.privacy-toggle:last-child {
+  margin-bottom: 0;
+}
+
+.privacy-toggle strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.privacy-toggle span {
+  display: block;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.privacy-toggle input {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: #2980b9;
+  flex-shrink: 0;
+}
+
+.privacy-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.storage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+
+.storage-btn:hover:not(:disabled) {
+  border-color: #2980b9;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.storage-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.storage-message {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 12px;
+  border: 1px solid #bfdbfe;
 }

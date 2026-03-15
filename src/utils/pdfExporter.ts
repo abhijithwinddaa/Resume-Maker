@@ -120,6 +120,9 @@ export async function exportResumeToPDF(
   element: HTMLElement,
   fileName: string = "Resume",
   resumeData?: ResumeData,
+  options?: {
+    embedResumeData?: boolean;
+  },
 ): Promise<void> {
   // Wait for all fonts to load before rendering
   if (document.fonts?.ready) {
@@ -254,7 +257,7 @@ export async function exportResumeToPDF(
   }
 
   // Embed ResumeData JSON in PDF metadata for lossless re-upload
-  if (resumeData) {
+  if (resumeData && options?.embedResumeData !== false) {
     pdfDoc.setSubject(RESUME_DATA_MARKER + JSON.stringify(resumeData));
   }
   pdfDoc.setCreator("Resume Maker");

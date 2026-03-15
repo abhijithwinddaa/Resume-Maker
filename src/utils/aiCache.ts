@@ -4,7 +4,8 @@
    API calls for identical resume + JD combinations.
    ────────────────────────────────────────────────────── */
 
-import { idbGetCached, idbSetCache } from "./indexedDB";
+import { loadPrivacySettings } from "../types/privacySettings";
+import { clearIDBAICache, idbGetCached, idbSetCache } from "./indexedDB";
 
 const CACHE_PREFIX = "ai_cache_";
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
@@ -39,6 +40,10 @@ export function getCacheKey(operation: string, ...inputs: string[]): string {
  * Checks localStorage (sync) first, then IndexedDB (async).
  */
 export function getCached<T>(key: string): T | null {
+  if (!loadPrivacySettings().cacheAIResponses) {
+    return null;
+  }
+
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
@@ -61,6 +66,10 @@ export function getCached<T>(key: string): T | null {
  * Async version that also checks IndexedDB if localStorage misses.
  */
 export async function getCachedAsync<T>(key: string): Promise<T | null> {
+  if (!loadPrivacySettings().cacheAIResponses) {
+    return null;
+  }
+
   // Try localStorage first (fast, sync)
   const syncResult = getCached<T>(key);
   if (syncResult !== null) return syncResult;
@@ -83,6 +92,10 @@ export async function getCachedAsync<T>(key: string): Promise<T | null> {
  * Store a response in cache (localStorage + IndexedDB).
  */
 export function setCache<T>(key: string, data: T): void {
+  if (!loadPrivacySettings().cacheAIResponses) {
+    return;
+  }
+
   try {
     const entry: CacheEntry<T> = {
       data,
@@ -112,6 +125,11 @@ export function clearAICache(): void {
     }
   }
   keys.forEach((k) => localStorage.removeItem(k));
+}
+
+export async function clearAICacheStorage(): Promise<void> {
+  clearAICache();
+  await clearIDBAICache();
 }
 
 /**

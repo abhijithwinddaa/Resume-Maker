@@ -5,6 +5,11 @@ import type { TemplateId, TemplateCustomization } from "../types/templates";
 import { DEFAULT_CUSTOMIZATION } from "../types/templates";
 import type { AISettings } from "../types/aiSettings";
 import { loadAISettings, saveAISettings } from "../types/aiSettings";
+import type { PrivacySettings } from "../types/privacySettings";
+import {
+  loadPrivacySettings,
+  savePrivacySettings,
+} from "../types/privacySettings";
 import type { DetectedStyle } from "../utils/templateDetector";
 
 // ─── Undo/Redo History ───────────────────────────────
@@ -73,10 +78,12 @@ interface AppState {
   // ─── Multi-resume ──────────────────────
   resumes: ResumeMeta[];
   activeResumeId: string | null;
+  activeResumeName: string | null;
 
   // ─── Cover Letter ─────────────────────
   coverLetter: CoverLetterData | null;
   isGeneratingCoverLetter: boolean;
+  privacySettings: PrivacySettings;
 
   // ─── Undo/Redo ────────────────────────
   history: HistoryState;
@@ -120,10 +127,12 @@ interface AppState {
   // Multi-resume actions
   setResumes: (resumes: ResumeMeta[]) => void;
   setActiveResumeId: (id: string | null) => void;
+  setActiveResumeName: (name: string | null) => void;
 
   // Cover letter actions
   setCoverLetter: (cl: CoverLetterData | null) => void;
   setIsGeneratingCoverLetter: (v: boolean) => void;
+  setPrivacySettings: (settings: Partial<PrivacySettings>) => void;
 
   // Undo/Redo actions
   undo: () => void;
@@ -197,8 +206,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiSettings: loadAISettings(),
   resumes: [],
   activeResumeId: null,
+  activeResumeName: null,
   coverLetter: null,
   isGeneratingCoverLetter: false,
+  privacySettings: loadPrivacySettings(),
   history: { past: [], future: [] },
 
   // ─── Simple Setters ─────────────────
@@ -285,11 +296,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Multi-resume
   setResumes: (resumes) => set({ resumes }),
   setActiveResumeId: (activeResumeId) => set({ activeResumeId }),
+  setActiveResumeName: (activeResumeName) => set({ activeResumeName }),
 
   // Cover letter
   setCoverLetter: (coverLetter) => set({ coverLetter }),
   setIsGeneratingCoverLetter: (isGeneratingCoverLetter) =>
     set({ isGeneratingCoverLetter }),
+
+  // Privacy
+  setPrivacySettings: (partial) => {
+    const merged = { ...get().privacySettings, ...partial };
+    savePrivacySettings(merged);
+    set({ privacySettings: merged });
+  },
 
   // Undo/Redo
   undo: () => {
@@ -339,6 +358,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       uploadedFileName: null,
       jdText: "",
       resumeText: "",
+      activeResumeId: null,
+      activeResumeName: null,
       coverLetter: null,
       history: { past: [], future: [] },
       detectedStyle: null,

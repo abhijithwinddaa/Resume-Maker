@@ -11,6 +11,7 @@ import {
 import { exportResumeToPDF } from "./utils/pdfExporter";
 import { validateForExport } from "./utils/exportValidation";
 import {
+  useAuth,
   useUser,
   SignedIn,
   SignedOut,
@@ -34,7 +35,8 @@ import {
   extractEmbeddedResumeData,
 } from "./utils/pdfExtractorWorker";
 import { extractTextWithOCR } from "./utils/pdfOcr";
-import { loadResume, saveResume } from "./services/resumeService";
+import { loadLatestResume, saveResume } from "./services/resumeService";
+import { setSupabaseAccessTokenGetter } from "./lib/supabase";
 import {
   isRateLimited,
   getRateLimitRemaining,
@@ -109,6 +111,8 @@ const CoverLetterPanel = lazy(() => import("./components/CoverLetter"));
 const AISettingsPanel = lazy(() => import("./components/AISettings"));
 const ResumeManagerPanel = lazy(() => import("./components/ResumeManager"));
 const PdfPreviewPanel = lazy(() => import("./components/PdfPreview"));
+const CLERK_SUPABASE_TEMPLATE =
+  import.meta.env.VITE_CLERK_SUPABASE_TEMPLATE || "";
 
 /* ─── Score Visualization Components ─────────────────── */
 
@@ -232,6 +236,7 @@ function getOptimizeProgressPercent(
 /* ─── Main App ─────────────────────────────────────────── */
 
 function App() {
+  const { getToken } = useAuth();
   const { user } = useUser();
 
   // Zustand store
@@ -271,6 +276,7 @@ function App() {
   const hasBackup = useAppStore((s) => s.hasBackup);
   const setHasBackup = useAppStore((s) => s.setHasBackup);
   const aiSettings = useAppStore((s) => s.aiSettings);
+  const privacySettings = useAppStore((s) => s.privacySettings);
   const startOver = useAppStore((s) => s.startOver);
   const newJD = useAppStore((s) => s.newJD);
   const undo = useAppStore((s) => s.undo);
@@ -282,6 +288,10 @@ function App() {
   const originalPdfUrl = useAppStore((s) => s.originalPdfUrl);
   const showOriginalPdf = useAppStore((s) => s.showOriginalPdf);
   const setShowOriginalPdf = useAppStore((s) => s.setShowOriginalPdf);
+  const activeResumeId = useAppStore((s) => s.activeResumeId);
+  const setActiveResumeId = useAppStore((s) => s.setActiveResumeId);
+  const activeResumeName = useAppStore((s) => s.activeResumeName);
+  const setActiveResumeName = useAppStore((s) => s.setActiveResumeName);
 
   // Panel visibility
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -315,6 +325,10 @@ function App() {
   const resumeRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const authStartTimeoutRef = useRef<number | null>(null);
+  const activeResumeIdRef = useRef<string | null>(activeResumeId);
+  const pendingResumeCreationRef = useRef<Promise<
+    Awaited<ReturnType<typeof saveResume>>
+  > | null>(null);
   const initialViewportHeightRef = useRef<number>(
     typeof window !== "undefined" ? window.innerHeight : 0,
   );
@@ -371,6 +385,26 @@ function App() {
   }, [setHasBackup]);
 
   useEffect(() => {
+    if (!user?.id) {
+      setSupabaseAccessTokenGetter(null);
+      return;
+    }
+
+    setSupabaseAccessTokenGetter(async () => {
+      try {
+        if (CLERK_SUPABASE_TEMPLATE) {
+          return await getToken({ template: CLERK_SUPABASE_TEMPLATE });
+        }
+        return await getToken();
+      } catch {
+        return null;
+      }
+    });
+
+    return () => setSupabaseAccessTokenGetter(null);
+  }, [getToken, user?.id]);
+
+  useEffect(() => {
     if (user || step !== "landing") {
       setIsAuthStarting(false);
       if (authStartTimeoutRef.current) {
@@ -411,7 +445,9 @@ function App() {
   useEffect(() => {
     if (typeof window === "undefined" || !isCompactScreen) return;
 
-    const isTextEntryElement = (target: EventTarget | null): target is HTMLInputElement | HTMLTextAreaElement => {
+    const isTextEntryElement = (
+      target: EventTarget | null,
+    ): target is HTMLInputElement | HTMLTextAreaElement => {
       if (!(target instanceof HTMLElement)) return false;
       if (target instanceof HTMLTextAreaElement) return true;
       if (target instanceof HTMLInputElement) {
@@ -440,7 +476,12 @@ function App() {
     const handleFocusOut = () => {
       window.setTimeout(() => {
         const active = document.activeElement;
-        if (!(active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)) {
+        if (
+          !(
+            active instanceof HTMLInputElement ||
+            active instanceof HTMLTextAreaElement
+          )
+        ) {
           setIsTextEntryFocused(false);
         }
       }, 90);
@@ -455,7 +496,12 @@ function App() {
   }, [isCompactScreen]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !window.visualViewport || !isCompactScreen) return;
+    if (
+      typeof window === "undefined" ||
+      !window.visualViewport ||
+      !isCompactScreen
+    )
+      return;
     const viewport = window.visualViewport;
     initialViewportHeightRef.current = Math.max(
       initialViewportHeightRef.current || 0,
@@ -469,8 +515,14 @@ function App() {
       const keyboardOpen = currentHeight < baseline * 0.78;
       setIsMobileKeyboardOpen(keyboardOpen);
 
-      const offset = Math.max(0, window.innerHeight - currentHeight - viewport.offsetTop);
-      document.documentElement.style.setProperty("--vk-offset", `${Math.round(offset)}px`);
+      const offset = Math.max(
+        0,
+        window.innerHeight - currentHeight - viewport.offsetTop,
+      );
+      document.documentElement.style.setProperty(
+        "--vk-offset",
+        `${Math.round(offset)}px`,
+      );
     };
 
     updateViewportState();
@@ -525,16 +577,32 @@ function App() {
   const useStickyMobileActions =
     isCompactScreen && !isMobileKeyboardOpen && !isTextEntryFocused;
 
+  useEffect(() => {
+    activeResumeIdRef.current = activeResumeId;
+  }, [activeResumeId]);
+
   /* ── Auto-load from Supabase when user signs in ──── */
   useEffect(() => {
     if (!user?.id) return;
     identifyAnalyticsUser(user.id, { signed_in: true });
     setIsDbLoading(true);
-    loadResume(user.id)
-      .then((saved) => {
-        if (saved) {
+    loadLatestResume(user.id)
+      .then((savedRow) => {
+        if (pendingMode === "create") {
+          setActiveResumeId(null);
+          setActiveResumeName(null);
+          setResumeData(createEmptyResume(), false);
+          setMode("create");
+          setPendingMode(null);
+          setStep("editor");
+          return;
+        }
+
+        if (savedRow) {
           trackEvent("resume_loaded", { source: "supabase" });
-          setResumeData(saved, false);
+          setResumeData(savedRow.data, false);
+          setActiveResumeId(savedRow.id);
+          setActiveResumeName(savedRow.name || "Untitled Resume");
           // If user had a pending mode from landing page, honor it
           if (pendingMode) {
             setMode(pendingMode);
@@ -553,14 +621,12 @@ function App() {
           // No saved resume, but user picked a mode
           setMode(pendingMode);
           setPendingMode(null);
-          if (pendingMode === "create") {
-            setResumeData(createEmptyResume(), false);
-            setStep("editor");
-          } else {
-            setStep("input");
-          }
+          setStep("input");
         } else {
           // No saved resume and no pending mode — show landing
+          setActiveResumeId(null);
+          setActiveResumeName(null);
+          setResumeData(null, false);
           setStep("landing");
         }
       })
@@ -575,6 +641,8 @@ function App() {
           setMode(pendingMode);
           setPendingMode(null);
           if (pendingMode === "create") {
+            setActiveResumeId(null);
+            setActiveResumeName(null);
             setResumeData(createEmptyResume(), false);
             setStep("editor");
           } else {
@@ -618,25 +686,53 @@ function App() {
   }, []);
 
   /* ── Debounced auto-save to Supabase (500ms) ────── */
-  const debouncedSupabaseSave = useDebounce((data: ResumeData) => {
+  const debouncedSupabaseSave = useDebounce(async (data: ResumeData) => {
     if (!user?.id) return;
     setIsSaving(true);
     setSaveStatus("saving");
-    saveResume(user.id, data)
-      .then((ok) => {
-        if (!ok) console.warn("Supabase save returned false");
-        trackEvent("resume_saved", {
-          destination: "supabase",
-          success: ok,
+
+    try {
+      const currentResumeId = activeResumeIdRef.current;
+      let savedRow;
+
+      if (currentResumeId) {
+        savedRow = await saveResume(user.id, data, {
+          resumeId: currentResumeId,
+          name: activeResumeName ?? undefined,
         });
-        setSaveStatus("saved");
-      })
-      .catch((err) => {
-        console.error("Supabase save failed:", err);
-        trackEvent("resume_save_failed", { destination: "supabase" });
-        setSaveStatus("idle");
-      })
-      .finally(() => setIsSaving(false));
+      } else {
+        if (!pendingResumeCreationRef.current) {
+          pendingResumeCreationRef.current = saveResume(user.id, data, {
+            name: activeResumeName ?? undefined,
+          });
+        }
+
+        savedRow = await pendingResumeCreationRef.current;
+        pendingResumeCreationRef.current = null;
+      }
+
+      if (!savedRow) {
+        throw new Error("Resume save returned no row.");
+      }
+
+      activeResumeIdRef.current = savedRow.id;
+      setActiveResumeId(savedRow.id);
+      setActiveResumeName(savedRow.name || "Untitled Resume");
+      trackEvent("resume_saved", {
+        destination: "supabase",
+        success: true,
+        resume_id: savedRow.id,
+        created_new_resume: !currentResumeId,
+      });
+      setSaveStatus("saved");
+    } catch (err) {
+      pendingResumeCreationRef.current = null;
+      console.error("Supabase save failed:", err);
+      trackEvent("resume_save_failed", { destination: "supabase" });
+      setSaveStatus("idle");
+    } finally {
+      setIsSaving(false);
+    }
   }, 500);
 
   const handleResumeChange = useCallback(
@@ -644,9 +740,18 @@ function App() {
       setResumeData(data);
       setSaveStatus("idle"); // Mark as unsaved immediately
       debouncedSupabaseSave(data);
-      saveLocalBackup(data, jdText);
+      if (privacySettings.saveLocalBackups) {
+        saveLocalBackup(data, jdText);
+        setHasBackup(true);
+      }
     },
-    [setResumeData, debouncedSupabaseSave, jdText],
+    [
+      setResumeData,
+      debouncedSupabaseSave,
+      jdText,
+      privacySettings.saveLocalBackups,
+      setHasBackup,
+    ],
   );
 
   const handleExportPDF = useCallback(async () => {
@@ -663,17 +768,20 @@ function App() {
       ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
       : "Resume";
     try {
-      await exportResumeToPDF(el, fileName, resumeData ?? undefined);
+      await exportResumeToPDF(el, fileName, resumeData ?? undefined, {
+        embedResumeData: privacySettings.embedResumeDataInPdf,
+      });
       trackEvent("resume_exported", {
         format: "pdf",
         has_resume_data: Boolean(resumeData),
+        embedded_resume_data: privacySettings.embedResumeDataInPdf,
       });
     } catch (err) {
       console.error("PDF export failed:", err);
       trackEvent("resume_export_failed", { format: "pdf" });
       setError("PDF export failed. Please try again.");
     }
-  }, [resumeData, setError]);
+  }, [privacySettings.embedResumeDataInPdf, resumeData, setError]);
 
   /* ── Mode Selection (landing page) ───────────────── */
 
@@ -691,9 +799,9 @@ function App() {
       setMode(selectedMode);
       setError(null);
       if (selectedMode === "create") {
-        if (!resumeData) {
-          setResumeData(createEmptyResume(), false);
-        }
+        setActiveResumeId(null);
+        setActiveResumeName(null);
+        setResumeData(createEmptyResume(), false);
         setStep("editor");
       } else if (selectedMode === "ats") {
         if (resumeData) {
@@ -711,7 +819,16 @@ function App() {
         }
       }
     },
-    [user, setMode, setStep, setError, resumeData, setResumeData],
+    [
+      user,
+      setMode,
+      setStep,
+      setError,
+      resumeData,
+      setResumeData,
+      setActiveResumeId,
+      setActiveResumeName,
+    ],
   );
 
   const startSignInFlow = useCallback(
@@ -1255,6 +1372,7 @@ function App() {
     ]) {
       abortRequestController(key);
     }
+    pendingResumeCreationRef.current = null;
     startOver();
   }, [startOver, resumeData]);
 
@@ -1288,6 +1406,8 @@ function App() {
               setError(`Invalid resume JSON: ${validation.errors?.join(", ")}`);
               return;
             }
+            setActiveResumeId(null);
+            setActiveResumeName(null);
             handleResumeChange(raw as ResumeData);
             setStep("editor");
             trackEvent("resume_imported", { format: "json" });
@@ -1415,8 +1535,8 @@ function App() {
           <button
             className="header-btn"
             onClick={() => setShowAISettings(true)}
-            title="AI Settings"
-            aria-label="AI Settings"
+            title="Settings"
+            aria-label="Settings"
           >
             <Settings size={14} />
           </button>
@@ -1719,7 +1839,7 @@ function App() {
             </div>
 
             {/* Restore backup hint */}
-            {hasBackup && (
+            {hasBackup && privacySettings.saveLocalBackups && (
               <div className="landing-backup">
                 <button
                   className="btn-secondary backup-restore-btn"
@@ -1727,6 +1847,8 @@ function App() {
                     if (!user) return;
                     const backup = loadLocalBackup();
                     if (backup) {
+                      setActiveResumeId(null);
+                      setActiveResumeName(null);
                       setResumeData(backup.resumeData, false);
                       if (backup.jdText) setJdText(backup.jdText);
                       setMode("edit");
