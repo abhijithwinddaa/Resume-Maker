@@ -7,6 +7,10 @@ import { buildSelfATSPrompt } from "./selfATSPrompt";
 import { buildSelfOptimizePrompt } from "./selfOptimizePrompt";
 import { buildResumeParsePrompt } from "./resumeParser";
 import { getCacheKey, getCached, setCache } from "./aiCache";
+import {
+  analyzeResumeFeedback,
+  type ResumeFeedbackInsights,
+} from "./resumeFeedback";
 
 export interface ATSBreakdownItem {
   score: number;
@@ -29,6 +33,49 @@ export interface ATSResult {
   };
   topSuggestions: string[];
   summaryVerdict: string;
+  qualityInsights?: ResumeFeedbackInsights;
+}
+
+function uniqueSuggestions(items: string[], maxItems = 7): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const item of items) {
+    const normalized = item.trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+    if (result.length >= maxItems) break;
+  }
+
+  return result;
+}
+
+function enrichATSResult(
+  result: ATSResult,
+  resumeData: ResumeData,
+): ATSResult {
+  const qualityInsights = analyzeResumeFeedback(resumeData, {
+    matchedKeywords: [
+      ...(result.breakdown.keywordMatch.matchedKeywords || []),
+      ...(result.breakdown.skillsAlignment.matchedSkills || []),
+    ],
+    missingKeywords: [
+      ...(result.breakdown.keywordMatch.missingKeywords || []),
+      ...(result.breakdown.skillsAlignment.missingSkills || []),
+    ],
+  });
+
+  return {
+    ...result,
+    topSuggestions: uniqueSuggestions([
+      ...qualityInsights.suggestedEdits,
+      ...result.topSuggestions,
+    ]),
+    qualityInsights,
+  };
 }
 
 interface ChatMessage {
@@ -537,7 +584,9 @@ export async function analyzeATSScore(
   const cached = getCached<ATSResult>(cacheKey);
   if (cached) {
     console.log("ATS score loaded from cache");
-    return cached;
+    const enrichedCached = enrichATSResult(cached, resumeData);
+    setCache(cacheKey, enrichedCached);
+    return enrichedCached;
   }
 
   const prompt = buildATSPrompt(resumeData, jobDescription);
@@ -582,6 +631,8 @@ export async function analyzeATSScore(
     Math.min(100, Math.round(parsed.overallScore)),
   );
 
+  parsed = enrichATSResult(parsed, resumeData);
+
   // Cache the result
   setCache(cacheKey, parsed);
 
@@ -599,7 +650,9 @@ export async function selfATSScore(
   const cached = getCached<ATSResult>(cacheKey);
   if (cached) {
     console.log("Self ATS score loaded from cache");
-    return cached;
+    const enrichedCached = enrichATSResult(cached, resumeData);
+    setCache(cacheKey, enrichedCached);
+    return enrichedCached;
   }
 
   const prompt = buildSelfATSPrompt(resumeData);
@@ -641,6 +694,8 @@ export async function selfATSScore(
     0,
     Math.min(100, Math.round(parsed.overallScore)),
   );
+
+  parsed = enrichATSResult(parsed, resumeData);
 
   // Cache the result
   setCache(cacheKey, parsed);
