@@ -36,6 +36,54 @@ export interface ATSResult {
   qualityInsights?: ResumeFeedbackInsights;
 }
 
+function normalizeKeywordValue(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9+#]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function compactKeywordValue(value: string): string {
+  return normalizeKeywordValue(value).replace(/\s+/g, "");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildResumeSearchIndex(resumeData: ResumeData): {
+  normalized: string;
+  compact: string;
+} {
+  const serialized = JSON.stringify(resumeData);
+  const normalized = ` ${normalizeKeywordValue(serialized)} `;
+  return {
+    normalized,
+    compact: normalized.replace(/\s+/g, ""),
+  };
+}
+
+function resumeContainsKeyword(
+  searchIndex: { normalized: string; compact: string },
+  value: string,
+): boolean {
+  const normalizedValue = normalizeKeywordValue(value);
+  if (!normalizedValue) return false;
+
+  const compactValue = normalizedValue.replace(/\s+/g, "");
+  if (compactValue && searchIndex.compact.includes(compactValue)) {
+    return true;
+  }
+
+  const boundaryPattern = new RegExp(
+    `(^|\\s)${escapeRegExp(normalizedValue)}(?=\\s|$)`,
+    "i",
+  );
+  return boundaryPattern.test(searchIndex.normalized);
+}
+
 function uniqueSuggestions(items: string[], maxItems = 7): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -53,26 +101,106 @@ function uniqueSuggestions(items: string[], maxItems = 7): string[] {
   return result;
 }
 
+function uniqueKeywordList(items: string[] | undefined): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const item of items || []) {
+    const trimmed = item.trim();
+    const key = compactKeywordValue(trimmed);
+    if (!trimmed || !key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+
+  return result;
+}
+
+function reconcileKeywordBuckets(
+  matchedItems: string[] | undefined,
+  missingItems: string[] | undefined,
+  searchIndex: { normalized: string; compact: string },
+): { matched: string[]; missing: string[] } {
+  const matched = uniqueKeywordList(matchedItems);
+  const missing = uniqueKeywordList(missingItems);
+  const matchedKeys = new Set(matched.map((item) => compactKeywordValue(item)));
+  const reconciledMissing: string[] = [];
+
+  for (const item of missing) {
+    const key = compactKeywordValue(item);
+    if (!key || matchedKeys.has(key)) continue;
+
+    if (resumeContainsKeyword(searchIndex, item)) {
+      matched.push(item);
+      matchedKeys.add(key);
+      continue;
+    }
+
+    reconciledMissing.push(item);
+  }
+
+  return { matched, missing: reconciledMissing };
+}
+
+function sanitizeATSResultLists(
+  result: ATSResult,
+  resumeData: ResumeData,
+): ATSResult {
+  const searchIndex = buildResumeSearchIndex(resumeData);
+  const keywordBuckets = reconcileKeywordBuckets(
+    result.breakdown.keywordMatch.matchedKeywords,
+    result.breakdown.keywordMatch.missingKeywords,
+    searchIndex,
+  );
+  const skillBuckets = reconcileKeywordBuckets(
+    result.breakdown.skillsAlignment.matchedSkills,
+    result.breakdown.skillsAlignment.missingSkills,
+    searchIndex,
+  );
+
+  return {
+    ...result,
+    breakdown: {
+      ...result.breakdown,
+      keywordMatch: {
+        ...result.breakdown.keywordMatch,
+        matchedKeywords: keywordBuckets.matched,
+        missingKeywords: keywordBuckets.missing,
+      },
+      skillsAlignment: {
+        ...result.breakdown.skillsAlignment,
+        matchedSkills: skillBuckets.matched,
+        missingSkills: skillBuckets.missing,
+      },
+    },
+  };
+}
+
+export const atsResultTestUtils = {
+  sanitizeATSResultLists,
+};
+
 function enrichATSResult(
   result: ATSResult,
   resumeData: ResumeData,
 ): ATSResult {
+  const normalizedResult = sanitizeATSResultLists(result, resumeData);
   const qualityInsights = analyzeResumeFeedback(resumeData, {
     matchedKeywords: [
-      ...(result.breakdown.keywordMatch.matchedKeywords || []),
-      ...(result.breakdown.skillsAlignment.matchedSkills || []),
+      ...(normalizedResult.breakdown.keywordMatch.matchedKeywords || []),
+      ...(normalizedResult.breakdown.skillsAlignment.matchedSkills || []),
     ],
     missingKeywords: [
-      ...(result.breakdown.keywordMatch.missingKeywords || []),
-      ...(result.breakdown.skillsAlignment.missingSkills || []),
+      ...(normalizedResult.breakdown.keywordMatch.missingKeywords || []),
+      ...(normalizedResult.breakdown.skillsAlignment.missingSkills || []),
     ],
   });
 
   return {
-    ...result,
+    ...normalizedResult,
     topSuggestions: uniqueSuggestions([
       ...qualityInsights.suggestedEdits,
-      ...result.topSuggestions,
+      ...normalizedResult.topSuggestions,
     ]),
     qualityInsights,
   };
@@ -719,6 +847,7 @@ export interface OptimizeProgress {
   message: string;
   history: OptimizeIteration[];
   finalResume: ResumeData | null;
+  finalATSResult: ATSResult | null;
   finalScore: number;
   error?: string;
 }
@@ -736,6 +865,7 @@ export async function optimizeResumeLoop(
   let currentResume = { ...resumeData };
   let bestScore = 0;
   let bestResume = currentResume;
+  let bestATSResult: ATSResult | null = null;
 
   for (let i = 1; i <= maxIterations; i++) {
     // Check abort
@@ -747,6 +877,7 @@ export async function optimizeResumeLoop(
         message: "Optimization cancelled by user.",
         history,
         finalResume: bestResume,
+        finalATSResult: bestATSResult,
         finalScore: bestScore,
         error: "Cancelled",
       };
@@ -762,6 +893,7 @@ export async function optimizeResumeLoop(
       message: `Iteration ${i}/${maxIterations}: Scanning resume with ATS...`,
       history,
       finalResume: null,
+      finalATSResult: null,
       finalScore: bestScore,
     });
 
@@ -780,6 +912,7 @@ export async function optimizeResumeLoop(
         message: `ATS scan failed on iteration ${i}.`,
         history,
         finalResume: bestResume,
+        finalATSResult: bestATSResult,
         finalScore: bestScore,
         error: err instanceof Error ? err.message : "ATS scan failed",
       };
@@ -791,6 +924,7 @@ export async function optimizeResumeLoop(
     if (atsResult.overallScore > bestScore) {
       bestScore = atsResult.overallScore;
       bestResume = currentResume;
+      bestATSResult = atsResult;
     }
 
     history.push({
@@ -809,6 +943,7 @@ export async function optimizeResumeLoop(
         message: `Target reached! Score: ${atsResult.overallScore}/100 after ${i} iteration(s).`,
         history,
         finalResume: currentResume,
+        finalATSResult: atsResult,
         finalScore: atsResult.overallScore,
       };
       onProgress(progress);
@@ -825,6 +960,7 @@ export async function optimizeResumeLoop(
       message: `Iteration ${i}/${maxIterations}: Score ${atsResult.overallScore}/100 — AI is rewriting to fix gaps...`,
       history,
       finalResume: null,
+      finalATSResult: null,
       finalScore: bestScore,
     });
 
@@ -855,6 +991,7 @@ export async function optimizeResumeLoop(
         message: `AI rewrite failed on iteration ${i}.`,
         history,
         finalResume: bestResume,
+        finalATSResult: bestATSResult,
         finalScore: bestScore,
         error: err instanceof Error ? err.message : "AI rewrite failed",
       };
@@ -885,6 +1022,26 @@ export async function optimizeResumeLoop(
     currentResume = parsed;
   }
 
+  const currentResumeSnapshot = JSON.stringify(currentResume);
+  const bestResumeSnapshot = JSON.stringify(bestResume);
+
+  if (currentResumeSnapshot !== bestResumeSnapshot) {
+    try {
+      const finalATSResult = await analyzeATSScore(
+        settings,
+        currentResume,
+        jobDescription,
+      );
+      if (finalATSResult.overallScore >= bestScore) {
+        bestScore = finalATSResult.overallScore;
+        bestResume = currentResume;
+        bestATSResult = finalATSResult;
+      }
+    } catch {
+      // Fall back to the best analyzed resume if the final verification scan fails.
+    }
+  }
+
   // Exhausted all iterations — return best result
   const progress: OptimizeProgress = {
     currentIteration: maxIterations,
@@ -893,6 +1050,7 @@ export async function optimizeResumeLoop(
     message: `Completed ${maxIterations} iterations. Best score: ${bestScore}/100.`,
     history,
     finalResume: bestResume,
+    finalATSResult: bestATSResult,
     finalScore: bestScore,
   };
   onProgress(progress);
@@ -913,6 +1071,7 @@ export async function selfOptimizeLoop(
   let currentResume = { ...resumeData };
   let bestScore = 0;
   let bestResume = currentResume;
+  let bestATSResult: ATSResult | null = null;
 
   for (let i = 1; i <= maxIterations; i++) {
     // Check abort
@@ -924,6 +1083,7 @@ export async function selfOptimizeLoop(
         message: "Optimization cancelled by user.",
         history,
         finalResume: bestResume,
+        finalATSResult: bestATSResult,
         finalScore: bestScore,
         error: "Cancelled",
       };
@@ -939,6 +1099,7 @@ export async function selfOptimizeLoop(
       message: `Iteration ${i}/${maxIterations}: Self-scoring resume...`,
       history,
       finalResume: null,
+      finalATSResult: null,
       finalScore: bestScore,
     });
 
@@ -953,6 +1114,7 @@ export async function selfOptimizeLoop(
         message: `Self ATS scan failed on iteration ${i}.`,
         history,
         finalResume: bestResume,
+        finalATSResult: bestATSResult,
         finalScore: bestScore,
         error: err instanceof Error ? err.message : "Self ATS scan failed",
       };
@@ -964,6 +1126,7 @@ export async function selfOptimizeLoop(
     if (atsResult.overallScore > bestScore) {
       bestScore = atsResult.overallScore;
       bestResume = currentResume;
+      bestATSResult = atsResult;
     }
 
     history.push({
@@ -982,6 +1145,7 @@ export async function selfOptimizeLoop(
         message: `Target reached! Score: ${atsResult.overallScore}/100 after ${i} iteration(s).`,
         history,
         finalResume: currentResume,
+        finalATSResult: atsResult,
         finalScore: atsResult.overallScore,
       };
       onProgress(progress);
@@ -998,6 +1162,7 @@ export async function selfOptimizeLoop(
       message: `Iteration ${i}/${maxIterations}: Score ${atsResult.overallScore}/100 — AI is improving resume...`,
       history,
       finalResume: null,
+      finalATSResult: null,
       finalScore: bestScore,
     });
 
@@ -1023,6 +1188,7 @@ export async function selfOptimizeLoop(
         message: `AI rewrite failed on iteration ${i}.`,
         history,
         finalResume: bestResume,
+        finalATSResult: bestATSResult,
         finalScore: bestScore,
         error: err instanceof Error ? err.message : "AI rewrite failed",
       };
@@ -1053,6 +1219,22 @@ export async function selfOptimizeLoop(
     currentResume = parsed;
   }
 
+  const currentResumeSnapshot = JSON.stringify(currentResume);
+  const bestResumeSnapshot = JSON.stringify(bestResume);
+
+  if (currentResumeSnapshot !== bestResumeSnapshot) {
+    try {
+      const finalATSResult = await selfATSScore(settings, currentResume);
+      if (finalATSResult.overallScore >= bestScore) {
+        bestScore = finalATSResult.overallScore;
+        bestResume = currentResume;
+        bestATSResult = finalATSResult;
+      }
+    } catch {
+      // Fall back to the best analyzed resume if the final verification scan fails.
+    }
+  }
+
   // Exhausted all iterations — return best result
   const progress: OptimizeProgress = {
     currentIteration: maxIterations,
@@ -1061,6 +1243,7 @@ export async function selfOptimizeLoop(
     message: `Completed ${maxIterations} iterations. Best score: ${bestScore}/100.`,
     history,
     finalResume: bestResume,
+    finalATSResult: bestATSResult,
     finalScore: bestScore,
   };
   onProgress(progress);

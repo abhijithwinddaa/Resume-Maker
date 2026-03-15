@@ -258,6 +258,21 @@ function getAnalyzeProgressPercent(message: string): number {
   return 35;
 }
 
+function uniqueStrings(items: string[] = []): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const item of items) {
+    const trimmed = item.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+
+  return result;
+}
+
 function getOptimizeProgressPercent(
   progress: {
     currentIteration: number;
@@ -1285,11 +1300,13 @@ function App() {
       if (controller.signal.aborted) return;
       if (result.finalResume) {
         handleResumeChange(result.finalResume);
-        const newAts = await selfATSScore(aiSettings, result.finalResume);
-        setATSResult(newAts);
+        const finalATS = result.finalATSResult;
+        if (finalATS) {
+          setATSResult(finalATS);
+        }
         trackEvent("resume_optimized", {
           mode: "self_optimize",
-          overall_score: newAts.overallScore,
+          overall_score: finalATS?.overallScore ?? result.finalScore,
         });
       }
       setOptimizeDone(true);
@@ -1339,15 +1356,13 @@ function App() {
       if (controller.signal.aborted) return;
       if (result.finalResume) {
         handleResumeChange(result.finalResume);
-        const newAts = await analyzeATSScore(
-          aiSettings,
-          result.finalResume,
-          jdText,
-        );
-        setATSResult(newAts);
+        const finalATS = result.finalATSResult;
+        if (finalATS) {
+          setATSResult(finalATS);
+        }
         trackEvent("resume_optimized", {
           mode: "jd_optimize",
-          overall_score: newAts.overallScore,
+          overall_score: finalATS?.overallScore ?? result.finalScore,
         });
       }
       setOptimizeDone(true);
@@ -2271,20 +2286,14 @@ function App() {
                   {jdText.trim() ? "Keywords Found" : "Industry Keywords Found"}
                 </h4>
                 <div className="keyword-tags">
-                  {atsResult.breakdown.keywordMatch.matchedKeywords?.map(
-                    (k) => (
-                      <span key={k} className="tag tag-match">
-                        {k}
-                      </span>
-                    ),
-                  )}
-                  {atsResult.breakdown.skillsAlignment.matchedSkills?.map(
-                    (k) => (
-                      <span key={`s-${k}`} className="tag tag-match">
-                        {k}
-                      </span>
-                    ),
-                  )}
+                  {uniqueStrings([
+                    ...(atsResult.breakdown.keywordMatch.matchedKeywords || []),
+                    ...(atsResult.breakdown.skillsAlignment.matchedSkills || []),
+                  ]).map((k) => (
+                    <span key={k} className="tag tag-match">
+                      {k}
+                    </span>
+                  ))}
                 </div>
                 <h4>
                   {jdText.trim()
@@ -2292,20 +2301,14 @@ function App() {
                     : "Suggested Keywords to Add"}
                 </h4>
                 <div className="keyword-tags">
-                  {atsResult.breakdown.keywordMatch.missingKeywords?.map(
-                    (k) => (
-                      <span key={k} className="tag tag-missing">
-                        {k}
-                      </span>
-                    ),
-                  )}
-                  {atsResult.breakdown.skillsAlignment.missingSkills?.map(
-                    (k) => (
-                      <span key={`s-${k}`} className="tag tag-missing">
-                        {k}
-                      </span>
-                    ),
-                  )}
+                  {uniqueStrings([
+                    ...(atsResult.breakdown.keywordMatch.missingKeywords || []),
+                    ...(atsResult.breakdown.skillsAlignment.missingSkills || []),
+                  ]).map((k) => (
+                    <span key={k} className="tag tag-missing">
+                      {k}
+                    </span>
+                  ))}
                 </div>
               </div>
 
