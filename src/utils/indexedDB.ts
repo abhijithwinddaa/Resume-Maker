@@ -165,6 +165,17 @@ export async function idbSetCache<T>(key: string, data: T): Promise<void> {
   await idbEvictOldEntries();
 }
 
+export async function clearIDBAICache(): Promise<void> {
+  try {
+    const allKeys = await idbKeys();
+    const cacheKeys = allKeys.filter((key) => key.startsWith(IDB_CACHE_PREFIX));
+
+    await Promise.all(cacheKeys.map((key) => idbDelete(key)));
+  } catch {
+    // Silently fail
+  }
+}
+
 /**
  * Evict oldest cache entries if we exceed the limit.
  */

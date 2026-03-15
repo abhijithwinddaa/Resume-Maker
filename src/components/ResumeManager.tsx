@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useUser } from "@clerk/clerk-react";
+import { createEmptyResume } from "../types/resume";
 import { useAppStore } from "../store/appStore";
 import {
   loadAllResumes,
@@ -19,7 +20,10 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
   const userId = user?.id;
   const setResumeData = useAppStore((s) => s.setResumeData);
   const setStep = useAppStore((s) => s.setStep);
-  const startOver = useAppStore((s) => s.startOver);
+  const setMode = useAppStore((s) => s.setMode);
+  const activeResumeId = useAppStore((s) => s.activeResumeId);
+  const setActiveResumeId = useAppStore((s) => s.setActiveResumeId);
+  const setActiveResumeName = useAppStore((s) => s.setActiveResumeName);
 
   const [resumes, setResumes] = useState<ResumeRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,12 +40,13 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
   }, [loading]);
 
   const fetchResumes = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) return [];
     setLoading(true);
     setLoadingPercent(20);
     const rows = await loadAllResumes(userId);
     setResumes(rows);
     setLoading(false);
+    return rows;
   }, [userId]);
 
   useEffect(() => {
@@ -60,25 +65,53 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
 
   const handleSelect = (row: ResumeRow) => {
     setResumeData(row.data, false);
+    setActiveResumeId(row.id);
+    setActiveResumeName(row.name || "Untitled Resume");
+    setMode("edit");
     setStep("editor");
     onClose();
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this resume? This cannot be undone.")) return;
+
+    const wasActive = id === activeResumeId;
     await deleteResume(id);
-    await fetchResumes();
+    const rows = await fetchResumes();
+
+    if (!wasActive) return;
+
+    if (rows[0]) {
+      handleSelect(rows[0]);
+      return;
+    }
+
+    setActiveResumeId(null);
+    setActiveResumeName(null);
+    setResumeData(createEmptyResume(), false);
+    setMode("create");
+    setStep("editor");
+    onClose();
   };
 
   const handleRename = async (id: string) => {
-    if (!editName.trim()) return;
-    await renameResume(id, editName.trim());
+    const trimmedName = editName.trim();
+    if (!trimmedName) return;
+
+    await renameResume(id, trimmedName);
+    if (id === activeResumeId) {
+      setActiveResumeName(trimmedName);
+    }
     setEditingId(null);
     await fetchResumes();
   };
 
   const handleNew = () => {
-    startOver();
+    setActiveResumeId(null);
+    setActiveResumeName(null);
+    setResumeData(createEmptyResume(), false);
+    setMode("create");
+    setStep("editor");
     onClose();
   };
 
@@ -117,7 +150,10 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
             )}
 
             {resumes.map((row) => (
-              <div key={row.id} className="rm-item">
+              <div
+                key={row.id}
+                className={`rm-item ${row.id === activeResumeId ? "rm-item-active" : ""}`}
+              >
                 <div className="rm-item-icon">
                   <FileText size={20} />
                 </div>
@@ -143,9 +179,14 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
                     </div>
                   ) : (
                     <>
-                      <span className="rm-name">
-                        {row.name || "Untitled Resume"}
-                      </span>
+                      <div className="rm-name-row">
+                        <span className="rm-name">
+                          {row.name || "Untitled Resume"}
+                        </span>
+                        {row.id === activeResumeId && (
+                          <span className="rm-active-badge">Active</span>
+                        )}
+                      </div>
                       <span className="rm-date">
                         {new Date(row.updated_at).toLocaleDateString()}
                       </span>

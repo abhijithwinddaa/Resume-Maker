@@ -1,30 +1,39 @@
--- Run this in the Supabase SQL Editor (supabase.com → your project → SQL Editor)
+-- Run this in the Supabase SQL Editor.
+-- This schema assumes Clerk is configured as a third-party auth provider
+-- for Supabase so auth.jwt()->>'sub' contains the Clerk user ID.
 
--- 1. Create the resumes table
+create extension if not exists pgcrypto;
+
 create table if not exists public.resumes (
-  id         uuid default gen_random_uuid() primary key,
-  user_id    text not null unique,
-  data       jsonb not null default '{}'::jsonb,
-  updated_at timestamptz default now()
+  id uuid default gen_random_uuid() primary key,
+  user_id text not null,
+  name text not null default 'Untitled Resume',
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
 );
 
--- 2. Enable Row Level Security
+create index if not exists idx_resumes_user_id
+  on public.resumes(user_id);
+
 alter table public.resumes enable row level security;
 
--- 3. Allow anyone with anon key to do CRUD (filtered by user_id in the app)
---    For production, integrate Clerk JWT with Supabase auth for proper RLS.
-create policy "Users can read own resume"
+drop policy if exists "Users can read own resumes" on public.resumes;
+drop policy if exists "Users can insert own resumes" on public.resumes;
+drop policy if exists "Users can update own resumes" on public.resumes;
+drop policy if exists "Users can delete own resumes" on public.resumes;
+
+create policy "Users can read own resumes"
   on public.resumes for select
-  using (true);
+  using (user_id = auth.jwt()->>'sub');
 
-create policy "Users can insert own resume"
+create policy "Users can insert own resumes"
   on public.resumes for insert
-  with check (true);
+  with check (user_id = auth.jwt()->>'sub');
 
-create policy "Users can update own resume"
+create policy "Users can update own resumes"
   on public.resumes for update
-  using (true);
+  using (user_id = auth.jwt()->>'sub');
 
-create policy "Users can delete own resume"
+create policy "Users can delete own resumes"
   on public.resumes for delete
-  using (true);
+  using (user_id = auth.jwt()->>'sub');

@@ -29,6 +29,26 @@ function normalizeResume(resume: ResumeData): ResumeData {
   return resume;
 }
 
+function normalizeRow(row: ResumeRow): ResumeRow {
+  return {
+    ...row,
+    data: normalizeResume(row.data),
+  };
+}
+
+function deriveResumeName(
+  resumeData: ResumeData,
+  providedName?: string,
+): string {
+  const trimmedProvided = providedName?.trim();
+  if (trimmedProvided) return trimmedProvided;
+
+  const contactName = resumeData.contact.name.trim();
+  if (contactName) return `${contactName} Resume`;
+
+  return "Untitled Resume";
+}
+
 /**
  * Load all resumes for a user.
  */
@@ -44,48 +64,81 @@ export async function loadAllResumes(userId: string): Promise<ResumeRow[]> {
     return [];
   }
 
-  return (data || []).map((row: ResumeRow) => ({
-    ...row,
-    data: normalizeResume(row.data),
-  }));
+  return (data || []).map((row: ResumeRow) => normalizeRow(row));
 }
 
 /**
- * Load the user's saved resume from Supabase.
- * Returns the most recently updated one, or null if none exists.
+ * Load the user's most recently updated resume row.
  */
-export async function loadResume(userId: string): Promise<ResumeData | null> {
+export async function loadLatestResume(
+  userId: string,
+): Promise<ResumeRow | null> {
   const rows = await loadAllResumes(userId);
   if (rows.length === 0) return null;
-  return rows[0].data;
+  return rows[0];
 }
 
 /**
- * Save (upsert) the user's resume to Supabase.
+ * Backwards-compatible helper for callers that only need the data payload.
+ */
+export async function loadResume(userId: string): Promise<ResumeData | null> {
+  const row = await loadLatestResume(userId);
+  return row?.data ?? null;
+}
+
+interface SaveResumeOptions {
+  resumeId?: string;
+  name?: string;
+}
+
+/**
+ * Save a resume to Supabase.
+ * Updates the active resume when `resumeId` is provided, otherwise inserts a new one.
  */
 export async function saveResume(
   userId: string,
   resumeData: ResumeData,
-  resumeId?: string,
-  name?: string,
-): Promise<boolean> {
+  options: SaveResumeOptions = {},
+): Promise<ResumeRow | null> {
+  const { resumeId, name } = options;
   const row: Record<string, unknown> = {
     user_id: userId,
     data: resumeData,
     updated_at: new Date().toISOString(),
   };
-  if (name) row.name = name;
-  if (resumeId) row.id = resumeId;
+  if (resumeId) {
+    if (name?.trim()) row.name = name.trim();
 
-  const { error } = await supabase
+    const { data, error } = await supabase
+      .from("resumes")
+      .update(row)
+      .eq("id", resumeId)
+      .eq("user_id", userId)
+      .select("id, user_id, name, data, updated_at")
+      .single();
+
+    if (error) {
+      console.error("Error updating resume:", error);
+      return null;
+    }
+
+    return normalizeRow(data as ResumeRow);
+  }
+
+  row.name = deriveResumeName(resumeData, name);
+
+  const { data, error } = await supabase
     .from("resumes")
-    .upsert(row, { onConflict: resumeId ? "id" : "user_id" });
+    .insert(row)
+    .select("id, user_id, name, data, updated_at")
+    .single();
 
   if (error) {
-    console.error("Error saving resume:", error);
-    return false;
+    console.error("Error creating resume:", error);
+    return null;
   }
-  return true;
+
+  return normalizeRow(data as ResumeRow);
 }
 
 /**
