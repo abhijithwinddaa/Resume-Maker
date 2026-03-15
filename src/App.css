@@ -784,6 +784,11 @@
   margin-top: 12px;
 }
 
+.mobile-resume-trigger-row-top {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
 .mobile-resume-trigger {
   width: 100%;
   justify-content: center;

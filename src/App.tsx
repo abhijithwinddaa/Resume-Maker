@@ -620,7 +620,7 @@ function App() {
   }, [isPdfLoading]);
 
   useEffect(() => {
-    if (step !== "score") {
+    if (step !== "score" && step !== "editor") {
       setShowMobileResumePreview(false);
     }
   }, [step]);
@@ -2474,6 +2474,16 @@ function App() {
         {step === "editor" && resumeData && (
           <div className="editor-step" role="region" aria-label="Resume editor">
             <div className="editor-left">
+              {isCompactScreen && (
+                <div className="mobile-resume-trigger-row mobile-resume-trigger-row-top">
+                  <button
+                    className="btn-secondary mobile-resume-trigger"
+                    onClick={() => setShowMobileResumePreview(true)}
+                  >
+                    <Eye size={16} /> Show Resume
+                  </button>
+                </div>
+              )}
               <StyleDetectedBadge />
               <ErrorBoundary>
                 <Suspense fallback={<EditorSkeleton />}>
@@ -2484,23 +2494,24 @@ function App() {
                 </Suspense>
               </ErrorBoundary>
             </div>
-            <div className="editor-right">
-              <div className="preview-container">
-                <ErrorBoundary>
-                  <Suspense fallback={<PreviewSkeleton />}>
-                    <ResumeTemplate ref={resumeRef} data={resumeData} />
-                  </Suspense>
-                </ErrorBoundary>
+            {!isCompactScreen && (
+              <div className="editor-right">
+                <div className="preview-container">
+                  <ErrorBoundary>
+                    <Suspense fallback={<PreviewSkeleton />}>
+                      <ResumeTemplate ref={resumeRef} data={resumeData} />
+                    </Suspense>
+                  </ErrorBoundary>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
-        {step === "score" &&
-          atsResult &&
-          resumeData &&
+        {resumeData &&
           isCompactScreen &&
-          showMobileResumePreview && (
+          showMobileResumePreview &&
+          (step === "editor" || (step === "score" && atsResult)) && (
             <div
               className="mobile-resume-overlay"
               onClick={() => setShowMobileResumePreview(false)}
