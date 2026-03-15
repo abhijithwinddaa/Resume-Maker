@@ -66,6 +66,10 @@
   white-space: nowrap;
 }
 
+.header-btn-labeled {
+  padding-inline: 12px 16px;
+}
+
 .header-btn:hover {
   background: var(--bg-hover);
   border-color: var(--text-muted);
@@ -1078,6 +1082,16 @@
     min-height: 40px;
     justify-content: center;
     border-radius: 10px;
+  }
+
+  .header-btn.header-btn-labeled {
+    padding: 0 12px;
+    min-width: max-content;
+    gap: 6px;
+  }
+
+  .header-btn.header-btn-labeled span {
+    display: inline;
   }
 
   .input-step {

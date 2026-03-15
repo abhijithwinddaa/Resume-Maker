@@ -72,7 +72,6 @@ import { exportToDocx } from "./utils/docxExporter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { EditorSkeleton, PreviewSkeleton } from "./components/Skeleton";
 import ThemeToggle from "./components/ThemeToggle";
-import LanguageSwitcher from "./components/LanguageSwitcher";
 import StyleDetectedBadge from "./components/StyleDetectedBadge";
 import {
   FileText,
@@ -1590,15 +1589,15 @@ function App() {
           )}
 
           <ThemeToggle />
-          <LanguageSwitcher />
 
           <button
-            className="header-btn"
+            className="header-btn header-btn-labeled"
             onClick={() => setShowTemplatePicker(true)}
-            title="Template & Style"
-            aria-label="Template & Style"
+            title="Templates & Style"
+            aria-label="Templates & Style"
           >
             <Palette size={14} />
+            <span>Templates & Style</span>
           </button>
 
           <button
