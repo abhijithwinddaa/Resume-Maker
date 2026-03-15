@@ -29,6 +29,7 @@ import {
   selfATSScore,
   selfOptimizeLoop,
 } from "./utils/aiService";
+import type { ResumeFeedbackSignal } from "./utils/resumeFeedback";
 import { detectTemplateStyle } from "./utils/templateDetector";
 import {
   extractTextAndLinks,
@@ -100,6 +101,8 @@ import {
   FolderOpen,
   Eye,
   PlusCircle,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import "./App.css";
 
@@ -188,6 +191,48 @@ const BreakdownBar = memo(function BreakdownBar({
         />
       </div>
     </div>
+  );
+});
+
+const FeedbackSignalCard = memo(function FeedbackSignalCard({
+  signal,
+}: {
+  signal: ResumeFeedbackSignal;
+}) {
+  const Icon =
+    signal.status === "good"
+      ? CheckCircle2
+      : signal.status === "warning"
+        ? AlertTriangle
+        : AlertCircle;
+
+  const statusLabel =
+    signal.status === "good"
+      ? "Strong"
+      : signal.status === "warning"
+        ? "Needs work"
+        : "High priority";
+
+  return (
+    <article className={`feedback-card feedback-card-${signal.status}`}>
+      <div className="feedback-card-header">
+        <div className="feedback-card-title">
+          <Icon size={16} />
+          <h5>{signal.title}</h5>
+        </div>
+        <span className={`feedback-badge feedback-badge-${signal.status}`}>
+          {statusLabel}
+        </span>
+      </div>
+      <p>{signal.summary}</p>
+      {signal.details.length > 0 && (
+        <ul>
+          {signal.details.map((detail) => (
+            <li key={`${signal.id}-${detail}`}>{detail}</li>
+          ))}
+        </ul>
+      )}
+    </article>
   );
 });
 
@@ -2296,6 +2341,17 @@ function App() {
                   weight={atsResult.breakdown.impact.weight}
                 />
               </div>
+
+              {atsResult.qualityInsights?.signals?.length ? (
+                <div className="feedback-section">
+                  <h4>Resume Signals</h4>
+                  <div className="feedback-grid">
+                    {atsResult.qualityInsights.signals.map((signal) => (
+                      <FeedbackSignalCard key={signal.id} signal={signal} />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               {atsResult.topSuggestions.length > 0 && (
                 <div className="suggestions-section">
