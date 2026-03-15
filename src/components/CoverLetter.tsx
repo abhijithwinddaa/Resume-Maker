@@ -1,8 +1,8 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useAppStore } from "../store/appStore";
 import { generateCoverLetter } from "../utils/coverLetterService";
 import { trackEvent } from "../utils/analytics";
-import { FileText, Loader2, Copy, Download, X, Sparkles } from "lucide-react";
+import { FileText, Copy, Download, X, Sparkles } from "lucide-react";
 import "./CoverLetter.css";
 
 interface CoverLetterPanelProps {
@@ -24,7 +24,19 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
   const [position, setPosition] = useState(coverLetter?.position || "");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [generationPercent, setGenerationPercent] = useState(14);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setGenerationPercent(14);
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setGenerationPercent((previous) => Math.min(previous + 7, 92));
+    }, 450);
+    return () => window.clearInterval(interval);
+  }, [isGenerating]);
 
   const handleGenerate = async () => {
     if (!resumeData || !jdText.trim()) {
@@ -158,7 +170,7 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
           >
             {isGenerating ? (
               <>
-                <Loader2 size={16} className="spin" /> Generating...
+                Generating... {generationPercent}%
               </>
             ) : (
               <>

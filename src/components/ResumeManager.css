@@ -49,11 +49,18 @@
 
 .rm-loading {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   padding: 40px;
   color: var(--text-secondary);
+}
+
+.rm-loading strong {
+  font-size: 28px;
+  line-height: 1;
+  color: var(--accent-primary);
 }
 
 .rm-list {

@@ -2,6 +2,7 @@ import {
   useRef,
   useEffect,
   useCallback,
+  useMemo,
   memo,
   lazy,
   Suspense,
@@ -79,7 +80,6 @@ import {
   Zap,
   RotateCcw,
   AlertCircle,
-  Loader2,
   Trophy,
   Target,
   ChevronRight,
@@ -187,6 +187,45 @@ const BreakdownBar = memo(function BreakdownBar({
   );
 });
 
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function getAnalyzeProgressPercent(message: string): number {
+  const lowered = message.toLowerCase();
+  const ocrMatch = message.match(/page\s+(\d+)\s+of\s+(\d+)/i);
+  if (ocrMatch) {
+    const page = Number(ocrMatch[1]);
+    const total = Number(ocrMatch[2]);
+    if (total > 0) {
+      return clampPercent(25 + (page / total) * 45);
+    }
+  }
+  if (lowered.includes("image-based pdf")) return 20;
+  if (lowered.includes("parsing your resume")) return 48;
+  if (lowered.includes("running ats analysis")) return 76;
+  if (lowered.includes("running self ats")) return 76;
+  if (lowered.includes("running ocr")) return 55;
+  return 35;
+}
+
+function getOptimizeProgressPercent(progress: {
+  currentIteration: number;
+  maxIterations: number;
+  phase: string;
+} | null): number {
+  if (!progress) return 0;
+  const { currentIteration, maxIterations, phase } = progress;
+  const completedIterations = Math.max(0, currentIteration - 1);
+  const base = maxIterations > 0 ? (completedIterations / maxIterations) * 100 : 0;
+
+  if (phase === "target-reached" || phase === "done") return 100;
+  if (phase === "error") return clampPercent(base);
+  if (phase === "scanning") return clampPercent(base + 15);
+  if (phase === "rewriting") return clampPercent(base + 65);
+  return clampPercent(base + 10);
+}
+
 /* ─── Main App ─────────────────────────────────────────── */
 
 function App() {
@@ -252,6 +291,14 @@ function App() {
     "idle",
   );
   const [isAuthStarting, setIsAuthStarting] = useState(false);
+  const [isCompactScreen, setIsCompactScreen] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(max-width: 900px)").matches
+      : false,
+  );
+  const [showMobileResumePreview, setShowMobileResumePreview] = useState(false);
+  const [dbLoadPercent, setDbLoadPercent] = useState(18);
+  const [pdfLoadPercent, setPdfLoadPercent] = useState(12);
 
   // Deferred auth: track which mode was selected before sign-in
   const [pendingMode, setPendingMode] = useState<AppMode>(null);
@@ -332,6 +379,60 @@ function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(max-width: 900px)");
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsCompactScreen(event.matches);
+    };
+    setIsCompactScreen(mediaQuery.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isCompactScreen) {
+      setShowMobileResumePreview(false);
+    }
+  }, [isCompactScreen]);
+
+  useEffect(() => {
+    if (!isDbLoading) {
+      setDbLoadPercent(18);
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setDbLoadPercent((previous) => Math.min(previous + 7, 92));
+    }, 400);
+    return () => window.clearInterval(interval);
+  }, [isDbLoading]);
+
+  useEffect(() => {
+    if (!isPdfLoading) {
+      setPdfLoadPercent(12);
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setPdfLoadPercent((previous) => Math.min(previous + 6, 88));
+    }, 450);
+    return () => window.clearInterval(interval);
+  }, [isPdfLoading]);
+
+  useEffect(() => {
+    if (step !== "score") {
+      setShowMobileResumePreview(false);
+    }
+  }, [step]);
+
+  const analyzingPercent = useMemo(
+    () => getAnalyzeProgressPercent(loadingMessage),
+    [loadingMessage],
+  );
+  const optimizePercent = useMemo(
+    () => getOptimizeProgressPercent(optimizeProgress),
+    [optimizeProgress],
+  );
 
   /* ── Auto-load from Supabase when user signs in ──── */
   useEffect(() => {
@@ -566,6 +667,8 @@ function App() {
     setUploadedFileName(file.name);
     setIsPdfLoading(true);
     setError(null);
+    setLoadingMessage("Reading PDF file...");
+    setPdfLoadPercent(15);
     try {
       // First, check for embedded ResumeData (from our own exported PDFs)
       const embedded = await extractEmbeddedResumeData(file);
@@ -585,17 +688,23 @@ function App() {
       }
 
       // Fallback: extract text from non-app PDFs
-      let { text, links } = await extractTextAndLinks(file);
+      const extracted = await extractTextAndLinks(file);
+      let text = extracted.text;
+      const links = extracted.links;
 
       // OCR fallback for image-based PDFs (e.g., old exports without metadata)
       if (!text.trim()) {
         trackEvent("pdf_ocr_started", { file_name: file.name });
+        setPdfLoadPercent(30);
         setLoadingMessage(
           "Image-based PDF detected — running OCR to extract text...",
         );
         setStep("analyzing");
         const ocr = await extractTextWithOCR(file, (page, total) => {
           setLoadingMessage(`Running OCR on page ${page} of ${total}...`);
+          if (total > 0) {
+            setPdfLoadPercent(clampPercent(30 + (page / total) * 45));
+          }
         });
         text = ocr.text;
         trackEvent("pdf_ocr_completed", {
@@ -636,6 +745,7 @@ function App() {
         });
 
       // Auto-parse the resume immediately
+      setPdfLoadPercent(88);
       setLoadingMessage(
         "Parsing your resume with AI (preserving all links)...",
       );
@@ -664,6 +774,7 @@ function App() {
       setStep("input");
     } finally {
       setIsPdfLoading(false);
+      setPdfLoadPercent(100);
       if (pdfInputRef.current) pdfInputRef.current.value = "";
     }
   };
@@ -1358,7 +1469,11 @@ function App() {
               <h2>Welcome to Resume Maker</h2>
               <p>AI-powered resume building, editing, and ATS optimization</p>
               {isAuthStarting && (
-                <p className="landing-auth-pending" role="status" aria-live="polite">
+                <p
+                  className="landing-auth-pending"
+                  role="status"
+                  aria-live="polite"
+                >
                   Opening sign-in... Complete login to continue.
                 </p>
               )}
@@ -1399,7 +1514,9 @@ function App() {
                       }}
                     >
                       <LogIn size={16} />
-                      {isAuthStarting ? "Opening Sign In..." : "Sign In & Start"}
+                      {isAuthStarting
+                        ? "Opening Sign In..."
+                        : "Sign In & Start"}
                     </button>
                   </SignInButton>
                 </SignedOut>
@@ -1445,7 +1562,9 @@ function App() {
                       }}
                     >
                       <LogIn size={16} />
-                      {isAuthStarting ? "Opening Sign In..." : "Sign In & Start"}
+                      {isAuthStarting
+                        ? "Opening Sign In..."
+                        : "Sign In & Start"}
                     </button>
                   </SignInButton>
                 </SignedOut>
@@ -1491,7 +1610,9 @@ function App() {
                       }}
                     >
                       <LogIn size={16} />
-                      {isAuthStarting ? "Opening Sign In..." : "Sign In & Start"}
+                      {isAuthStarting
+                        ? "Opening Sign In..."
+                        : "Sign In & Start"}
                     </button>
                   </SignInButton>
                 </SignedOut>
@@ -1534,8 +1655,15 @@ function App() {
         {/* DB Loading */}
         {isDbLoading && (
           <div className="analyzing-step">
-            <Loader2 size={48} className="spin" />
             <h2>Loading your saved resume...</h2>
+            <div className="loading-progress-number">{dbLoadPercent}%</div>
+            <div className="loading-progress-track" aria-hidden="true">
+              <div
+                className="loading-progress-fill"
+                style={{ width: `${dbLoadPercent}%` }}
+              />
+            </div>
+            <p>Syncing your latest resume data</p>
           </div>
         )}
 
@@ -1601,8 +1729,16 @@ function App() {
                   </div>
                   {isPdfLoading ? (
                     <div className="pdf-loading">
-                      <Loader2 size={24} className="spin" />
-                      <span>Extracting text from PDF...</span>
+                      <div className="loading-progress-number">
+                        {pdfLoadPercent}%
+                      </div>
+                      <div className="loading-progress-track" aria-hidden="true">
+                        <div
+                          className="loading-progress-fill"
+                          style={{ width: `${pdfLoadPercent}%` }}
+                        />
+                      </div>
+                      <span>{loadingMessage || "Extracting text from PDF..."}</span>
                     </div>
                   ) : (
                     <>
@@ -1739,29 +1875,37 @@ function App() {
                         </button>
                       </span>
                     )}
-                      <label
-                        className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
-                        aria-disabled={isPdfLoading}
-                      >
+                    <label
+                      className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
+                      aria-disabled={isPdfLoading}
+                    >
                       <Upload size={13} />
-                        {isPdfLoading ? "Processing..." : "Upload PDF"}
-                        {!isPdfLoading && (
-                          <input
-                            ref={pdfInputRef}
-                            type="file"
-                            accept=".pdf"
-                            onChange={handlePdfUpload}
-                            hidden
-                            aria-label="Upload PDF"
-                          />
-                        )}
+                      {isPdfLoading ? "Processing..." : "Upload PDF"}
+                      {!isPdfLoading && (
+                        <input
+                          ref={pdfInputRef}
+                          type="file"
+                          accept=".pdf"
+                          onChange={handlePdfUpload}
+                          hidden
+                          aria-label="Upload PDF"
+                        />
+                      )}
                     </label>
                   </div>
                 </div>
                 {isPdfLoading ? (
                   <div className="pdf-loading">
-                    <Loader2 size={24} className="spin" />
-                    <span>Extracting text from PDF...</span>
+                    <div className="loading-progress-number">
+                      {pdfLoadPercent}%
+                    </div>
+                    <div className="loading-progress-track" aria-hidden="true">
+                      <div
+                        className="loading-progress-fill"
+                        style={{ width: `${pdfLoadPercent}%` }}
+                      />
+                    </div>
+                    <span>{loadingMessage || "Extracting text from PDF..."}</span>
                   </div>
                 ) : (
                   <>
@@ -1818,9 +1962,15 @@ function App() {
         {/* ═══ ANALYZING STEP ═══ */}
         {step === "analyzing" && (
           <div className="analyzing-step" role="status" aria-live="polite">
-            <Loader2 size={48} className="spin" />
             <h2>{loadingMessage}</h2>
-            <p>This may take a moment...</p>
+            <div className="loading-progress-number">{analyzingPercent}%</div>
+            <div className="loading-progress-track" aria-hidden="true">
+              <div
+                className="loading-progress-fill"
+                style={{ width: `${analyzingPercent}%` }}
+              />
+            </div>
+            <p>Processing step by step...</p>
           </div>
         )}
 
@@ -1948,8 +2098,14 @@ function App() {
               {isOptimizing && optimizeProgress && (
                 <div className="optimize-progress">
                   <div className="optimize-header">
-                    <Loader2 size={18} className="spin" />
                     <span>{optimizeProgress.message}</span>
+                    <strong>{optimizePercent}%</strong>
+                  </div>
+                  <div className="loading-progress-track" aria-hidden="true">
+                    <div
+                      className="loading-progress-fill"
+                      style={{ width: `${optimizePercent}%` }}
+                    />
                   </div>
                   <div className="optimize-timeline">
                     {optimizeProgress.history.map((h) => (
@@ -2005,17 +2161,30 @@ function App() {
                   </button>
                 </div>
               )}
+
+              {isCompactScreen && (
+                <div className="mobile-resume-trigger-row">
+                  <button
+                    className="btn-secondary mobile-resume-trigger"
+                    onClick={() => setShowMobileResumePreview(true)}
+                  >
+                    <Eye size={16} /> Show Resume
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="score-right">
-              <div className="preview-container">
-                <ErrorBoundary>
-                  <Suspense fallback={<PreviewSkeleton />}>
-                    <ResumeTemplate ref={resumeRef} data={resumeData} />
-                  </Suspense>
-                </ErrorBoundary>
+            {!isCompactScreen && (
+              <div className="score-right">
+                <div className="preview-container">
+                  <ErrorBoundary>
+                    <Suspense fallback={<PreviewSkeleton />}>
+                      <ResumeTemplate ref={resumeRef} data={resumeData} />
+                    </Suspense>
+                  </ErrorBoundary>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -2044,6 +2213,41 @@ function App() {
             </div>
           </div>
         )}
+
+        {step === "score" &&
+          atsResult &&
+          resumeData &&
+          isCompactScreen &&
+          showMobileResumePreview && (
+            <div
+              className="mobile-resume-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Resume preview"
+            >
+              <div className="mobile-resume-sheet">
+                <div className="mobile-resume-sheet-header">
+                  <h3>Resume Preview</h3>
+                  <button
+                    className="mobile-resume-close"
+                    onClick={() => setShowMobileResumePreview(false)}
+                    aria-label="Close resume preview"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="mobile-resume-sheet-body">
+                  <div className="preview-container">
+                    <ErrorBoundary>
+                      <Suspense fallback={<PreviewSkeleton />}>
+                        <ResumeTemplate ref={resumeRef} data={resumeData} />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
       </main>
 
       {/* Modals/Panels */}

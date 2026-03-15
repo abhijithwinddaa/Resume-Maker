@@ -7,7 +7,7 @@ import {
   renameResume,
   type ResumeRow,
 } from "../services/resumeService";
-import { FileText, Plus, Trash2, Edit3, X, Loader2, Check } from "lucide-react";
+import { FileText, Plus, Trash2, Edit3, X, Check } from "lucide-react";
 import "./ResumeManager.css";
 
 interface ResumeManagerProps {
@@ -16,26 +16,47 @@ interface ResumeManagerProps {
 
 export default function ResumeManager({ onClose }: ResumeManagerProps) {
   const { user } = useUser();
+  const userId = user?.id;
   const setResumeData = useAppStore((s) => s.setResumeData);
   const setStep = useAppStore((s) => s.setStep);
   const startOver = useAppStore((s) => s.startOver);
 
   const [resumes, setResumes] = useState<ResumeRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingPercent, setLoadingPercent] = useState(20);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
 
+  useEffect(() => {
+    if (!loading) return;
+    const interval = window.setInterval(() => {
+      setLoadingPercent((previous) => Math.min(previous + 12, 90));
+    }, 350);
+    return () => window.clearInterval(interval);
+  }, [loading]);
+
   const fetchResumes = useCallback(async () => {
-    if (!user?.id) return;
+    if (!userId) return;
     setLoading(true);
-    const rows = await loadAllResumes(user.id);
+    setLoadingPercent(20);
+    const rows = await loadAllResumes(userId);
     setResumes(rows);
     setLoading(false);
-  }, [user?.id]);
+  }, [userId]);
 
   useEffect(() => {
-    fetchResumes();
-  }, [fetchResumes]);
+    if (!userId) return;
+    let active = true;
+    void (async () => {
+      const rows = await loadAllResumes(userId);
+      if (!active) return;
+      setResumes(rows);
+      setLoading(false);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   const handleSelect = (row: ResumeRow) => {
     setResumeData(row.data, false);
@@ -79,7 +100,7 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
 
         {loading ? (
           <div className="rm-loading">
-            <Loader2 size={24} className="spin" />
+            <strong>{loadingPercent}%</strong>
             <span>Loading resumes...</span>
           </div>
         ) : (
