@@ -251,6 +251,7 @@ function App() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
     "idle",
   );
+  const [isAuthStarting, setIsAuthStarting] = useState(false);
 
   // Deferred auth: track which mode was selected before sign-in
   const [pendingMode, setPendingMode] = useState<AppMode>(null);
@@ -261,6 +262,7 @@ function App() {
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const resumeRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const authStartTimeoutRef = useRef<number | null>(null);
 
   /* ── Keyboard shortcuts (Ctrl+Z / Ctrl+Y / Escape) ── */
   useEffect(() => {
@@ -312,6 +314,24 @@ function App() {
     const backup = loadLocalBackup();
     setHasBackup(!!backup);
   }, [setHasBackup]);
+
+  useEffect(() => {
+    if (user || step !== "landing") {
+      setIsAuthStarting(false);
+      if (authStartTimeoutRef.current) {
+        window.clearTimeout(authStartTimeoutRef.current);
+        authStartTimeoutRef.current = null;
+      }
+    }
+  }, [user, step]);
+
+  useEffect(() => {
+    return () => {
+      if (authStartTimeoutRef.current) {
+        window.clearTimeout(authStartTimeoutRef.current);
+      }
+    };
+  }, []);
 
   /* ── Auto-load from Supabase when user signs in ──── */
   useEffect(() => {
@@ -502,9 +522,31 @@ function App() {
     [user, setMode, setStep, setError, resumeData, setResumeData],
   );
 
+  const startSignInFlow = useCallback(
+    (selectedMode: AppMode) => {
+      if (isAuthStarting) return;
+      setPendingMode(selectedMode);
+      setIsAuthStarting(true);
+      trackEvent("sign_in_initiated", { mode: selectedMode });
+      if (authStartTimeoutRef.current) {
+        window.clearTimeout(authStartTimeoutRef.current);
+      }
+      authStartTimeoutRef.current = window.setTimeout(() => {
+        setIsAuthStarting(false);
+        authStartTimeoutRef.current = null;
+      }, 10000);
+    },
+    [isAuthStarting],
+  );
+
   /* ── PDF Upload ──────────────────────────────────────── */
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isPdfLoading) {
+      trackEvent("pdf_upload_blocked", { reason: "already_processing" });
+      return;
+    }
+
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -517,9 +559,11 @@ function App() {
     if (!validation.valid) {
       trackEvent("pdf_upload_failed", { reason: "validation_failed" });
       setError(validation.error || "Invalid file.");
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
       return;
     }
 
+    setUploadedFileName(file.name);
     setIsPdfLoading(true);
     setError(null);
     try {
@@ -1313,6 +1357,11 @@ function App() {
               <FileText size={48} className="landing-hero-icon" />
               <h2>Welcome to Resume Maker</h2>
               <p>AI-powered resume building, editing, and ATS optimization</p>
+              {isAuthStarting && (
+                <p className="landing-auth-pending" role="status" aria-live="polite">
+                  Opening sign-in... Complete login to continue.
+                </p>
+              )}
             </div>
 
             <div className="landing-cards">
@@ -1342,13 +1391,15 @@ function App() {
                   <SignInButton mode="modal">
                     <button
                       className="landing-card-btn"
+                      disabled={isAuthStarting}
+                      aria-busy={isAuthStarting}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPendingMode("ats");
+                        startSignInFlow("ats");
                       }}
                     >
                       <LogIn size={16} />
-                      Sign In & Start
+                      {isAuthStarting ? "Opening Sign In..." : "Sign In & Start"}
                     </button>
                   </SignInButton>
                 </SignedOut>
@@ -1386,13 +1437,15 @@ function App() {
                   <SignInButton mode="modal">
                     <button
                       className="landing-card-btn"
+                      disabled={isAuthStarting}
+                      aria-busy={isAuthStarting}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPendingMode("edit");
+                        startSignInFlow("edit");
                       }}
                     >
                       <LogIn size={16} />
-                      Sign In & Start
+                      {isAuthStarting ? "Opening Sign In..." : "Sign In & Start"}
                     </button>
                   </SignInButton>
                 </SignedOut>
@@ -1430,13 +1483,15 @@ function App() {
                   <SignInButton mode="modal">
                     <button
                       className="landing-card-btn"
+                      disabled={isAuthStarting}
+                      aria-busy={isAuthStarting}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPendingMode("create");
+                        startSignInFlow("create");
                       }}
                     >
                       <LogIn size={16} />
-                      Sign In & Start
+                      {isAuthStarting ? "Opening Sign In..." : "Sign In & Start"}
                     </button>
                   </SignInButton>
                 </SignedOut>
@@ -1525,17 +1580,22 @@ function App() {
                           </button>
                         </span>
                       )}
-                      <label className="upload-btn">
+                      <label
+                        className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
+                        aria-disabled={isPdfLoading}
+                      >
                         <Upload size={13} />
-                        Upload PDF
-                        <input
-                          ref={pdfInputRef}
-                          type="file"
-                          accept=".pdf"
-                          onChange={handlePdfUpload}
-                          hidden
-                          aria-label="Upload PDF"
-                        />
+                        {isPdfLoading ? "Processing..." : "Upload PDF"}
+                        {!isPdfLoading && (
+                          <input
+                            ref={pdfInputRef}
+                            type="file"
+                            accept=".pdf"
+                            onChange={handlePdfUpload}
+                            hidden
+                            aria-label="Upload PDF"
+                          />
+                        )}
                       </label>
                     </div>
                   </div>
@@ -1679,17 +1739,22 @@ function App() {
                         </button>
                       </span>
                     )}
-                    <label className="upload-btn">
+                      <label
+                        className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
+                        aria-disabled={isPdfLoading}
+                      >
                       <Upload size={13} />
-                      Upload PDF
-                      <input
-                        ref={pdfInputRef}
-                        type="file"
-                        accept=".pdf"
-                        onChange={handlePdfUpload}
-                        hidden
-                        aria-label="Upload PDF"
-                      />
+                        {isPdfLoading ? "Processing..." : "Upload PDF"}
+                        {!isPdfLoading && (
+                          <input
+                            ref={pdfInputRef}
+                            type="file"
+                            accept=".pdf"
+                            onChange={handlePdfUpload}
+                            hidden
+                            aria-label="Upload PDF"
+                          />
+                        )}
                     </label>
                   </div>
                 </div>
