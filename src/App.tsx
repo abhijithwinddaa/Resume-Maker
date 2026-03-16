@@ -15,7 +15,7 @@ import {
   useUser,
   SignedIn,
   SignedOut,
-  SignInButton,
+  useClerk,
   UserButton,
 } from "@clerk/clerk-react";
 import { useAppStore } from "./store/appStore";
@@ -297,6 +297,7 @@ function getOptimizeProgressPercent(
 function App() {
   const { getToken } = useAuth();
   const { user } = useUser();
+  const { openSignIn } = useClerk();
 
   // Zustand store
   const step = useAppStore((s) => s.step);
@@ -373,6 +374,10 @@ function App() {
   const [showMobileResumePreview, setShowMobileResumePreview] = useState(false);
   const [dbLoadPercent, setDbLoadPercent] = useState(18);
   const [pdfLoadPercent, setPdfLoadPercent] = useState(12);
+  const [modeToastMessage, setModeToastMessage] = useState<string | null>(null);
+  const [atsResumeSource, setAtsResumeSource] = useState<"existing" | "new">(
+    "existing",
+  );
 
   // Deferred auth: track which mode was selected before sign-in
   const [pendingMode, setPendingMode] = useState<AppMode>(null);
@@ -385,6 +390,7 @@ function App() {
   const abortRef = useRef<AbortController | null>(null);
   const authStartTimeoutRef = useRef<number | null>(null);
   const activeResumeIdRef = useRef<string | null>(activeResumeId);
+  const modeSelectionInProgressRef = useRef(false);
   const pendingResumeCreationRef = useRef<Promise<
     Awaited<ReturnType<typeof saveResume>>
   > | null>(null);
@@ -625,6 +631,12 @@ function App() {
     }
   }, [step]);
 
+  useEffect(() => {
+    if (!modeToastMessage) return;
+    const timeout = window.setTimeout(() => setModeToastMessage(null), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [modeToastMessage]);
+
   const analyzingPercent = useMemo(
     () => getAnalyzeProgressPercent(loadingMessage),
     [loadingMessage],
@@ -653,6 +665,7 @@ function App() {
           setResumeData(createEmptyResume(), false);
           setMode("create");
           setPendingMode(null);
+          modeSelectionInProgressRef.current = false;
           setStep("editor");
           return;
         }
@@ -666,12 +679,16 @@ function App() {
           if (pendingMode) {
             setMode(pendingMode);
             setPendingMode(null);
+            modeSelectionInProgressRef.current = false;
             if (pendingMode === "ats") {
               setStep("input");
             } else {
               setStep("editor");
             }
           } else {
+            if (modeSelectionInProgressRef.current) {
+              return;
+            }
             // Returning user with saved resume → straight to editor
             setMode("edit");
             setStep("editor");
@@ -680,6 +697,7 @@ function App() {
           // No saved resume, but user picked a mode
           setMode(pendingMode);
           setPendingMode(null);
+          modeSelectionInProgressRef.current = false;
           setStep("input");
         } else {
           // No saved resume and no pending mode — show landing
@@ -699,6 +717,7 @@ function App() {
         if (pendingMode) {
           setMode(pendingMode);
           setPendingMode(null);
+          modeSelectionInProgressRef.current = false;
           if (pendingMode === "create") {
             setActiveResumeId(null);
             setActiveResumeName(null);
@@ -846,13 +865,27 @@ function App() {
 
   const handleSelectMode = useCallback(
     (selectedMode: AppMode) => {
+      modeSelectionInProgressRef.current = true;
       trackEvent("mode_selected", {
         mode: selectedMode,
         signed_in: Boolean(user),
       });
       if (!user) {
-        // Not signed in → save mode and let Clerk prompt
+        if (isAuthStarting) return;
         setPendingMode(selectedMode);
+        setModeToastMessage(
+          `Selected: ${selectedMode === "ats" ? "ATS" : selectedMode === "edit" ? "Edit" : "Create"}`,
+        );
+        setIsAuthStarting(true);
+        trackEvent("sign_in_initiated", { mode: selectedMode });
+        if (authStartTimeoutRef.current) {
+          window.clearTimeout(authStartTimeoutRef.current);
+        }
+        authStartTimeoutRef.current = window.setTimeout(() => {
+          setIsAuthStarting(false);
+          authStartTimeoutRef.current = null;
+        }, 10000);
+        openSignIn();
         return;
       }
       setMode(selectedMode);
@@ -863,12 +896,8 @@ function App() {
         setResumeData(createEmptyResume(), false);
         setStep("editor");
       } else if (selectedMode === "ats") {
-        if (resumeData) {
-          // Already have resume data, go to input for JD
-          setStep("input");
-        } else {
-          setStep("input");
-        }
+        setAtsResumeSource(resumeData ? "existing" : "new");
+        setStep("input");
       } else {
         // edit mode
         if (resumeData) {
@@ -877,6 +906,10 @@ function App() {
           setStep("input");
         }
       }
+      modeSelectionInProgressRef.current = false;
+      setModeToastMessage(
+        `Selected: ${selectedMode === "ats" ? "ATS" : selectedMode === "edit" ? "Edit" : "Create"}`,
+      );
     },
     [
       user,
@@ -887,6 +920,8 @@ function App() {
       setResumeData,
       setActiveResumeId,
       setActiveResumeName,
+      isAuthStarting,
+      openSignIn,
     ],
   );
 
@@ -903,8 +938,9 @@ function App() {
         setIsAuthStarting(false);
         authStartTimeoutRef.current = null;
       }, 10000);
+      openSignIn();
     },
-    [isAuthStarting],
+    [isAuthStarting, openSignIn],
   );
 
   /* ── PDF Upload ──────────────────────────────────────── */
@@ -1105,10 +1141,12 @@ function App() {
   /* ── Analyze (ATS mode — resume + JD) ───────────────── */
 
   const handleAnalyze = async () => {
-    if (!resumeText.trim() && !resumeData) return;
+    const requireNewResumeInput = mode === "ats" && atsResumeSource === "new";
+
+    if (!resumeText.trim() && (!resumeData || requireNewResumeInput)) return;
     if (!jdText.trim()) return;
 
-    if (!resumeData) {
+    if (!resumeData || requireNewResumeInput) {
       const resumeValidation = validateResumeText(resumeText);
       if (!resumeValidation.valid) {
         setError(resumeValidation.error || "Invalid resume text.");
@@ -1136,7 +1174,7 @@ function App() {
     const controller = getRequestController("analyze");
 
     try {
-      let parsed = resumeData;
+      let parsed = requireNewResumeInput ? null : resumeData;
       if (!parsed) {
         setLoadingMessage("Parsing your resume with AI...");
         if (controller.signal.aborted) return;
@@ -1148,6 +1186,10 @@ function App() {
             : undefined,
         );
         if (controller.signal.aborted) return;
+        if (requireNewResumeInput) {
+          setActiveResumeId(null);
+          setActiveResumeName(null);
+        }
         handleResumeChange(parsed);
       }
 
@@ -1175,6 +1217,21 @@ function App() {
       clearRequestController("analyze");
     }
   };
+
+  const handleBackToLanding = useCallback(() => {
+    modeSelectionInProgressRef.current = false;
+    setError(null);
+    setMode(null);
+    setStep("landing");
+  }, [setError, setMode, setStep]);
+
+  const handleSwitchMode = useCallback(
+    (selectedMode: Exclude<AppMode, null>) => {
+      if (selectedMode === mode) return;
+      handleSelectMode(selectedMode);
+    },
+    [handleSelectMode, mode],
+  );
 
   /* ── Analyze Existing (from editor, with new JD) ───── */
 
@@ -1590,6 +1647,31 @@ function App() {
 
           <ThemeToggle />
 
+          <SignedIn>
+            {step !== "landing" && step !== "analyzing" && (
+              <div className="mode-switch" role="group" aria-label="Switch mode">
+                <button
+                  className={`header-btn ${mode === "ats" ? "btn-accent" : ""}`}
+                  onClick={() => handleSwitchMode("ats")}
+                >
+                  ATS
+                </button>
+                <button
+                  className={`header-btn ${mode === "edit" ? "btn-accent" : ""}`}
+                  onClick={() => handleSwitchMode("edit")}
+                >
+                  Edit
+                </button>
+                <button
+                  className={`header-btn ${mode === "create" ? "btn-accent" : ""}`}
+                  onClick={() => handleSwitchMode("create")}
+                >
+                  Create
+                </button>
+              </div>
+            )}
+          </SignedIn>
+
           <button
             className="header-btn header-btn-labeled"
             onClick={() => setShowTemplatePicker(true)}
@@ -1721,6 +1803,12 @@ function App() {
         {step === "analyzing" && loadingMessage}
       </div>
 
+      {modeToastMessage && (
+        <div className="mode-toast" role="status" aria-live="polite">
+          {modeToastMessage}
+        </div>
+      )}
+
       {/* Step Indicator — only for active flows (not landing) */}
       {mode && step !== "analyzing" && step !== "landing" && (
         <nav className="step-indicator" aria-label="Progress">
@@ -1731,6 +1819,26 @@ function App() {
                 <div className="step-number">{i + 1}</div>
                 <span>{s.label}</span>
               </div>
+            </span>
+          ))}
+        </nav>
+      )}
+
+      {isCompactScreen && mode && step !== "analyzing" && step !== "landing" && (
+        <nav className="mobile-breadcrumb" aria-label="Current flow">
+          <button
+            className="mobile-breadcrumb-home"
+            onClick={handleBackToLanding}
+          >
+            Home
+          </button>
+          {getStepConfig().map((s) => (
+            <span
+              key={`crumb-${s.key}`}
+              className={`mobile-breadcrumb-item ${getStepStatus(s.key)}`}
+            >
+              <ChevronRight size={12} />
+              {s.label}
             </span>
           ))}
         </nav>
@@ -1862,27 +1970,25 @@ function App() {
               <div className="landing-shared-action">
                 <p className="landing-selection-copy">
                   {pendingMode
-                    ? `Selected: ${getModeTitle(pendingMode)}`
-                    : "Choose one option above, then sign in to continue."}
+                    ? `Selected: ${getModeTitle(pendingMode)}. Sign-in opens automatically when you tap a card.`
+                    : "Choose one option above to sign in and continue."}
                 </p>
-                <SignInButton mode="modal">
-                  <button
-                    className="landing-primary-btn"
-                    disabled={!pendingMode || isAuthStarting}
-                    aria-busy={isAuthStarting}
-                    onClick={() => {
-                      if (!pendingMode) return;
-                      startSignInFlow(pendingMode);
-                    }}
-                  >
-                    <LogIn size={16} />
-                    {isAuthStarting
-                      ? "Opening Sign In..."
-                      : pendingMode
-                        ? "Sign In & Continue"
-                        : "Select an Option First"}
-                  </button>
-                </SignInButton>
+                <button
+                  className="landing-primary-btn"
+                  disabled={!pendingMode || isAuthStarting}
+                  aria-busy={isAuthStarting}
+                  onClick={() => {
+                    if (!pendingMode) return;
+                    startSignInFlow(pendingMode);
+                  }}
+                >
+                  <LogIn size={16} />
+                  {isAuthStarting
+                    ? "Opening Sign In..."
+                    : pendingMode
+                      ? "Continue to Sign In"
+                      : "Select an Option First"}
+                </button>
               </div>
             </SignedOut>
             <SignedIn>
@@ -1947,17 +2053,49 @@ function App() {
             <div className="input-hero">
               <h2>ATS Score & Optimize</h2>
               <p>
-                {resumeData
-                  ? "Your resume is loaded. Paste the job description below to run ATS analysis."
+                {resumeData && atsResumeSource === "existing"
+                  ? "Use your saved resume or switch to upload a new one for this ATS run."
                   : "Paste your resume and the target job description to get an ATS score."}
               </p>
             </div>
+
+            {resumeData && (
+              <div className="ats-source-choice" role="group" aria-label="Resume source">
+                <button
+                  className={`header-btn header-btn-labeled ${atsResumeSource === "existing" ? "btn-accent" : ""}`}
+                  onClick={() => {
+                    setAtsResumeSource("existing");
+                    setError(null);
+                  }}
+                >
+                  Use Existing Resume
+                </button>
+                <button
+                  className={`header-btn header-btn-labeled ${atsResumeSource === "new" ? "btn-accent" : ""}`}
+                  onClick={() => {
+                    setAtsResumeSource("new");
+                    setError(null);
+                  }}
+                >
+                  Upload New Resume
+                </button>
+              </div>
+            )}
+
+            {resumeData && atsResumeSource === "new" && (
+              <p className="ats-source-note">
+                You are analyzing a new resume. Your saved resume remains unchanged.
+              </p>
+            )}
+
             <div
               className={
-                resumeData ? "input-grid input-grid-single" : "input-grid"
+                resumeData && atsResumeSource === "existing"
+                  ? "input-grid input-grid-single"
+                  : "input-grid"
               }
             >
-              {!resumeData && (
+              {(!resumeData || atsResumeSource === "new") && (
                 <div className="input-card">
                   <div className="input-label-row">
                     <label className="input-label">
@@ -2066,7 +2204,7 @@ function App() {
             <div
               className={`input-actions-row ${useStickyMobileActions ? "input-actions-row-sticky" : ""}`}
             >
-              {resumeData ? (
+              {resumeData && atsResumeSource === "existing" ? (
                 <button
                   className="analyze-btn"
                   onClick={handleAnalyzeExisting}
@@ -2090,7 +2228,8 @@ function App() {
                   className="analyze-btn"
                   onClick={handleAnalyze}
                   disabled={
-                    !resumeText.trim() ||
+                    ((!resumeText.trim() && atsResumeSource === "new") ||
+                      (!resumeText.trim() && !resumeData)) ||
                     !jdText.trim() ||
                     isRateLimited("analyze", 30000)
                   }
@@ -2110,13 +2249,13 @@ function App() {
                 </button>
               )}
               {resumeData && (
-                <button
-                  className="btn-secondary"
-                  onClick={() => setStep("editor")}
-                >
+                <button className="btn-secondary" onClick={() => setStep("editor")}>
                   Back to Editor
                 </button>
               )}
+              <button className="btn-secondary" onClick={handleBackToLanding}>
+                Back
+              </button>
             </div>
           </div>
         )}
@@ -2218,6 +2357,9 @@ function App() {
             <div
               className={`input-actions-row ${useStickyMobileActions ? "input-actions-row-sticky" : ""}`}
             >
+              <button className="btn-secondary" onClick={handleBackToLanding}>
+                Back
+              </button>
               <button
                 className="analyze-btn"
                 onClick={handleParseResume}

@@ -85,6 +85,22 @@
   background: var(--accent-dark);
 }
 
+.mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.mode-switch .header-btn {
+  min-width: 58px;
+  justify-content: center;
+  padding: 6px 10px;
+}
+
 /* ─── Step Indicator ─────────────────────────────────── */
 
 .step-indicator {
@@ -179,6 +195,68 @@
   color: var(--text-secondary);
   font-size: 15px;
   margin: 0;
+}
+
+.ats-source-choice {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 0 0 20px;
+}
+
+.ats-source-note {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 12px;
+  color: #0f766e;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.mode-toast {
+  position: fixed;
+  top: 74px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1400;
+  background: #0f172a;
+  color: #f8fafc;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.25);
+}
+
+.mobile-breadcrumb {
+  display: none;
+}
+
+.mobile-breadcrumb-home {
+  border: none;
+  background: transparent;
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mobile-breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.mobile-breadcrumb-item.active,
+.mobile-breadcrumb-item.completed {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .input-grid {
@@ -989,6 +1067,24 @@
 /* ─── Responsive ─────────────────────────────────────── */
 
 @media (max-width: 900px) {
+  .mobile-breadcrumb {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 9;
+    gap: 6px;
+    align-items: center;
+    overflow-x: auto;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+    scrollbar-width: none;
+  }
+
+  .mobile-breadcrumb::-webkit-scrollbar {
+    display: none;
+  }
+
   .input-grid {
     grid-template-columns: 1fr;
   }
@@ -1069,6 +1165,14 @@
 }
 
 @media (max-width: 600px) {
+  .mode-switch {
+    gap: 4px;
+  }
+
+  .mode-switch .header-btn {
+    min-width: 44px;
+  }
+
   .app-header {
     padding: 6px 12px;
   }
@@ -1159,6 +1263,10 @@
   .step-indicator {
     padding: 8px 12px;
     gap: 6px;
+  }
+
+  .mode-toast {
+    top: 66px;
   }
 
   .step-number {

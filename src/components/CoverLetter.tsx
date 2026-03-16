@@ -169,9 +169,7 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
             disabled={isGenerating || !companyName.trim() || !position.trim()}
           >
             {isGenerating ? (
-              <>
-                Generating... {generationPercent}%
-              </>
+              <>Generating... {generationPercent}%</>
             ) : (
               <>
                 <Sparkles size={16} /> Generate Cover Letter
