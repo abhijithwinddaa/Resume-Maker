@@ -29,6 +29,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .logo-icon {
@@ -47,6 +48,14 @@
   gap: 8px;
   align-items: center;
   min-width: 0;
+  flex: 1 1 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  justify-content: flex-end;
+}
+
+.header-actions::-webkit-scrollbar {
+  display: none;
 }
 
 .header-btn {
@@ -1115,13 +1124,7 @@
   .header-actions {
     gap: 4px;
     flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    scrollbar-width: none;
-  }
-
-  .header-actions::-webkit-scrollbar {
-    display: none;
+    padding-bottom: 2px;
   }
 
   .header-btn {
