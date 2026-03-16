@@ -1498,6 +1498,13 @@
   padding: 60px 24px 40px;
   overflow-y: auto;
   height: 100%;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.landing-step::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .landing-hero {
