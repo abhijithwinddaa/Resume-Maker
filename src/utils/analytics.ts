@@ -70,12 +70,7 @@ function initClarity(): void {
   if (!CLARITY_PROJECT_ID || typeof window === "undefined") return;
   if (window.clarity) return;
 
-  ((
-    c: Window & typeof globalThis,
-    l: Document,
-    a: string,
-    i: string,
-  ) => {
+  ((c: Window & typeof globalThis, l: Document, a: string, i: string) => {
     c[a as "clarity"] =
       c[a as "clarity"] ||
       ((...args: unknown[]) => {
