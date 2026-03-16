@@ -967,6 +967,13 @@ function App() {
       return;
     }
 
+    if (mode === "ats" && atsResumeSource === "new") {
+      // New ATS upload should not reuse the currently saved resume in memory.
+      setResumeData(null, false);
+      setActiveResumeId(null);
+      setActiveResumeName(null);
+    }
+
     setUploadedFileName(file.name);
     setIsPdfLoading(true);
     setError(null);
@@ -1073,6 +1080,7 @@ function App() {
       trackEvent("pdf_upload_failed", {
         reason: err instanceof Error ? err.message : "unknown",
       });
+      setUploadedFileName(null);
       setError(err instanceof Error ? err.message : "Failed to read PDF");
       setStep("input");
     } finally {
@@ -1142,11 +1150,16 @@ function App() {
 
   const handleAnalyze = async () => {
     const requireNewResumeInput = mode === "ats" && atsResumeSource === "new";
+    const hasResumeText = resumeText.trim().length > 0;
+    const hasUploadedResume = Boolean(uploadedFileName);
+    const hasParsedResume = Boolean(resumeData);
+    const hasNewResumeInput = hasResumeText || hasUploadedResume || hasParsedResume;
 
-    if (!resumeText.trim() && (!resumeData || requireNewResumeInput)) return;
+    if (requireNewResumeInput && !hasNewResumeInput) return;
+    if (!requireNewResumeInput && !hasResumeText && !hasParsedResume) return;
     if (!jdText.trim()) return;
 
-    if (!resumeData || requireNewResumeInput) {
+    if (!resumeData) {
       const resumeValidation = validateResumeText(resumeText);
       if (!resumeValidation.valid) {
         setError(resumeValidation.error || "Invalid resume text.");
@@ -1174,7 +1187,7 @@ function App() {
     const controller = getRequestController("analyze");
 
     try {
-      let parsed = requireNewResumeInput ? null : resumeData;
+      let parsed = resumeData;
       if (!parsed) {
         setLoadingMessage("Parsing your resume with AI...");
         if (controller.signal.aborted) return;
@@ -2240,9 +2253,11 @@ function App() {
                   className="analyze-btn"
                   onClick={handleAnalyze}
                   disabled={
-                    (!resumeText.trim() && atsResumeSource === "new") ||
-                    (!resumeText.trim() && !resumeData) ||
+                    (atsResumeSource === "new"
+                      ? !resumeText.trim() && !uploadedFileName && !resumeData
+                      : !resumeText.trim() && !resumeData) ||
                     !jdText.trim() ||
+                    isPdfLoading ||
                     isRateLimited("analyze", 30000)
                   }
                 >
