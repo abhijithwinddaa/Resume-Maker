@@ -1673,7 +1673,11 @@
 
 .landing-card-selected {
   border-color: var(--accent-color);
-  background: color-mix(in srgb, var(--bg-primary) 88%, var(--accent-color) 12%);
+  background: color-mix(
+    in srgb,
+    var(--bg-primary) 88%,
+    var(--accent-color) 12%
+  );
   box-shadow: 0 12px 32px rgba(41, 128, 185, 0.18);
   transform: translateY(-4px);
 }

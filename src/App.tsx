@@ -1649,7 +1649,11 @@ function App() {
 
           <SignedIn>
             {step !== "landing" && step !== "analyzing" && (
-              <div className="mode-switch" role="group" aria-label="Switch mode">
+              <div
+                className="mode-switch"
+                role="group"
+                aria-label="Switch mode"
+              >
                 <button
                   className={`header-btn ${mode === "ats" ? "btn-accent" : ""}`}
                   onClick={() => handleSwitchMode("ats")}
@@ -1824,25 +1828,28 @@ function App() {
         </nav>
       )}
 
-      {isCompactScreen && mode && step !== "analyzing" && step !== "landing" && (
-        <nav className="mobile-breadcrumb" aria-label="Current flow">
-          <button
-            className="mobile-breadcrumb-home"
-            onClick={handleBackToLanding}
-          >
-            Home
-          </button>
-          {getStepConfig().map((s) => (
-            <span
-              key={`crumb-${s.key}`}
-              className={`mobile-breadcrumb-item ${getStepStatus(s.key)}`}
+      {isCompactScreen &&
+        mode &&
+        step !== "analyzing" &&
+        step !== "landing" && (
+          <nav className="mobile-breadcrumb" aria-label="Current flow">
+            <button
+              className="mobile-breadcrumb-home"
+              onClick={handleBackToLanding}
             >
-              <ChevronRight size={12} />
-              {s.label}
-            </span>
-          ))}
-        </nav>
-      )}
+              Home
+            </button>
+            {getStepConfig().map((s) => (
+              <span
+                key={`crumb-${s.key}`}
+                className={`mobile-breadcrumb-item ${getStepStatus(s.key)}`}
+              >
+                <ChevronRight size={12} />
+                {s.label}
+              </span>
+            ))}
+          </nav>
+        )}
 
       {/* Main Content */}
       <main className="app-main" id="main-content" role="main">
@@ -2060,7 +2067,11 @@ function App() {
             </div>
 
             {resumeData && (
-              <div className="ats-source-choice" role="group" aria-label="Resume source">
+              <div
+                className="ats-source-choice"
+                role="group"
+                aria-label="Resume source"
+              >
                 <button
                   className={`header-btn header-btn-labeled ${atsResumeSource === "existing" ? "btn-accent" : ""}`}
                   onClick={() => {
@@ -2084,7 +2095,8 @@ function App() {
 
             {resumeData && atsResumeSource === "new" && (
               <p className="ats-source-note">
-                You are analyzing a new resume. Your saved resume remains unchanged.
+                You are analyzing a new resume. Your saved resume remains
+                unchanged.
               </p>
             )}
 
@@ -2228,8 +2240,8 @@ function App() {
                   className="analyze-btn"
                   onClick={handleAnalyze}
                   disabled={
-                    ((!resumeText.trim() && atsResumeSource === "new") ||
-                      (!resumeText.trim() && !resumeData)) ||
+                    (!resumeText.trim() && atsResumeSource === "new") ||
+                    (!resumeText.trim() && !resumeData) ||
                     !jdText.trim() ||
                     isRateLimited("analyze", 30000)
                   }
@@ -2249,7 +2261,10 @@ function App() {
                 </button>
               )}
               {resumeData && (
-                <button className="btn-secondary" onClick={() => setStep("editor")}>
+                <button
+                  className="btn-secondary"
+                  onClick={() => setStep("editor")}
+                >
                   Back to Editor
                 </button>
               )}
@@ -2431,7 +2446,8 @@ function App() {
                 <div className="keyword-tags">
                   {uniqueStrings([
                     ...(atsResult.breakdown.keywordMatch.matchedKeywords || []),
-                    ...(atsResult.breakdown.skillsAlignment.matchedSkills || []),
+                    ...(atsResult.breakdown.skillsAlignment.matchedSkills ||
+                      []),
                   ]).map((k) => (
                     <span key={k} className="tag tag-match">
                       {k}
@@ -2446,7 +2462,8 @@ function App() {
                 <div className="keyword-tags">
                   {uniqueStrings([
                     ...(atsResult.breakdown.keywordMatch.missingKeywords || []),
-                    ...(atsResult.breakdown.skillsAlignment.missingSkills || []),
+                    ...(atsResult.breakdown.skillsAlignment.missingSkills ||
+                      []),
                   ]).map((k) => (
                     <span key={k} className="tag tag-missing">
                       {k}
