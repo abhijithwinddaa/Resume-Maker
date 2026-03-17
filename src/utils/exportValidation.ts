@@ -140,6 +140,78 @@ export function validateForExport(data: ResumeData): ExportValidationResult {
   };
 }
 
+/** Auto-fix all known typos in resume data, returning the corrected data and a list of fixes applied */
+export function autoFixTypos(
+  data: ResumeData,
+): { fixed: ResumeData; corrections: string[] } {
+  const corrections: string[] = [];
+  const clone: ResumeData = JSON.parse(JSON.stringify(data));
+
+  function fixString(text: string, path: string): string {
+    let result = text;
+    for (const rule of TYPO_RULES) {
+      if (rule.pattern.test(result)) {
+        corrections.push(`${path}: "${rule.wrong}" → "${rule.suggestion}"`);
+        result = result.replace(rule.pattern, rule.suggestion);
+      }
+    }
+    return result;
+  }
+
+  // Fix summary
+  clone.summary = fixString(clone.summary, "summary");
+
+  // Fix experience bullets
+  if (clone.experience) {
+    clone.experience.forEach((exp, i) => {
+      exp.role = fixString(exp.role, `experience[${i}].role`);
+      exp.company = fixString(exp.company, `experience[${i}].company`);
+      exp.bullets = exp.bullets.map((b, j) =>
+        fixString(b, `experience[${i}].bullets[${j}]`),
+      );
+    });
+  }
+
+  // Fix project fields
+  if (clone.projects) {
+    clone.projects.forEach((proj, i) => {
+      proj.title = fixString(proj.title, `projects[${i}].title`);
+      proj.techStack = fixString(proj.techStack, `projects[${i}].techStack`);
+      proj.bullets = proj.bullets.map((b, j) =>
+        fixString(b, `projects[${i}].bullets[${j}]`),
+      );
+    });
+  }
+
+  // Fix skills
+  if (clone.skills) {
+    clone.skills.forEach((skill, i) => {
+      skill.label = fixString(skill.label, `skills[${i}].label`);
+      skill.skills = fixString(skill.skills, `skills[${i}].skills`);
+    });
+  }
+
+  // Fix achievements
+  if (clone.achievements) {
+    clone.achievements.forEach((ach, i) => {
+      ach.text = fixString(ach.text, `achievements[${i}].text`);
+    });
+  }
+
+  // Fix certificates
+  if (clone.certificates) {
+    clone.certificates.forEach((cert, i) => {
+      cert.name = fixString(cert.name, `certificates[${i}].name`);
+      cert.description = fixString(
+        cert.description,
+        `certificates[${i}].description`,
+      );
+    });
+  }
+
+  return { fixed: clone, corrections };
+}
+
 /** Calculate resume completeness percentage */
 export function calculateCompleteness(data: ResumeData): {
   percentage: number;
