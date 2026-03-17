@@ -94,7 +94,6 @@ import {
   Undo2,
   Redo2,
   Palette,
-  Settings,
   FileType,
   Mail,
   FolderOpen,
@@ -110,7 +109,6 @@ const ResumeTemplate = lazy(() => import("./components/ResumeTemplate"));
 const ResumeEditor = lazy(() => import("./components/ResumeEditor"));
 const TemplatePicker = lazy(() => import("./components/TemplatePicker"));
 const CoverLetterPanel = lazy(() => import("./components/CoverLetter"));
-const AISettingsPanel = lazy(() => import("./components/AISettings"));
 const ResumeManagerPanel = lazy(() => import("./components/ResumeManager"));
 const PdfPreviewPanel = lazy(() => import("./components/PdfPreview"));
 const CLERK_SUPABASE_TEMPLATE =
@@ -356,7 +354,6 @@ function App() {
   // Panel visibility
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCoverLetter, setShowCoverLetter] = useState(false);
-  const [showAISettings, setShowAISettings] = useState(false);
   const [showResumeManager, setShowResumeManager] = useState(false);
 
   // Save status tracking
@@ -404,7 +401,6 @@ function App() {
       if (e.key === "Escape") {
         setShowTemplatePicker(false);
         setShowCoverLetter(false);
-        setShowAISettings(false);
         setShowResumeManager(false);
         return;
       }
@@ -1153,7 +1149,8 @@ function App() {
     const hasResumeText = resumeText.trim().length > 0;
     const hasUploadedResume = Boolean(uploadedFileName);
     const hasParsedResume = Boolean(resumeData);
-    const hasNewResumeInput = hasResumeText || hasUploadedResume || hasParsedResume;
+    const hasNewResumeInput =
+      hasResumeText || hasUploadedResume || hasParsedResume;
 
     if (requireNewResumeInput && !hasNewResumeInput) return;
     if (!requireNewResumeInput && !hasResumeText && !hasParsedResume) return;
@@ -1634,30 +1631,6 @@ function App() {
             <span className="save-indicator unsaved">Unsaved changes •</span>
           )}
 
-          {/* Undo/Redo */}
-          {step === "editor" && (
-            <>
-              <button
-                className="header-btn"
-                onClick={undo}
-                disabled={!canUndo()}
-                title="Undo (Ctrl+Z)"
-                aria-label="Undo"
-              >
-                <Undo2 size={14} />
-              </button>
-              <button
-                className="header-btn"
-                onClick={redo}
-                disabled={!canRedo()}
-                title="Redo (Ctrl+Y)"
-                aria-label="Redo"
-              >
-                <Redo2 size={14} />
-              </button>
-            </>
-          )}
-
           <ThemeToggle />
 
           <SignedIn>
@@ -1688,34 +1661,6 @@ function App() {
               </div>
             )}
           </SignedIn>
-
-          <button
-            className="header-btn header-btn-labeled"
-            onClick={() => setShowTemplatePicker(true)}
-            title="Templates & Style"
-            aria-label="Templates & Style"
-          >
-            <Palette size={14} />
-            <span>Templates & Style</span>
-          </button>
-
-          <button
-            className="header-btn"
-            onClick={() => setShowAISettings(true)}
-            title="Settings"
-            aria-label="Settings"
-          >
-            <Settings size={14} />
-          </button>
-
-          <button
-            className="header-btn"
-            onClick={() => setShowResumeManager(true)}
-            title="My Resumes"
-            aria-label="My Resumes"
-          >
-            <FolderOpen size={14} />
-          </button>
 
           {/* Show Original PDF toggle */}
           {originalPdfUrl && (step === "editor" || step === "score") && (
@@ -1828,17 +1773,74 @@ function App() {
 
       {/* Step Indicator — only for active flows (not landing) */}
       {mode && step !== "analyzing" && step !== "landing" && (
-        <nav className="step-indicator" aria-label="Progress">
-          {getStepConfig().map((s, i) => (
-            <span key={s.key} style={{ display: "contents" }}>
-              {i > 0 && <ChevronRight size={16} className="step-arrow" />}
-              <div className={`step-item ${getStepStatus(s.key)}`}>
-                <div className="step-number">{i + 1}</div>
-                <span>{s.label}</span>
-              </div>
-            </span>
-          ))}
-        </nav>
+        <>
+          <nav className="step-indicator" aria-label="Progress">
+            {getStepConfig().map((s, i) => (
+              <span key={s.key} style={{ display: "contents" }}>
+                {i > 0 && <ChevronRight size={16} className="step-arrow" />}
+                <div className={`step-item ${getStepStatus(s.key)}`}>
+                  <div className="step-number">{i + 1}</div>
+                  <span>{s.label}</span>
+                </div>
+              </span>
+            ))}
+          </nav>
+
+          <div
+            className="flow-toolbar"
+            role="toolbar"
+            aria-label="Quick actions"
+          >
+            <div className="flow-toolbar-group">
+              {step === "editor" && (
+                <>
+                  <button
+                    className="header-btn flow-btn"
+                    onClick={undo}
+                    disabled={!canUndo()}
+                    title="Undo (Ctrl+Z)"
+                    aria-label="Undo"
+                  >
+                    <Undo2 size={14} />
+                    <span>Back</span>
+                  </button>
+                  <button
+                    className="header-btn flow-btn"
+                    onClick={redo}
+                    disabled={!canRedo()}
+                    title="Redo (Ctrl+Y)"
+                    aria-label="Redo"
+                  >
+                    <Redo2 size={14} />
+                    <span>Forward</span>
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="flow-toolbar-group flow-toolbar-right">
+              <button
+                className="header-btn header-btn-labeled flow-btn"
+                onClick={() => setShowTemplatePicker(true)}
+                title="Templates & Style"
+                aria-label="Templates & Style"
+              >
+                <Palette size={14} />
+                <span>Templates & Style</span>
+              </button>
+
+              <button
+                className="header-btn header-btn-labeled flow-btn"
+                onClick={() => setShowResumeManager(true)}
+                title="Files"
+                aria-label="Files"
+              >
+                <FolderOpen size={14} />
+                <span>Files</span>
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {isCompactScreen &&
@@ -2730,11 +2732,6 @@ function App() {
       {showCoverLetter && (
         <Suspense fallback={null}>
           <CoverLetterPanel onClose={() => setShowCoverLetter(false)} />
-        </Suspense>
-      )}
-      {showAISettings && (
-        <Suspense fallback={null}>
-          <AISettingsPanel onClose={() => setShowAISettings(false)} />
         </Suspense>
       )}
       {showResumeManager && (
