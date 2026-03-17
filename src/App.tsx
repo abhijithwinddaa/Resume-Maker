@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { exportResumeToPDF } from "./utils/pdfExporter";
-import { validateForExport } from "./utils/exportValidation";
+import { validateForExport, autoFixTypos } from "./utils/exportValidation";
 import {
   useAuth,
   useUser,
@@ -854,18 +854,16 @@ function App() {
         setError(validation.errors.join("\n"));
         return;
       }
+      // Auto-fix typos before export
       if (validation.typoWarnings.length > 0) {
-        const proceed = window.confirm(
-          [
-            "Potential typo(s) found:",
-            ...validation.typoWarnings,
-            "",
-            "Click OK to export anyway, or Cancel to fix first.",
-          ].join("\n"),
-        );
-        if (!proceed) {
-          setError("Export canceled. Please fix typos and try again.");
-          return;
+        const { fixed, corrections } = autoFixTypos(resumeData);
+        if (corrections.length > 0) {
+          setResumeData(fixed);
+          setExportToastMessage(
+            `Auto-fixed ${corrections.length} typo${corrections.length > 1 ? "s" : ""}: ${corrections.map((c) => c.split(": ")[1]).join(", ")}`,
+          );
+          // Brief pause so user sees the toast and the hidden template re-renders with fixed data
+          await new Promise((r) => setTimeout(r, 600));
         }
       }
       setError(null);
@@ -1602,18 +1600,15 @@ function App() {
       setError(validation.errors.join("\n"));
       return;
     }
+    // Auto-fix typos before export
     if (validation.typoWarnings.length > 0) {
-      const proceed = window.confirm(
-        [
-          "Potential typo(s) found:",
-          ...validation.typoWarnings,
-          "",
-          "Click OK to export anyway, or Cancel to fix first.",
-        ].join("\n"),
-      );
-      if (!proceed) {
-        setError("Export canceled. Please fix typos and try again.");
-        return;
+      const { fixed, corrections } = autoFixTypos(resumeData);
+      if (corrections.length > 0) {
+        setResumeData(fixed);
+        setExportToastMessage(
+          `Auto-fixed ${corrections.length} typo${corrections.length > 1 ? "s" : ""}: ${corrections.map((c) => c.split(": ")[1]).join(", ")}`,
+        );
+        await new Promise((r) => setTimeout(r, 600));
       }
     }
     setError(null);
