@@ -8,7 +8,7 @@ import {
   Suspense,
   useState,
 } from "react";
-import { exportResumeToPDF } from "./utils/pdfExporter";
+import { useReactToPrint } from "react-to-print";
 import { validateForExport, autoFixTypos } from "./utils/exportValidation";
 import {
   useAuth,
@@ -398,6 +398,24 @@ function App() {
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const resumeRef = useRef<HTMLDivElement>(null);
+
+  const reactToPrintFn = useReactToPrint({
+    contentRef: resumeRef,
+    documentTitle: resumeData
+      ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
+      : "Resume",
+    onAfterPrint: () => {
+      setIsExporting(false);
+      setExportToastMessage(null);
+    },
+    onPrintError: (error) => {
+      console.error("PDF export failed:", error);
+      trackEvent("resume_export_failed", { format: "pdf" });
+      setError("PDF export failed. Please try again.");
+      setIsExporting(false);
+      setExportToastMessage(null);
+    },
+  });
   const abortRef = useRef<AbortController | null>(null);
   const authStartTimeoutRef = useRef<number | null>(null);
   const activeResumeIdRef = useRef<string | null>(activeResumeId);
@@ -875,35 +893,35 @@ function App() {
       }
       setError(null);
     }
-    const fileName = resumeData
-      ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
-      : "Resume";
     setIsExporting(true);
-    setExportToastMessage("Generating PDF...");
+    setExportToastMessage("Preparing PDF...");
+    
+    trackEvent("resume_exported", {
+      format: "pdf",
+      has_resume_data: Boolean(resumeData),
+      embedded_resume_data: privacySettings.embedResumeDataInPdf,
+    });
+    setPreferredExportFormat("pdf");
     try {
-      await exportResumeToPDF(el, fileName, resumeData ?? undefined, {
-        embedResumeData: privacySettings.embedResumeDataInPdf,
-      });
-      trackEvent("resume_exported", {
-        format: "pdf",
-        has_resume_data: Boolean(resumeData),
-        embedded_resume_data: privacySettings.embedResumeDataInPdf,
-      });
-      setPreferredExportFormat("pdf");
-      try {
-        localStorage.setItem("preferred-export-format", "pdf");
-      } catch {
-        /* ignore */
-      }
+      localStorage.setItem("preferred-export-format", "pdf");
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      reactToPrintFn();
     } catch (err) {
-      console.error("PDF export failed:", err);
-      trackEvent("resume_export_failed", { format: "pdf" });
-      setError("PDF export failed. Please try again.");
-    } finally {
+      console.error("react-to-print failed:", err);
+      setError("Failed to open print dialog.");
       setIsExporting(false);
       setExportToastMessage(null);
     }
-  }, [privacySettings.embedResumeDataInPdf, resumeData, setError]);
+  }, [
+    privacySettings.embedResumeDataInPdf,
+    resumeData,
+    setError,
+    reactToPrintFn,
+  ]);
 
   /* ── Mode Selection (landing page) ───────────────── */
 
