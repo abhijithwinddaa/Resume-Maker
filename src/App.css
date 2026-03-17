@@ -1461,21 +1461,130 @@
 /* ─── Save Indicator ────────────────────────────────── */
 
 .save-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: #94a3b8;
   font-style: italic;
   padding: 4px 8px;
-  animation: pulse 1.5s ease-in-out infinite;
+  transition: opacity 0.4s ease;
+}
+
+.save-indicator::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+  animation: save-pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
 }
 
 .save-indicator.saved {
   color: #22c55e;
+  animation: save-fade 3s ease forwards;
+}
+
+.save-indicator.saved::before {
+  background: #22c55e;
   animation: none;
 }
 
 .save-indicator.unsaved {
   color: #f59e0b;
+}
+
+.save-indicator.unsaved::before {
+  background: #f59e0b;
   animation: none;
+}
+
+@keyframes save-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+@keyframes save-fade {
+  0%, 60% { opacity: 1; }
+  100% { opacity: 0.35; }
+}
+
+/* ─── Export Progress Toast ──────────────────────────── */
+
+.export-toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  background: #0f172a;
+  color: #f1f5f9;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  animation: export-toast-enter 0.3s ease;
+}
+
+.export-toast-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: export-spin 0.7s linear infinite;
+}
+
+@keyframes export-toast-enter {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes export-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Mobile Export Buttons ──────────────────────────── */
+
+.mobile-export-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mobile-export-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: "Inter", sans-serif;
+  transition: all 0.2s;
+}
+
+.mobile-export-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary-mobile {
+  background: var(--accent-color);
+  color: white;
+  border: none;
+}
+
+.btn-primary-mobile:hover:not(:disabled) {
+  background: var(--accent-dark);
 }
 
 @keyframes pulse {
