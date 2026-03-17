@@ -5,9 +5,28 @@ export interface ExportValidationResult {
   errors: string[];
   hasPlaceholders: boolean;
   placeholderSections: string[];
+  typoWarnings: string[];
 }
 
 const PLACEHOLDER_PATTERN = /\[PLACEHOLDER|\[CONFIRM|\[TODO|\[FILL/i;
+
+interface TypoRule {
+  pattern: RegExp;
+  wrong: string;
+  suggestion: string;
+}
+
+const TYPO_RULES: TypoRule[] = [
+  { pattern: /\bSocket\.I0\b/i, wrong: "Socket.I0", suggestion: "Socket.IO" },
+  { pattern: /\bGrog\s+LLM\b/i, wrong: "Grog LLM", suggestion: "Groq LLM" },
+  { pattern: /\bOpenAl\b/i, wrong: "OpenAl", suggestion: "OpenAI" },
+  { pattern: /\bUl\s+flows\b/i, wrong: "Ul flows", suggestion: "UI flows" },
+  {
+    pattern: /\b0S\/?Android\b/i,
+    wrong: "0S/Android",
+    suggestion: "OS/Android",
+  },
+];
 
 /** Scan a string for placeholder patterns */
 function containsPlaceholder(text: string): boolean {
@@ -29,6 +48,41 @@ function findPlaceholders(obj: unknown, path: string, results: string[]): void {
   if (obj && typeof obj === "object") {
     for (const [key, value] of Object.entries(obj)) {
       findPlaceholders(value, path ? `${path}.${key}` : key, results);
+    }
+  }
+}
+
+/** Scan all string values for known high-impact technical typos */
+function findKnownTypos(
+  obj: unknown,
+  path: string,
+  results: string[],
+  seen: Set<string>,
+): void {
+  if (typeof obj === "string") {
+    const text = obj.trim();
+    if (!text) return;
+
+    for (const rule of TYPO_RULES) {
+      if (!rule.pattern.test(text)) continue;
+      const key = `${path}|${rule.wrong}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(`${path}: \"${rule.wrong}\" -> \"${rule.suggestion}\"`);
+    }
+    return;
+  }
+
+  if (Array.isArray(obj)) {
+    obj.forEach((item, i) =>
+      findKnownTypos(item, `${path}[${i}]`, results, seen),
+    );
+    return;
+  }
+
+  if (obj && typeof obj === "object") {
+    for (const [key, value] of Object.entries(obj)) {
+      findKnownTypos(value, path ? `${path}.${key}` : key, results, seen);
     }
   }
 }
@@ -74,11 +128,21 @@ export function validateForExport(data: ResumeData): ExportValidationResult {
     );
   }
 
+  const typoWarnings: string[] = [];
+  findKnownTypos(data, "", typoWarnings, new Set<string>());
+  if (typoWarnings.length > 0) {
+    errors.push(
+      "Potential typo(s) found in resume content. Please correct these before exporting:",
+      ...typoWarnings,
+    );
+  }
+
   return {
     valid: errors.length === 0,
     errors,
     hasPlaceholders: placeholderSections.length > 0,
     placeholderSections,
+    typoWarnings,
   };
 }
 
