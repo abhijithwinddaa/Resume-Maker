@@ -101,6 +101,36 @@ function wrapLine(line: string, maxLen = 140): string[] {
   return chunks;
 }
 
+/**
+ * Some renderers can produce a tiny trailing white slice that appears as
+ * an extra blank page in the exported PDF. Sample pixels to detect this.
+ */
+function isCanvasMostlyWhite(canvas: HTMLCanvasElement): boolean {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return false;
+
+  const { width, height } = canvas;
+  if (width === 0 || height === 0) return true;
+
+  const step = Math.max(1, Math.floor(Math.min(width, height) / 120));
+  let sampled = 0;
+  let nonWhite = 0;
+
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
+      const [r, g, b, a] = ctx.getImageData(x, y, 1, 1).data;
+      sampled += 1;
+      // Treat any non-transparent or darker pixel as content.
+      if (a > 245 && (r < 248 || g < 248 || b < 248)) {
+        nonWhite += 1;
+      }
+    }
+  }
+
+  if (sampled === 0) return true;
+  return nonWhite / sampled < 0.0015;
+}
+
 export async function exportResumeToPDF(
   element: HTMLElement,
   fileName: string = "Resume",
@@ -196,6 +226,14 @@ export async function exportResumeToPDF(
       canvas.width,
       sliceHeight,
     );
+
+    const tinySlice = sliceHeight < pagePixelHeight * 0.12;
+    const trailingPage = pageIndex > 0;
+    if (trailingPage && (tinySlice || pageIndex === pageCount - 1)) {
+      if (isCanvasMostlyWhite(sliceCanvas)) {
+        continue;
+      }
+    }
 
     const pngDataUrl = sliceCanvas.toDataURL("image/png", 1.0);
     const pngBytes = Uint8Array.from(atob(pngDataUrl.split(",")[1]), (c) =>
