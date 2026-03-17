@@ -837,6 +837,21 @@ function App() {
         setError(validation.errors.join("\n"));
         return;
       }
+      if (validation.typoWarnings.length > 0) {
+        const proceed = window.confirm(
+          [
+            "Potential typo(s) found:",
+            ...validation.typoWarnings,
+            "",
+            "Click OK to export anyway, or Cancel to fix first.",
+          ].join("\n"),
+        );
+        if (!proceed) {
+          setError("Export canceled. Please fix typos and try again.");
+          return;
+        }
+      }
+      setError(null);
     }
     const fileName = resumeData
       ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
@@ -1556,6 +1571,21 @@ function App() {
       setError(validation.errors.join("\n"));
       return;
     }
+    if (validation.typoWarnings.length > 0) {
+      const proceed = window.confirm(
+        [
+          "Potential typo(s) found:",
+          ...validation.typoWarnings,
+          "",
+          "Click OK to export anyway, or Cancel to fix first.",
+        ].join("\n"),
+      );
+      if (!proceed) {
+        setError("Export canceled. Please fix typos and try again.");
+        return;
+      }
+    }
+    setError(null);
     try {
       await exportToDocx(resumeData);
       trackEvent("resume_exported", { format: "docx" });

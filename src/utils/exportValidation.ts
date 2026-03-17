@@ -130,12 +130,6 @@ export function validateForExport(data: ResumeData): ExportValidationResult {
 
   const typoWarnings: string[] = [];
   findKnownTypos(data, "", typoWarnings, new Set<string>());
-  if (typoWarnings.length > 0) {
-    errors.push(
-      "Potential typo(s) found in resume content. Please correct these before exporting:",
-      ...typoWarnings,
-    );
-  }
 
   return {
     valid: errors.length === 0,
