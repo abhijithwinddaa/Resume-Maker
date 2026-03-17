@@ -375,6 +375,20 @@ function App() {
   const [atsResumeSource, setAtsResumeSource] = useState<"existing" | "new">(
     "existing",
   );
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportToastMessage, setExportToastMessage] = useState<string | null>(
+    null,
+  );
+  const [preferredExportFormat, setPreferredExportFormat] = useState<
+    "pdf" | "docx"
+  >(() => {
+    try {
+      const saved = localStorage.getItem("preferred-export-format");
+      return saved === "docx" ? "docx" : "pdf";
+    } catch {
+      return "pdf";
+    }
+  });
 
   // Deferred auth: track which mode was selected before sign-in
   const [pendingMode, setPendingMode] = useState<AppMode>(null);
@@ -830,7 +844,10 @@ function App() {
 
   const handleExportPDF = useCallback(async () => {
     const el = resumeRef.current;
-    if (!el) return;
+    if (!el) {
+      setError("Resume preview not available for export. Please try again.");
+      return;
+    }
     if (resumeData) {
       const validation = validateForExport(resumeData);
       if (!validation.valid) {
@@ -856,6 +873,8 @@ function App() {
     const fileName = resumeData
       ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
       : "Resume";
+    setIsExporting(true);
+    setExportToastMessage("Generating PDF...");
     try {
       await exportResumeToPDF(el, fileName, resumeData ?? undefined, {
         embedResumeData: privacySettings.embedResumeDataInPdf,
@@ -865,10 +884,19 @@ function App() {
         has_resume_data: Boolean(resumeData),
         embedded_resume_data: privacySettings.embedResumeDataInPdf,
       });
+      setPreferredExportFormat("pdf");
+      try {
+        localStorage.setItem("preferred-export-format", "pdf");
+      } catch {
+        /* ignore */
+      }
     } catch (err) {
       console.error("PDF export failed:", err);
       trackEvent("resume_export_failed", { format: "pdf" });
       setError("PDF export failed. Please try again.");
+    } finally {
+      setIsExporting(false);
+      setExportToastMessage(null);
     }
   }, [privacySettings.embedResumeDataInPdf, resumeData, setError]);
 
@@ -1565,7 +1593,10 @@ function App() {
   };
 
   const handleExportDocx = async () => {
-    if (!resumeData) return;
+    if (!resumeData) {
+      setError("No resume data to export. Please create or load a resume first.");
+      return;
+    }
     const validation = validateForExport(resumeData);
     if (!validation.valid) {
       setError(validation.errors.join("\n"));
@@ -1586,12 +1617,23 @@ function App() {
       }
     }
     setError(null);
+    setIsExporting(true);
+    setExportToastMessage("Generating DOCX...");
     try {
       await exportToDocx(resumeData);
       trackEvent("resume_exported", { format: "docx" });
+      setPreferredExportFormat("docx");
+      try {
+        localStorage.setItem("preferred-export-format", "docx");
+      } catch {
+        /* ignore */
+      }
     } catch (err) {
       trackEvent("resume_export_failed", { format: "docx" });
       setError(err instanceof Error ? err.message : "DOCX export failed");
+    } finally {
+      setIsExporting(false);
+      setExportToastMessage(null);
     }
   };
 
@@ -1763,16 +1805,18 @@ function App() {
                 </>
               )}
               <button
-                className="header-btn"
+                className={`header-btn ${preferredExportFormat === "docx" ? "btn-primary" : ""}`}
                 onClick={handleExportDocx}
+                disabled={isExporting}
                 title="Export as DOCX"
               >
                 <FileType size={14} />
                 <span>DOCX</span>
               </button>
               <button
-                className="header-btn btn-primary"
+                className={`header-btn ${preferredExportFormat === "pdf" ? "btn-primary" : ""}`}
                 onClick={handleExportPDF}
+                disabled={isExporting}
               >
                 <Download size={14} />
                 <span>Export PDF</span>
@@ -1798,6 +1842,14 @@ function App() {
       {modeToastMessage && (
         <div className="mode-toast" role="status" aria-live="polite">
           {modeToastMessage}
+        </div>
+      )}
+
+      {/* Export progress toast */}
+      {exportToastMessage && (
+        <div className="export-toast" role="status" aria-live="polite">
+          <span className="export-toast-spinner" />
+          {exportToastMessage}
         </div>
       )}
 
@@ -2658,6 +2710,22 @@ function App() {
                   >
                     <Eye size={16} /> Show Resume
                   </button>
+                  <div className="mobile-export-row">
+                    <button
+                      className="btn-secondary mobile-export-btn"
+                      onClick={handleExportDocx}
+                      disabled={isExporting}
+                    >
+                      <FileType size={14} /> DOCX
+                    </button>
+                    <button
+                      className="btn-primary-mobile mobile-export-btn"
+                      onClick={handleExportPDF}
+                      disabled={isExporting}
+                    >
+                      <Download size={14} /> Export PDF
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2667,7 +2735,7 @@ function App() {
                 <div className="preview-container">
                   <ErrorBoundary>
                     <Suspense fallback={<PreviewSkeleton />}>
-                      <ResumeTemplate ref={resumeRef} data={resumeData} />
+                      <ResumeTemplate data={resumeData} />
                     </Suspense>
                   </ErrorBoundary>
                 </div>
@@ -2688,6 +2756,22 @@ function App() {
                   >
                     <Eye size={16} /> Show Resume
                   </button>
+                  <div className="mobile-export-row">
+                    <button
+                      className="btn-secondary mobile-export-btn"
+                      onClick={handleExportDocx}
+                      disabled={isExporting}
+                    >
+                      <FileType size={14} /> DOCX
+                    </button>
+                    <button
+                      className="btn-primary-mobile mobile-export-btn"
+                      onClick={handleExportPDF}
+                      disabled={isExporting}
+                    >
+                      <Download size={14} /> Export PDF
+                    </button>
+                  </div>
                 </div>
               )}
               <StyleDetectedBadge />
@@ -2705,7 +2789,7 @@ function App() {
                 <div className="preview-container">
                   <ErrorBoundary>
                     <Suspense fallback={<PreviewSkeleton />}>
-                      <ResumeTemplate ref={resumeRef} data={resumeData} />
+                      <ResumeTemplate data={resumeData} />
                     </Suspense>
                   </ErrorBoundary>
                 </div>
@@ -2743,7 +2827,7 @@ function App() {
                   <div className="preview-container">
                     <ErrorBoundary>
                       <Suspense fallback={<PreviewSkeleton />}>
-                        <ResumeTemplate ref={resumeRef} data={resumeData} />
+                        <ResumeTemplate data={resumeData} />
                       </Suspense>
                     </ErrorBoundary>
                   </div>
@@ -2752,6 +2836,28 @@ function App() {
             </div>
           )}
       </main>
+
+      {/* Hidden off-screen ResumeTemplate — always mounted for PDF export */}
+      {resumeData && (
+        <div
+          style={{
+            position: "fixed",
+            left: "-9999px",
+            top: 0,
+            width: "210mm",
+            opacity: 0,
+            pointerEvents: "none",
+            zIndex: -1,
+          }}
+          aria-hidden="true"
+        >
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <ResumeTemplate ref={resumeRef} data={resumeData} />
+            </Suspense>
+          </ErrorBoundary>
+        </div>
+      )}
 
       {/* Modals/Panels */}
       {showTemplatePicker && (
