@@ -43,16 +43,22 @@ describe("export validation typo checks", () => {
 
     const result = validateForExport(resume);
 
-    expect(result.valid).toBe(false);
+    expect(result.valid).toBe(true);
     expect(result.typoWarnings.length).toBeGreaterThanOrEqual(5);
-    expect(result.errors.some((e) => e.includes("Potential typo(s) found"))).toBe(
-      true,
+    expect(result.errors).toHaveLength(0);
+    expect(result.typoWarnings.join("\n")).toContain(
+      '"Socket.I0" -> "Socket.IO"',
     );
-    expect(result.typoWarnings.join("\n")).toContain('"Socket.I0" -> "Socket.IO"');
-    expect(result.typoWarnings.join("\n")).toContain('"Grog LLM" -> "Groq LLM"');
+    expect(result.typoWarnings.join("\n")).toContain(
+      '"Grog LLM" -> "Groq LLM"',
+    );
     expect(result.typoWarnings.join("\n")).toContain('"OpenAl" -> "OpenAI"');
-    expect(result.typoWarnings.join("\n")).toContain('"Ul flows" -> "UI flows"');
-    expect(result.typoWarnings.join("\n")).toContain('"0S/Android" -> "OS/Android"');
+    expect(result.typoWarnings.join("\n")).toContain(
+      '"Ul flows" -> "UI flows"',
+    );
+    expect(result.typoWarnings.join("\n")).toContain(
+      '"0S/Android" -> "OS/Android"',
+    );
   });
 
   it("passes when required fields exist and no known typos are present", () => {
