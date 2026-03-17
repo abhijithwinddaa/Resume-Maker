@@ -5,7 +5,7 @@
    ────────────────────────────────────────────────────── */
 
 import * as pdfjsLib from "pdfjs-dist";
-import { RESUME_DATA_MARKER } from "./pdfExporter";
+const RESUME_DATA_MARKER = "%%RESUME_MAKER_DATA_V1%%";
 import type { ResumeData } from "../types/resume";
 
 // Fallback: main-thread worker setup
