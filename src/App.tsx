@@ -843,7 +843,7 @@ function App() {
   );
 
   const handleExportPDF = useCallback(async () => {
-    const el = resumeRef.current;
+    let el = resumeRef.current;
     if (!el) {
       setError("Resume preview not available for export. Please try again.");
       return;
@@ -864,6 +864,13 @@ function App() {
           );
           // Brief pause so user sees the toast and the hidden template re-renders with fixed data
           await new Promise((r) => setTimeout(r, 600));
+          
+          // Re-acquire the freshly rendered DOM element
+          el = resumeRef.current;
+          if (!el) {
+             setError("Resume preview not available for export. Please try again.");
+             return;
+          }
         }
       }
       setError(null);

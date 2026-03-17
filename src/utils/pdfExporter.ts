@@ -70,12 +70,13 @@ function collectLinkRects(container: HTMLElement): LinkRect[] {
   return links;
 }
 
-function collectNormalizedText(container: HTMLElement): string {
-  return container.innerText
-    .replace(/\u00A0/g, " ")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+export interface TextRect {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize: number;
 }
 
 function sanitizePdfText(text: string): string {
@@ -85,20 +86,60 @@ function sanitizePdfText(text: string): string {
     .trim();
 }
 
-function wrapLine(line: string, maxLen = 140): string[] {
-  if (line.length <= maxLen) return [line];
+/** 
+ * Use a TreeWalker to find all visible text nodes and compute their exact 
+ * bounding boxes and font sizes relative to the container. 
+ * This allows overlaying invisible text on the PDF perfectly matching the visual image.
+ */
+function collectTextRects(container: HTMLElement): TextRect[] {
+  const containerRect = container.getBoundingClientRect();
+  const rects: TextRect[] = [];
 
-  const chunks: string[] = [];
-  let remaining = line;
-  while (remaining.length > maxLen) {
-    const slice = remaining.slice(0, maxLen);
-    const lastSpace = slice.lastIndexOf(" ");
-    const breakAt = lastSpace > 24 ? lastSpace : maxLen;
-    chunks.push(remaining.slice(0, breakAt).trim());
-    remaining = remaining.slice(breakAt).trimStart();
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_TEXT,
+    null,
+  );
+
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    const text = node.nodeValue?.trim();
+    if (!text) continue;
+
+    const parent = node.parentElement;
+    if (!parent) continue;
+
+    // Skip hidden elements
+    const style = window.getComputedStyle(parent);
+    if (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      style.opacity === "0"
+    ) {
+      continue;
+    }
+
+    // Use a Range to get the exact bounding box of just the text node 
+    // (not taking up the full width of block parents)
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const rect = range.getBoundingClientRect();
+
+    if (rect.width === 0 || rect.height === 0) continue;
+
+    const fontSize = parseFloat(style.fontSize) || 12;
+
+    rects.push({
+      text: sanitizePdfText(text),
+      x: rect.left - containerRect.left,
+      y: rect.top - containerRect.top,
+      width: rect.width,
+      height: rect.height,
+      fontSize,
+    });
   }
-  if (remaining.length > 0) chunks.push(remaining);
-  return chunks;
+
+  return rects;
 }
 
 /**
@@ -151,7 +192,7 @@ export async function exportResumeToPDF(
   const { PDFDocument } = pdfLib;
 
   const links = collectLinkRects(element);
-  const normalizedText = collectNormalizedText(element);
+  const textRects = collectTextRects(element);
   const elementWidth = Math.max(1, element.offsetWidth);
 
   const scale = isSafariOrIOS() ? 2 : 2.5;
@@ -187,21 +228,8 @@ export async function exportResumeToPDF(
   const cssPageHeight = pagePixelHeight / scale;
   const pointsPerCssPx = A4_WIDTH_PT / elementWidth;
 
-  const lines = normalizedText
-    .split(/\r?\n/)
-    .map((line) => sanitizePdfText(line))
-    .filter((line) => line.length > 0)
-    .flatMap((line) => wrapLine(line));
-  const textLines = lines.length > 0 ? lines : ["Resume"];
-  const linesPerPage = Math.max(1, Math.ceil(textLines.length / pageCount));
-  const textMarginX = 20;
-  const textTopY = A4_HEIGHT_PT - 22;
-  const textLineHeight = 10;
-
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(pdfLib.StandardFonts.Helvetica);
-
-  let lineCursor = 0;
 
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
     const srcY = pageIndex * pagePixelHeight;
@@ -252,29 +280,40 @@ export async function exportResumeToPDF(
     });
 
     const pageFontKey = page.node.newFontDictionary("Helvetica", font.ref);
-    const pageLineEnd = Math.min(lineCursor + linesPerPage, textLines.length);
-    let y = textTopY;
-    for (let i = lineCursor; i < pageLineEnd; i += 1) {
-      const safe = sanitizePdfText(textLines[i]);
-      if (!safe) continue;
-
-      page.pushOperators(
-        pdfLib.pushGraphicsState(),
-        pdfLib.beginText(),
-        pdfLib.setTextRenderingMode(pdfLib.TextRenderingMode.Invisible),
-        pdfLib.setFontAndSize(pageFontKey, 8),
-        pdfLib.moveText(textMarginX, y),
-        pdfLib.showText(font.encodeText(safe)),
-        pdfLib.endText(),
-        pdfLib.popGraphicsState(),
-      );
-      y -= textLineHeight;
-      if (y < 14) break;
-    }
-    lineCursor = pageLineEnd;
-
+    
+    // Render text nodes that fall into this page
     const pageStartCssY = pageIndex * cssPageHeight;
     const pageEndCssY = pageStartCssY + cssPageHeight;
+    
+    for (const textRect of textRects) {
+      // Check if text is mostly within this page
+      const textCenterY = textRect.y + textRect.height / 2;
+      if (textCenterY >= pageStartCssY && textCenterY < pageEndCssY) {
+        
+        const localY = textRect.y - pageStartCssY;
+        
+        // Convert CSS coordinates to PDF points
+        const pdfX = textRect.x * pointsPerCssPx;
+        // PDF Y coordinate (0 is at bottom)
+        const pdfY = A4_HEIGHT_PT - (localY + textRect.height) * pointsPerCssPx;
+        
+        // Approximate PDF font size
+        const pdfFontSize = textRect.fontSize * pointsPerCssPx;
+
+        page.pushOperators(
+          pdfLib.pushGraphicsState(),
+          pdfLib.beginText(),
+          pdfLib.setTextRenderingMode(pdfLib.TextRenderingMode.Invisible),
+          pdfLib.setFontAndSize(pageFontKey, pdfFontSize),
+          // Slight vertical adjustment because moveText sets the baseline, not the top border
+          pdfLib.moveText(pdfX, pdfY + (pdfFontSize * 0.2)),
+          pdfLib.showText(font.encodeText(textRect.text)),
+          pdfLib.endText(),
+          pdfLib.popGraphicsState(),
+        );
+      }
+    }
+
     for (const link of links) {
       const segTop = Math.max(link.y, pageStartCssY);
       const segBottom = Math.min(link.y + link.height, pageEndCssY);
