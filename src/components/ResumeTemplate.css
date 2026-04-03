@@ -486,6 +486,26 @@
   letter-spacing: 0.2px;
 }
 
+.template-portfolio .portfolio-project-links {
+  font-size: 8.2pt;
+  color: #8a8f98;
+}
+
+.template-portfolio .portfolio-project-links a {
+  color: #2b9dcf;
+  text-decoration: none;
+}
+
+.template-portfolio .portfolio-project-links a:hover {
+  text-decoration: underline;
+}
+
+.template-portfolio .portfolio-project-tech {
+  margin: 0 0 2px;
+  font-size: 8.45pt;
+  color: #4b5563;
+}
+
 .template-portfolio .portfolio-project-tag {
   color: #8a8f98;
   font-size: 8.2pt;
@@ -509,6 +529,12 @@
   margin-bottom: 1px;
   font-size: 8.65pt;
   color: #3f3f46;
+}
+
+.template-portfolio .portfolio-achievement-link {
+  color: #2b9dcf;
+  font-size: 8.4pt;
+  margin-left: 4px;
 }
 
 .template-portfolio .portfolio-project-bullets li::before,

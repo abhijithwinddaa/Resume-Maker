@@ -413,10 +413,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                     {getSectionTitle("projects")}
                   </h2>
                   {projects.map((project, i) => {
-                    const projectTag = project.techStack
-                      .split(/[|,]/)
-                      .map((chunk) => chunk.trim())
-                      .filter(Boolean)[0];
+                    const hasProjectLinks = Boolean(
+                      project.githubLink || project.liveLink,
+                    );
 
                     return (
                       <div
@@ -425,12 +424,41 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                       >
                         <div className="project-header portfolio-project-header">
                           <span className="project-title">{project.title}</span>
-                          {projectTag && (
-                            <span className="portfolio-project-tag">
-                              | {projectTag}
+                          {hasProjectLinks && (
+                            <span className="project-links portfolio-project-links">
+                              {project.githubLink && (
+                                <>
+                                  {" | "}
+                                  <a
+                                    href={project.githubLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Github
+                                  </a>
+                                </>
+                              )}
+                              {project.liveLink && (
+                                <>
+                                  {" | "}
+                                  <a
+                                    href={project.liveLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Live Demo
+                                  </a>
+                                </>
+                              )}
                             </span>
                           )}
                         </div>
+                        {project.techStack.trim() && (
+                          <div className="project-tech portfolio-project-tech">
+                            <strong>Tech Stack:</strong>{" "}
+                            {highlightText(project.techStack)}
+                          </div>
+                        )}
                         <ul className="project-bullets portfolio-project-bullets">
                           {project.bullets
                             .filter((bullet) => bullet.trim())
@@ -486,7 +514,22 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                   </h2>
                   <ul className="achievements-list portfolio-achievements-list">
                     {achievements.map((achievement, i) => (
-                      <li key={i}>{highlightText(achievement.text)}</li>
+                      <li key={i}>
+                        {highlightText(achievement.text)}
+                        {achievement.githubLink && (
+                          <>
+                            {" "}
+                            <a
+                              href={achievement.githubLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="github-badge portfolio-achievement-link"
+                            >
+                              GITHUB LINK
+                            </a>
+                          </>
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </section>
