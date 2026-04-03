@@ -30,6 +30,7 @@ Create a `.env` file in the project root:
 ```env
 # Clerk
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_key
+CLERK_SECRET_KEY=sk_test_your_clerk_secret
 
 # Supabase
 VITE_SUPABASE_URL=https://your-project.supabase.co

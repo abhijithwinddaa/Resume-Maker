@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@clerk/clerk-react";
 import { Check, MessageSquare, Shield, Star, X } from "lucide-react";
 import {
   loadAdminFeedbackWithStatus,
@@ -66,6 +67,7 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   requireFeedbackForDownload = false,
   onFeedbackSubmitted,
 }) => {
+  const { getToken } = useAuth();
   const [activeTab, setActiveTab] = useState<FeedbackTab>(initialTab);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,10 +124,18 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
       return;
     }
 
-    const result = await loadAdminFeedbackWithStatus(adminFilter);
+    const adminToken = (await getToken().catch(() => null)) || "";
+
+    if (!adminToken) {
+      setAdminQueue([]);
+      setAdminQueueError("Admin token is missing. Please sign in again.");
+      return;
+    }
+
+    const result = await loadAdminFeedbackWithStatus(adminFilter, adminToken);
     setAdminQueue(result.rows);
     setAdminQueueError(result.error);
-  }, [adminFilter, isAdmin]);
+  }, [adminFilter, getToken, isAdmin]);
 
   useEffect(() => {
     setLoading(true);
@@ -213,11 +223,20 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
     setNotice(null);
     setLoading(true);
 
+    const adminToken = (await getToken().catch(() => null)) || "";
+
+    if (!adminToken) {
+      setLoading(false);
+      setError("Admin token is missing. Please sign in again.");
+      return;
+    }
+
     const updated = await moderateFeedback(
       row.id,
       nextStatus,
       userEmail,
       adminNotes[row.id],
+      adminToken,
     );
 
     setLoading(false);
@@ -457,8 +476,7 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
               {adminQueue.length === 0 && (
                 <p className="feedback-muted">
                   No items in this queue. If you expected pending feedback,
-                  confirm your Clerk-Supabase token template includes an email
-                  claim.
+                  check the admin error above and verify Clerk server settings.
                 </p>
               )}
               {adminQueue.map((row) => (

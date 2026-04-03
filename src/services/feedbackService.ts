@@ -20,6 +20,44 @@ export interface FeedbackSubmissionCheckResult {
   hadError: boolean;
 }
 
+interface AdminListApiResponse {
+  rows?: FeedbackRow[];
+  error?: string;
+}
+
+interface AdminModerateApiResponse {
+  row?: FeedbackRow;
+  error?: string;
+}
+
+async function callAdminApi<T>(
+  path: string,
+  authToken: string,
+  method: "GET" | "POST" = "GET",
+  body?: unknown,
+): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${authToken}`,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const payload: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      (payload as { error?: string } | null)?.error ||
+      response.statusText ||
+      "Admin API request failed.";
+    throw new Error(message);
+  }
+
+  return payload as T;
+}
+
 export async function loadPublicFeedback(limit = 30): Promise<FeedbackRow[]> {
   const { data, error } = await supabase
     .from(FEEDBACK_TABLE)
@@ -86,14 +124,44 @@ export async function upsertMyFeedback(
 
 export async function loadAdminFeedback(
   status: FeedbackStatus | "all" = "pending",
+  authToken?: string,
 ): Promise<FeedbackRow[]> {
-  const result = await loadAdminFeedbackWithStatus(status);
+  const result = await loadAdminFeedbackWithStatus(status, authToken);
   return result.rows;
 }
 
 export async function loadAdminFeedbackWithStatus(
   status: FeedbackStatus | "all" = "pending",
+  authToken?: string,
 ): Promise<AdminFeedbackResult> {
+  if (authToken) {
+    try {
+      const response = await callAdminApi<AdminListApiResponse>(
+        `/api/feedback/admin/list?status=${encodeURIComponent(status)}`,
+        authToken,
+      );
+
+      if (response.error) {
+        return {
+          rows: [],
+          error: response.error,
+        };
+      }
+
+      return {
+        rows: response.rows || [],
+        error: null,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load admin queue.";
+      return {
+        rows: [],
+        error: message,
+      };
+    }
+  }
+
   let query = supabase
     .from(FEEDBACK_TABLE)
     .select(FEEDBACK_COLUMNS)
@@ -148,7 +216,36 @@ export async function moderateFeedback(
   status: "approved" | "rejected",
   adminEmail: string,
   adminNotes?: string,
+  authToken?: string,
 ): Promise<FeedbackRow | null> {
+  if (authToken) {
+    try {
+      const response = await callAdminApi<AdminModerateApiResponse>(
+        "/api/feedback/admin/moderate",
+        authToken,
+        "POST",
+        {
+          feedbackId,
+          status,
+          adminNotes,
+        },
+      );
+
+      if (response.error || !response.row) {
+        console.error(
+          "Error moderating feedback via admin API:",
+          response.error || "Unknown error",
+        );
+        return null;
+      }
+
+      return response.row;
+    } catch (error) {
+      console.error("Error moderating feedback via admin API:", error);
+      return null;
+    }
+  }
+
   const notes = adminNotes?.trim() || null;
   const payload = {
     status,
