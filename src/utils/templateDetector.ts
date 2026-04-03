@@ -34,6 +34,7 @@ const VALID_TEMPLATE_IDS: TemplateId[] = [
   "minimal",
   "creative",
   "ats",
+  "portfolio",
 ];
 const VALID_FONT_IDS = FONT_OPTIONS.map((f) => f.id);
 const VALID_FONT_SIZES = ["small", "medium", "large"] as const;

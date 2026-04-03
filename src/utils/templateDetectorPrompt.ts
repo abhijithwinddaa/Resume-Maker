@@ -9,12 +9,13 @@ export function buildTemplateDetectorPrompt(resumeText: string): string {
 
 Based on the text structure, formatting patterns, section organization, and content density, determine:
 
-1. **templateId**: Which of these 5 templates best matches the original?
+1. **templateId**: Which of these 6 templates best matches the original?
    - "classic" — Traditional, clean lines, standard section headers (ALL CAPS), straightforward layout
    - "modern" — Contemporary design, colored headers, uses accent colors, may have borders or backgrounds
    - "minimal" — Clean, lots of whitespace, simple formatting, elegant and sparse
    - "creative" — Bold, sidebar layout, uses icons/symbols, decorative elements, unique structure
    - "ats" — Plain text optimized, no columns, simple bullet points, maximum parsability
+   - "portfolio" — Profile-style two-column layout, strong name header, icon-based contact row, skills/education sidebar
 
 2. **primaryColor**: A hex color (e.g., "#2980b9") that likely matches the accent/heading color. Infer from:
    - If sections use standard black headers → "#2c3e50" (dark)

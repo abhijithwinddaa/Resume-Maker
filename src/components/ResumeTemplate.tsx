@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { Github, House, Linkedin, Mail, Phone } from "lucide-react";
 import type { ResumeData, SectionKey } from "../types/resume";
 import { DEFAULT_SECTION_LABELS } from "../types/resume";
 import { useAppStore } from "../store/appStore";
@@ -283,6 +284,296 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
           return null;
       }
     };
+
+    const renderPortfolioTemplate = () => {
+      const headline =
+        data.experience.find((exp) => exp.role.trim())?.role ||
+        data.skills.find((skill) => skill.label.trim())?.label ||
+        "";
+
+      const projects = data.projects.filter(
+        (project) =>
+          project.title.trim() ||
+          project.techStack.trim() ||
+          project.bullets.some((bullet) => bullet.trim()),
+      );
+
+      const experienceEntries = (data.experience || []).filter(
+        (exp) =>
+          exp.company.trim() ||
+          exp.role.trim() ||
+          exp.dateRange.trim() ||
+          exp.bullets.some((bullet) => bullet.trim()),
+      );
+
+      const educationEntries = data.education.filter(
+        (edu) =>
+          edu.university.trim() ||
+          edu.degree.trim() ||
+          edu.yearRange.trim() ||
+          edu.cgpa.trim(),
+      );
+
+      const skillEntries = data.skills.filter(
+        (skill) => skill.label.trim() || skill.skills.trim(),
+      );
+
+      const achievements = (data.achievements || []).filter((achievement) =>
+        achievement.text.trim(),
+      );
+
+      const certificates = (data.certificates || []).filter(
+        (cert) =>
+          cert.name.trim() || cert.description.trim() || cert.link.trim(),
+      );
+
+      return (
+        <div
+          className={`resume-page template-${templateId}`}
+          ref={ref}
+          style={rootStyle}
+        >
+          <div className="resume-header portfolio-header">
+            <h1 className="resume-name">{data.contact.name}</h1>
+            {headline && <p className="portfolio-subtitle">{headline}</p>}
+
+            <div className="resume-contact portfolio-contact">
+              {data.contact.portfolio && (
+                <a
+                  href={data.contact.portfolio}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="portfolio-contact-item"
+                >
+                  <House size={13} strokeWidth={1.8} />
+                  <span>Portfolio</span>
+                </a>
+              )}
+
+              {data.contact.github && (
+                <a
+                  href={data.contact.github}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="portfolio-contact-item"
+                >
+                  <Github size={13} strokeWidth={1.8} />
+                  <span>GitHub</span>
+                </a>
+              )}
+
+              {data.contact.linkedin && (
+                <a
+                  href={data.contact.linkedin}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="portfolio-contact-item"
+                >
+                  <Linkedin size={13} strokeWidth={1.8} />
+                  <span>LinkedIn</span>
+                </a>
+              )}
+
+              {data.contact.email && (
+                <a
+                  href={`mailto:${data.contact.email}`}
+                  className="portfolio-contact-item"
+                >
+                  <Mail size={13} strokeWidth={1.8} />
+                  <span>{data.contact.email}</span>
+                </a>
+              )}
+
+              {data.contact.phone && (
+                <a
+                  href={`tel:${data.contact.phone}`}
+                  className="portfolio-contact-item"
+                >
+                  <Phone size={13} strokeWidth={1.8} />
+                  <span>{data.contact.phone}</span>
+                </a>
+              )}
+            </div>
+          </div>
+
+          <div className="portfolio-layout">
+            <main className="portfolio-main">
+              {data.summary.trim() && (
+                <section className="resume-section">
+                  <h2 className="section-title">
+                    {getSectionTitle("summary")}
+                  </h2>
+                  <p className="summary-text">{highlightText(data.summary)}</p>
+                </section>
+              )}
+
+              {projects.length > 0 && (
+                <section className="resume-section">
+                  <h2 className="section-title">
+                    {getSectionTitle("projects")}
+                  </h2>
+                  {projects.map((project, i) => {
+                    const projectTag = project.techStack
+                      .split(/[|,]/)
+                      .map((chunk) => chunk.trim())
+                      .filter(Boolean)[0];
+
+                    return (
+                      <div
+                        key={i}
+                        className="project-item portfolio-project-item"
+                      >
+                        <div className="project-header portfolio-project-header">
+                          <span className="project-title">{project.title}</span>
+                          {projectTag && (
+                            <span className="portfolio-project-tag">
+                              | {projectTag}
+                            </span>
+                          )}
+                        </div>
+                        <ul className="project-bullets portfolio-project-bullets">
+                          {project.bullets
+                            .filter((bullet) => bullet.trim())
+                            .map((bullet, j) => (
+                              <li key={j}>{highlightText(bullet)}</li>
+                            ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </section>
+              )}
+
+              {data.showExperience && experienceEntries.length > 0 && (
+                <section className="resume-section">
+                  <h2 className="section-title">
+                    {getSectionTitle("experience")}
+                  </h2>
+                  {experienceEntries.map((exp, i) => (
+                    <div
+                      key={i}
+                      className="experience-item portfolio-experience-item"
+                    >
+                      <div className="experience-header portfolio-experience-header">
+                        <strong>{exp.company}</strong>
+                        {exp.role && (
+                          <span className="portfolio-experience-role">
+                            | {exp.role}
+                          </span>
+                        )}
+                      </div>
+                      {exp.dateRange && (
+                        <div className="experience-date portfolio-experience-date">
+                          {exp.dateRange}
+                        </div>
+                      )}
+                      <ul className="experience-bullets portfolio-experience-bullets">
+                        {exp.bullets
+                          .filter((bullet) => bullet.trim())
+                          .map((bullet, j) => (
+                            <li key={j}>{highlightText(bullet)}</li>
+                          ))}
+                      </ul>
+                    </div>
+                  ))}
+                </section>
+              )}
+
+              {achievements.length > 0 && (
+                <section className="resume-section">
+                  <h2 className="section-title">
+                    {getSectionTitle("achievements")}
+                  </h2>
+                  <ul className="achievements-list portfolio-achievements-list">
+                    {achievements.map((achievement, i) => (
+                      <li key={i}>{highlightText(achievement.text)}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {data.showCertificates && certificates.length > 0 && (
+                <section className="resume-section">
+                  <h2 className="section-title">
+                    {getSectionTitle("certificates")}
+                  </h2>
+                  <ul className="certificates-list portfolio-certificates-list">
+                    {certificates.map((cert, i) => {
+                      const title = cert.name.trim() || cert.description.trim();
+                      return (
+                        <li
+                          key={i}
+                          className="certificate-item portfolio-certificate-item"
+                        >
+                          <span className="portfolio-cert-name">{title}</span>
+                          {cert.link && (
+                            <a
+                              href={cert.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="cert-link portfolio-cert-link"
+                            >
+                              View Certificate
+                            </a>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
+            </main>
+
+            <aside className="portfolio-sidebar">
+              {skillEntries.length > 0 && (
+                <section className="resume-section">
+                  <h2 className="section-title">{getSectionTitle("skills")}</h2>
+                  <div className="portfolio-skills-list">
+                    {skillEntries.map((skill, i) => (
+                      <div key={i} className="portfolio-skills-group">
+                        <p className="portfolio-skills-label">{skill.label}</p>
+                        <p className="portfolio-skills-text">
+                          {highlightText(skill.skills)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {educationEntries.length > 0 && (
+                <section className="resume-section">
+                  <h2 className="section-title">
+                    {getSectionTitle("education")}
+                  </h2>
+                  {educationEntries.map((edu, i) => (
+                    <div
+                      key={i}
+                      className="education-item portfolio-education-item"
+                    >
+                      <p className="portfolio-education-school">
+                        {edu.university}
+                      </p>
+                      <p className="portfolio-education-degree">{edu.degree}</p>
+                      <p className="portfolio-education-meta">
+                        {edu.yearRange}
+                      </p>
+                      {edu.cgpa && (
+                        <p className="portfolio-education-meta">{edu.cgpa}</p>
+                      )}
+                    </div>
+                  ))}
+                </section>
+              )}
+            </aside>
+          </div>
+        </div>
+      );
+    };
+
+    if (templateId === "portfolio") {
+      return renderPortfolioTemplate();
+    }
 
     return (
       <div

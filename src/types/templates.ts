@@ -1,4 +1,10 @@
-export type TemplateId = "classic" | "modern" | "minimal" | "creative" | "ats";
+export type TemplateId =
+  | "classic"
+  | "modern"
+  | "minimal"
+  | "creative"
+  | "ats"
+  | "portfolio";
 
 export interface TemplateCustomization {
   primaryColor: string;
@@ -46,6 +52,12 @@ export const TEMPLATES: TemplateInfo[] = [
     name: "ATS-Friendly",
     description: "Optimized for applicant tracking systems",
     thumbnail: "🤖",
+  },
+  {
+    id: "portfolio",
+    name: "Portfolio Blue",
+    description: "Two-column layout with icon header and sidebar",
+    thumbnail: "🧩",
   },
 ];
 
