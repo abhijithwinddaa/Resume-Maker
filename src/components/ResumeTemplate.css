@@ -655,7 +655,7 @@
   color: #6b7280;
 }
 
-@media (max-width: 900px) {
+@media screen and (max-width: 760px) {
   .template-portfolio .portfolio-layout {
     grid-template-columns: 1fr;
     gap: 8px;
@@ -667,6 +667,11 @@
   @page {
     size: A4;
     margin: 0;
+  }
+
+  .template-portfolio .portfolio-layout {
+    grid-template-columns: 1.7fr 1fr !important;
+    gap: 14px !important;
   }
 
   .resume-page {
