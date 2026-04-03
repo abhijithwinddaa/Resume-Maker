@@ -188,9 +188,7 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
     }
   };
 
-  const handleModeration = async (
-    row: FeedbackRow,
-  ) => {
+  const handleModeration = async (row: FeedbackRow) => {
     setError(null);
     setNotice(null);
     setLoading(true);
@@ -411,7 +409,9 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
                 <article key={row.id} className="feedback-item admin-item">
                   <div className="feedback-item-header">
                     <strong>{row.user_email}</strong>
-                    <small>{new Date(row.created_at).toLocaleDateString()}</small>
+                    <small>
+                      {new Date(row.created_at).toLocaleDateString()}
+                    </small>
                   </div>
 
                   <div className="feedback-item-rating">

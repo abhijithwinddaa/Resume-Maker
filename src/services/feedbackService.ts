@@ -1,8 +1,5 @@
 import { supabase } from "../lib/supabase";
-import type {
-  FeedbackRow,
-  FeedbackUpsertInput,
-} from "../types/feedback";
+import type { FeedbackRow, FeedbackUpsertInput } from "../types/feedback";
 
 const FEEDBACK_TABLE = "app_feedback";
 
@@ -12,6 +9,23 @@ const FEEDBACK_COLUMNS =
 export interface FeedbackSubmissionCheckResult {
   hasSubmitted: boolean;
   hadError: boolean;
+}
+
+function isPolicyMismatchError(
+  error: {
+    message?: string;
+    details?: string;
+    hint?: string;
+  } | null,
+): boolean {
+  if (!error) return false;
+  const combined =
+    `${error.message || ""} ${error.details || ""} ${error.hint || ""}`.toLowerCase();
+  return (
+    combined.includes("row-level security") ||
+    combined.includes("violates policy") ||
+    combined.includes("violates row-level security policy")
+  );
 }
 
 export async function loadPublicFeedback(limit = 30): Promise<FeedbackRow[]> {
@@ -51,24 +65,46 @@ export async function loadMyFeedback(
 export async function upsertMyFeedback(
   input: FeedbackUpsertInput,
 ): Promise<FeedbackRow | null> {
-  const payload = {
+  const basePayload = {
     user_id: input.userId,
     user_email: input.userEmail,
     rating: Math.min(5, Math.max(1, Math.round(input.rating))),
     comment: input.comment.trim(),
     is_public: input.isPublic,
-    status: "approved" as const,
     admin_notes: null,
     approved_by: null,
     approved_at: null,
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const primaryPayload = {
+    ...basePayload,
+    status: "approved" as const,
+  };
+
+  let { data, error } = await supabase
     .from(FEEDBACK_TABLE)
-    .upsert(payload, { onConflict: "user_id" })
+    .upsert(primaryPayload, { onConflict: "user_id" })
     .select(FEEDBACK_COLUMNS)
     .single();
+
+  // Backward-compatible fallback for projects still running the older
+  // policy that only allows status='pending' on insert/update.
+  if (error && isPolicyMismatchError(error)) {
+    const legacyPayload = {
+      ...basePayload,
+      status: "pending" as const,
+    };
+
+    const retryResult = await supabase
+      .from(FEEDBACK_TABLE)
+      .upsert(legacyPayload, { onConflict: "user_id" })
+      .select(FEEDBACK_COLUMNS)
+      .single();
+
+    data = retryResult.data;
+    error = retryResult.error;
+  }
 
   if (error) {
     console.error("Error submitting feedback:", error);
