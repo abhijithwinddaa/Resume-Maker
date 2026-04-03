@@ -12,13 +12,21 @@ create table if not exists public.app_feedback (
   rating integer not null check (rating between 1 and 5),
   comment text not null check (char_length(trim(comment)) between 10 and 2000),
   is_public boolean not null default true,
-  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  status text not null default 'approved' check (status in ('pending', 'approved', 'rejected')),
   admin_notes text,
   approved_by text,
   approved_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.app_feedback
+  alter column status set default 'approved';
+
+update public.app_feedback
+set status = 'approved',
+    updated_at = now()
+where status = 'pending';
 
 create index if not exists idx_app_feedback_status
   on public.app_feedback(status);
@@ -51,8 +59,10 @@ drop policy if exists "Users can read own app feedback" on public.app_feedback;
 drop policy if exists "Users can insert own app feedback" on public.app_feedback;
 drop policy if exists "Users can update own app feedback" on public.app_feedback;
 drop policy if exists "Public can read approved app feedback" on public.app_feedback;
+drop policy if exists "Public can read public app feedback" on public.app_feedback;
 drop policy if exists "Admins can read all app feedback" on public.app_feedback;
 drop policy if exists "Admins can moderate app feedback" on public.app_feedback;
+drop policy if exists "Admins can remove app feedback" on public.app_feedback;
 
 create or replace function public.feedback_actor_email()
 returns text
@@ -79,7 +89,7 @@ create policy "Users can insert own app feedback"
   on public.app_feedback for insert
   with check (
     user_id = auth.jwt()->>'sub'
-    and status = 'pending'
+    and status in ('approved', 'pending')
     and approved_by is null
     and approved_at is null
     and admin_notes is null
@@ -90,15 +100,15 @@ create policy "Users can update own app feedback"
   using (user_id = auth.jwt()->>'sub')
   with check (
     user_id = auth.jwt()->>'sub'
-    and status = 'pending'
+    and status in ('approved', 'pending')
     and approved_by is null
     and approved_at is null
     and admin_notes is null
   );
 
-create policy "Public can read approved app feedback"
+create policy "Public can read public app feedback"
   on public.app_feedback for select
-  using (status = 'approved' and is_public = true);
+  using (is_public = true and status <> 'rejected');
 
 create policy "Admins can read all app feedback"
   on public.app_feedback for select
@@ -109,7 +119,7 @@ create policy "Admins can read all app feedback"
     )
   );
 
-create policy "Admins can moderate app feedback"
+create policy "Admins can remove app feedback"
   on public.app_feedback for update
   using (
     public.feedback_actor_email() in (
@@ -122,6 +132,8 @@ create policy "Admins can moderate app feedback"
       'abhijithyadav786@gmail.com',
       'abhijithwinddaa@gmail.com'
     )
+    and status = 'rejected'
+    and is_public = false
   );
 
 -- ─────────────────────────────────────────────────────────────

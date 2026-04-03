@@ -1,7 +1,6 @@
 import { supabase } from "../lib/supabase";
 import type {
   FeedbackRow,
-  FeedbackStatus,
   FeedbackUpsertInput,
 } from "../types/feedback";
 
@@ -10,60 +9,17 @@ const FEEDBACK_TABLE = "app_feedback";
 const FEEDBACK_COLUMNS =
   "id, user_id, user_email, rating, comment, is_public, status, admin_notes, approved_by, approved_at, created_at, updated_at";
 
-export interface AdminFeedbackResult {
-  rows: FeedbackRow[];
-  error: string | null;
-}
-
 export interface FeedbackSubmissionCheckResult {
   hasSubmitted: boolean;
   hadError: boolean;
-}
-
-interface AdminListApiResponse {
-  rows?: FeedbackRow[];
-  error?: string;
-}
-
-interface AdminModerateApiResponse {
-  row?: FeedbackRow;
-  error?: string;
-}
-
-async function callAdminApi<T>(
-  path: string,
-  authToken: string,
-  method: "GET" | "POST" = "GET",
-  body?: unknown,
-): Promise<T> {
-  const response = await fetch(path, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const payload: unknown = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    const message =
-      (payload as { error?: string } | null)?.error ||
-      response.statusText ||
-      "Admin API request failed.";
-    throw new Error(message);
-  }
-
-  return payload as T;
 }
 
 export async function loadPublicFeedback(limit = 30): Promise<FeedbackRow[]> {
   const { data, error } = await supabase
     .from(FEEDBACK_TABLE)
     .select(FEEDBACK_COLUMNS)
-    .eq("status", "approved")
     .eq("is_public", true)
+    .neq("status", "rejected")
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -101,7 +57,7 @@ export async function upsertMyFeedback(
     rating: Math.min(5, Math.max(1, Math.round(input.rating))),
     comment: input.comment.trim(),
     is_public: input.isPublic,
-    status: "pending" as FeedbackStatus,
+    status: "approved" as const,
     admin_notes: null,
     approved_by: null,
     approved_at: null,
@@ -122,70 +78,23 @@ export async function upsertMyFeedback(
   return data as FeedbackRow;
 }
 
-export async function loadAdminFeedback(
-  status: FeedbackStatus | "all" = "pending",
-  authToken?: string,
+export async function loadAdminFeedbackForRemoval(
+  limit = 120,
 ): Promise<FeedbackRow[]> {
-  const result = await loadAdminFeedbackWithStatus(status, authToken);
-  return result.rows;
-}
-
-export async function loadAdminFeedbackWithStatus(
-  status: FeedbackStatus | "all" = "pending",
-  authToken?: string,
-): Promise<AdminFeedbackResult> {
-  if (authToken) {
-    try {
-      const response = await callAdminApi<AdminListApiResponse>(
-        `/api/feedback/admin/list?status=${encodeURIComponent(status)}`,
-        authToken,
-      );
-
-      if (response.error) {
-        return {
-          rows: [],
-          error: response.error,
-        };
-      }
-
-      return {
-        rows: response.rows || [],
-        error: null,
-      };
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load admin queue.";
-      return {
-        rows: [],
-        error: message,
-      };
-    }
-  }
-
-  let query = supabase
+  const { data, error } = await supabase
     .from(FEEDBACK_TABLE)
     .select(FEEDBACK_COLUMNS)
-    .order("created_at", { ascending: false });
-
-  if (status !== "all") {
-    query = query.eq("status", status);
-  }
-
-  const { data, error } = await query;
+    .eq("is_public", true)
+    .neq("status", "rejected")
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
   if (error) {
-    const message = error.message || "Unknown admin feedback error";
-    console.error("Error loading admin feedback queue:", error);
-    return {
-      rows: [],
-      error: message,
-    };
+    console.error("Error loading admin feedback list:", error);
+    return [];
   }
 
-  return {
-    rows: (data || []) as FeedbackRow[],
-    error: null,
-  };
+  return (data || []) as FeedbackRow[];
 }
 
 export async function checkUserHasSubmittedFeedback(
@@ -213,45 +122,14 @@ export async function checkUserHasSubmittedFeedback(
 
 export async function moderateFeedback(
   feedbackId: string,
-  status: "approved" | "rejected",
   adminEmail: string,
-  adminNotes?: string,
-  authToken?: string,
 ): Promise<FeedbackRow | null> {
-  if (authToken) {
-    try {
-      const response = await callAdminApi<AdminModerateApiResponse>(
-        "/api/feedback/admin/moderate",
-        authToken,
-        "POST",
-        {
-          feedbackId,
-          status,
-          adminNotes,
-        },
-      );
-
-      if (response.error || !response.row) {
-        console.error(
-          "Error moderating feedback via admin API:",
-          response.error || "Unknown error",
-        );
-        return null;
-      }
-
-      return response.row;
-    } catch (error) {
-      console.error("Error moderating feedback via admin API:", error);
-      return null;
-    }
-  }
-
-  const notes = adminNotes?.trim() || null;
   const payload = {
-    status,
-    admin_notes: notes,
+    status: "rejected" as const,
+    is_public: false,
+    admin_notes: "Removed by admin",
     approved_by: adminEmail.toLowerCase(),
-    approved_at: status === "approved" ? new Date().toISOString() : null,
+    approved_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
 

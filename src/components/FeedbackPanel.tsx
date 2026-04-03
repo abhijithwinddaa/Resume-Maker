@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuth } from "@clerk/clerk-react";
 import { Check, MessageSquare, Shield, Star, X } from "lucide-react";
 import {
-  loadAdminFeedbackWithStatus,
+  loadAdminFeedbackForRemoval,
   loadMyFeedback,
   loadPublicFeedback,
   moderateFeedback,
@@ -19,7 +18,6 @@ import {
   type PopularityMetricKey,
   type PopularitySnapshot,
   type FeedbackRow,
-  type FeedbackStatus,
 } from "../types/feedback";
 import { trackEvent } from "../utils/analytics";
 import "./FeedbackPanel.css";
@@ -52,12 +50,6 @@ const POPULARITY_LABELS: Record<PopularityMetricKey, string> = {
   resume_download: "Resume Downloads",
 };
 
-function formatStatus(status: FeedbackStatus): string {
-  if (status === "approved") return "Approved";
-  if (status === "rejected") return "Rejected";
-  return "Pending";
-}
-
 const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   onClose,
   userId,
@@ -67,7 +59,6 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   requireFeedbackForDownload = false,
   onFeedbackSubmitted,
 }) => {
-  const { getToken } = useAuth();
   const [activeTab, setActiveTab] = useState<FeedbackTab>(initialTab);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,18 +67,13 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   const [myFeedback, setMyFeedback] = useState<FeedbackRow | null>(null);
   const [publicFeedback, setPublicFeedback] = useState<FeedbackRow[]>([]);
   const [adminQueue, setAdminQueue] = useState<FeedbackRow[]>([]);
-  const [adminQueueError, setAdminQueueError] = useState<string | null>(null);
   const [popularity, setPopularity] = useState<PopularitySnapshot>(
     emptyPopularitySnapshot,
-  );
-  const [adminFilter, setAdminFilter] = useState<FeedbackStatus | "all">(
-    "pending",
   );
 
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [isPublic, setIsPublic] = useState(true);
-  const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -119,23 +105,10 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   }, []);
 
   const loadAdminQueue = useCallback(async () => {
-    if (!isAdmin) {
-      setAdminQueueError(null);
-      return;
-    }
-
-    const adminToken = (await getToken().catch(() => null)) || "";
-
-    if (!adminToken) {
-      setAdminQueue([]);
-      setAdminQueueError("Admin token is missing. Please sign in again.");
-      return;
-    }
-
-    const result = await loadAdminFeedbackWithStatus(adminFilter, adminToken);
-    setAdminQueue(result.rows);
-    setAdminQueueError(result.error);
-  }, [adminFilter, getToken, isAdmin]);
+    if (!isAdmin) return;
+    const rows = await loadAdminFeedbackForRemoval();
+    setAdminQueue(rows);
+  }, [isAdmin]);
 
   useEffect(() => {
     setLoading(true);
@@ -198,7 +171,7 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
     setNotice(
       requireFeedbackForDownload
         ? "Thanks. Your feedback is submitted. Continuing your download..."
-        : "Thanks. Your feedback has been submitted and is waiting for admin approval.",
+        : "Thanks. Your feedback is now visible in the community.",
     );
     trackEvent("feedback_submitted", {
       rating: saved.rating,
@@ -217,38 +190,23 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
 
   const handleModeration = async (
     row: FeedbackRow,
-    nextStatus: "approved" | "rejected",
   ) => {
     setError(null);
     setNotice(null);
     setLoading(true);
 
-    const adminToken = (await getToken().catch(() => null)) || "";
-
-    if (!adminToken) {
-      setLoading(false);
-      setError("Admin token is missing. Please sign in again.");
-      return;
-    }
-
-    const updated = await moderateFeedback(
-      row.id,
-      nextStatus,
-      userEmail,
-      adminNotes[row.id],
-      adminToken,
-    );
+    const updated = await moderateFeedback(row.id, userEmail);
 
     setLoading(false);
 
     if (!updated) {
-      setError("Moderation action failed. Please retry.");
+      setError("Could not remove feedback. Please retry.");
       return;
     }
 
-    setNotice(`Feedback ${nextStatus}.`);
+    setNotice("Feedback removed from community.");
     trackEvent("feedback_moderated", {
-      action: nextStatus,
+      action: "removed",
       feedback_id: row.id,
     });
 
@@ -369,17 +327,8 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
                 checked={isPublic}
                 onChange={(e) => setIsPublic(e.target.checked)}
               />
-              <span>
-                Allow this feedback to appear publicly after approval.
-              </span>
+              <span>Allow this feedback to appear publicly.</span>
             </label>
-
-            {myFeedback && (
-              <p className="feedback-status-line">
-                Current status:{" "}
-                <strong>{formatStatus(myFeedback.status)}</strong>
-              </p>
-            )}
 
             <button className="feedback-submit" onClick={handleSubmit}>
               <Check size={14} />
@@ -422,7 +371,7 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
 
             <div className="feedback-summary-card">
               <strong>{summary.averageRating.toFixed(1)} / 5</strong>
-              <span>{summary.totalRatings} approved review(s)</span>
+              <span>{summary.totalRatings} public review(s)</span>
               {renderStars(Math.round(summary.averageRating), false)}
             </div>
 
@@ -450,42 +399,19 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
 
         {activeTab === "admin" && isAdmin && (
           <section className="feedback-section">
-            {adminQueueError && (
-              <p className="feedback-error">
-                Could not load admin queue: {adminQueueError}
-              </p>
-            )}
-
-            <div className="feedback-admin-toolbar">
-              <label htmlFor="feedback-filter">Filter</label>
-              <select
-                id="feedback-filter"
-                value={adminFilter}
-                onChange={(e) =>
-                  setAdminFilter(e.target.value as FeedbackStatus | "all")
-                }
-              >
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="all">All</option>
-              </select>
-            </div>
+            <p className="feedback-muted">
+              All public feedback appears here. Remove items that are not good.
+            </p>
 
             <div className="feedback-list">
               {adminQueue.length === 0 && (
-                <p className="feedback-muted">
-                  No items in this queue. If you expected pending feedback,
-                  check the admin error above and verify Clerk server settings.
-                </p>
+                <p className="feedback-muted">No public feedback to remove.</p>
               )}
               {adminQueue.map((row) => (
                 <article key={row.id} className="feedback-item admin-item">
                   <div className="feedback-item-header">
                     <strong>{row.user_email}</strong>
-                    <span className={`feedback-status ${row.status}`}>
-                      {formatStatus(row.status)}
-                    </span>
+                    <small>{new Date(row.created_at).toLocaleDateString()}</small>
                   </div>
 
                   <div className="feedback-item-rating">
@@ -493,31 +419,12 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
                   </div>
                   <p>{row.comment}</p>
 
-                  <textarea
-                    className="feedback-admin-notes"
-                    placeholder="Optional admin note"
-                    value={adminNotes[row.id] || ""}
-                    onChange={(e) =>
-                      setAdminNotes((prev) => ({
-                        ...prev,
-                        [row.id]: e.target.value,
-                      }))
-                    }
-                    rows={2}
-                  />
-
                   <div className="feedback-admin-actions">
                     <button
-                      className="feedback-approve"
-                      onClick={() => handleModeration(row, "approved")}
-                    >
-                      Approve
-                    </button>
-                    <button
                       className="feedback-reject"
-                      onClick={() => handleModeration(row, "rejected")}
+                      onClick={() => handleModeration(row)}
                     >
-                      Reject
+                      Remove
                     </button>
                   </div>
                 </article>

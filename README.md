@@ -30,14 +30,13 @@ Create a `.env` file in the project root:
 ```env
 # Clerk
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_key
-CLERK_SECRET_KEY=sk_test_your_clerk_secret
 
 # Supabase
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-# Required for Clerk + Supabase RLS policies (including admin feedback moderation).
-# The template should include an email claim.
+# Required for Clerk + Supabase RLS policies.
+# The template should include an email claim for admin remove permissions.
 VITE_CLERK_SUPABASE_TEMPLATE=supabase
 
 # Server-side AI for ATS analyze + optimize
@@ -75,10 +74,10 @@ npm run dev
 3. Run [`supabase-schema.sql`](./supabase-schema.sql).
 4. For existing projects, run [`supabase-rls-migration.sql`](./supabase-rls-migration.sql).
 5. Run [`supabase-ai-cache-migration.sql`](./supabase-ai-cache-migration.sql) to enable server-side ATS and optimize caching.
-6. Run [`supabase-feedback-migration.sql`](./supabase-feedback-migration.sql) to enable user ratings/feedback, admin moderation, and live popularity counters.
+6. Run [`supabase-feedback-migration.sql`](./supabase-feedback-migration.sql) to enable user ratings/feedback, admin remove controls, and live popularity counters.
 
 The app now expects JWT-backed RLS with `auth.jwt()->>'sub'` matching the Clerk user ID.
-For admin moderation, ensure the Supabase token template includes at least one email claim (`email`, `email_address`, or `primary_email_address`).
+For admin remove controls, ensure the Supabase token template includes at least one email claim (`email`, `email_address`, or `primary_email_address`).
 
 ## Vercel Notes
 
