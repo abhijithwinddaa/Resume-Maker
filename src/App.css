@@ -1501,13 +1501,25 @@
 }
 
 @keyframes save-pulse {
-  0%, 100% { opacity: 0.4; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.15); }
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
 }
 
 @keyframes save-fade {
-  0%, 60% { opacity: 1; }
-  100% { opacity: 0.35; }
+  0%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.35;
+  }
 }
 
 /* ─── Export Progress Toast ──────────────────────────── */
@@ -1541,12 +1553,86 @@
 }
 
 @keyframes export-toast-enter {
-  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 @keyframes export-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── Floating Feedback CTA ─────────────────────────── */
+
+.floating-feedback-cta {
+  position: fixed;
+  right: 20px;
+  bottom: calc(20px + var(--vk-offset));
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: "Inter", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.35);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.floating-feedback-cta:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.42);
+}
+
+.floating-feedback-cta:active {
+  transform: translateY(0);
+}
+
+.floating-feedback-cta:focus-visible {
+  outline: 3px solid rgba(191, 219, 254, 0.95);
+  outline-offset: 2px;
+}
+
+@supports (bottom: env(safe-area-inset-bottom)) {
+  .floating-feedback-cta {
+    right: calc(16px + env(safe-area-inset-right));
+    bottom: calc(16px + env(safe-area-inset-bottom) + var(--vk-offset));
+  }
+}
+
+@media (max-width: 900px) {
+  .floating-feedback-cta {
+    right: 14px;
+    bottom: calc(14px + var(--vk-offset));
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .floating-feedback-cta {
+    right: 10px;
+    bottom: calc(10px + var(--vk-offset));
+    padding: 9px 12px;
+    gap: 6px;
+  }
 }
 
 /* ─── Mobile Export Buttons ──────────────────────────── */

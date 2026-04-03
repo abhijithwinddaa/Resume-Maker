@@ -35,8 +35,9 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_key
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-# Optional legacy fallback. Leave empty when using Clerk's native Supabase integration.
-VITE_CLERK_SUPABASE_TEMPLATE=
+# Required for Clerk + Supabase RLS policies (including admin feedback moderation).
+# The template should include an email claim.
+VITE_CLERK_SUPABASE_TEMPLATE=supabase
 
 # Server-side AI for ATS analyze + optimize
 GITHUB_TOKEN=github_pat_server_token_1
@@ -76,6 +77,7 @@ npm run dev
 6. Run [`supabase-feedback-migration.sql`](./supabase-feedback-migration.sql) to enable user ratings/feedback, admin moderation, and live popularity counters.
 
 The app now expects JWT-backed RLS with `auth.jwt()->>'sub'` matching the Clerk user ID.
+For admin moderation, ensure the Supabase token template includes at least one email claim (`email`, `email_address`, or `primary_email_address`).
 
 ## Vercel Notes
 

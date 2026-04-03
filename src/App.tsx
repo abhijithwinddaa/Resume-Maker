@@ -68,6 +68,7 @@ import {
 } from "./utils/analytics";
 import { recordFeatureUsage } from "./services/popularityService";
 import { isAdminEmail } from "./utils/adminAccess";
+import { checkUserHasSubmittedFeedback } from "./services/feedbackService";
 import { useDebounce } from "./hooks/useDebounce";
 import { validateResumeData } from "./utils/zodSchemas";
 import { exportToDocx } from "./utils/docxExporter";
@@ -117,7 +118,7 @@ const ResumeManagerPanel = lazy(() => import("./components/ResumeManager"));
 const PdfPreviewPanel = lazy(() => import("./components/PdfPreview"));
 const FeedbackPanel = lazy(() => import("./components/FeedbackPanel"));
 const CLERK_SUPABASE_TEMPLATE =
-  import.meta.env.VITE_CLERK_SUPABASE_TEMPLATE || "";
+  import.meta.env.VITE_CLERK_SUPABASE_TEMPLATE || "supabase";
 const FEEDBACK_PROMPT_COOLDOWN_MS = 1000 * 60 * 60 * 24 * 14;
 const FEEDBACK_PROMPT_LAST_AT_KEY = "feedback-prompt-last-at";
 
@@ -371,6 +372,9 @@ function App() {
   const [feedbackInitialTab, setFeedbackInitialTab] = useState<
     "my" | "community" | "admin"
   >("community");
+  const [pendingExportFormat, setPendingExportFormat] = useState<
+    "pdf" | "docx" | null
+  >(null);
 
   // Save status tracking
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
@@ -452,6 +456,12 @@ function App() {
         setShowTemplatePicker(false);
         setShowCoverLetter(false);
         setShowResumeManager(false);
+        if (pendingExportFormat) {
+          trackEvent("feedback_export_gate_cancelled", {
+            format: pendingExportFormat,
+          });
+          setPendingExportFormat(null);
+        }
         setShowFeedbackPanel(false);
         return;
       }
@@ -467,7 +477,7 @@ function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo]);
+  }, [pendingExportFormat, redo, undo]);
 
   /* ── Navigation guard: warn on tab close with unsaved changes ── */
   useEffect(() => {
@@ -506,9 +516,17 @@ function App() {
 
     setSupabaseAccessTokenGetter(async () => {
       try {
-        if (CLERK_SUPABASE_TEMPLATE) {
-          return await getToken({ template: CLERK_SUPABASE_TEMPLATE });
+        const templatedToken = await getToken({
+          template: CLERK_SUPABASE_TEMPLATE,
+        });
+        if (templatedToken) {
+          return templatedToken;
         }
+      } catch {
+        // fallback below
+      }
+
+      try {
         return await getToken();
       } catch {
         return null;
@@ -710,7 +728,7 @@ function App() {
     try {
       lastPromptAt = Number(localStorage.getItem(FEEDBACK_PROMPT_LAST_AT_KEY));
     } catch {
-      lastPromptAt = 0;
+      // ignore storage errors
     }
 
     if (
@@ -941,7 +959,7 @@ function App() {
     ],
   );
 
-  const handleExportPDF = useCallback(async () => {
+  const runExportPDF = useCallback(async () => {
     let el = resumeRef.current;
     if (!el) {
       setError("Resume preview not available for export. Please try again.");
@@ -1006,9 +1024,43 @@ function App() {
     privacySettings.embedResumeDataInPdf,
     resumeData,
     setError,
+    setResumeData,
     reactToPrintFn,
     user?.id,
   ]);
+
+  const requestExportWithFeedbackGate = useCallback(
+    async (format: "pdf" | "docx", exportAction: () => Promise<void>) => {
+      if (isExporting) return;
+
+      if (!user?.id) {
+        openSignIn();
+        return;
+      }
+
+      if (isAdminUser) {
+        await exportAction();
+        return;
+      }
+
+      const submissionState = await checkUserHasSubmittedFeedback(user.id);
+
+      if (submissionState.hadError || submissionState.hasSubmitted) {
+        await exportAction();
+        return;
+      }
+
+      setPendingExportFormat(format);
+      setFeedbackInitialTab("my");
+      setShowFeedbackPanel(true);
+      trackEvent("feedback_export_gate_shown", { format });
+    },
+    [isAdminUser, isExporting, openSignIn, user?.id],
+  );
+
+  const handleExportPDF = useCallback(async () => {
+    await requestExportWithFeedbackGate("pdf", runExportPDF);
+  }, [requestExportWithFeedbackGate, runExportPDF]);
 
   /* ── Mode Selection (landing page) ───────────────── */
 
@@ -1702,7 +1754,7 @@ function App() {
     input.click();
   };
 
-  const handleExportDocx = async () => {
+  const runExportDocx = useCallback(async () => {
     if (!resumeData) {
       setError(
         "No resume data to export. Please create or load a resume first.",
@@ -1747,7 +1799,27 @@ function App() {
       setIsExporting(false);
       setExportToastMessage(null);
     }
-  };
+  }, [resumeData, setError, setResumeData, user?.id]);
+
+  const handleExportDocx = useCallback(async () => {
+    await requestExportWithFeedbackGate("docx", runExportDocx);
+  }, [requestExportWithFeedbackGate, runExportDocx]);
+
+  const handleFeedbackSubmitted = useCallback(() => {
+    if (!pendingExportFormat) return;
+
+    const format = pendingExportFormat;
+    setPendingExportFormat(null);
+    setShowFeedbackPanel(false);
+    trackEvent("feedback_export_gate_completed", { format });
+
+    if (format === "pdf") {
+      void runExportPDF();
+      return;
+    }
+
+    void runExportDocx();
+  }, [pendingExportFormat, runExportDocx, runExportPDF]);
 
   /* ── Step indicator config per mode ─────────────────── */
 
@@ -1869,28 +1941,11 @@ function App() {
           </SignedIn>
 
           <SignedIn>
-            {step !== "analyzing" && (
-              <button
-                className="header-btn"
-                onClick={() => {
-                  setFeedbackInitialTab("my");
-                  setShowFeedbackPanel(true);
-                  trackEvent("feedback_panel_opened", { tab: "my" });
-                }}
-                title="Feedback & Ratings"
-                aria-label="Feedback & Ratings"
-              >
-                <MessageSquare size={14} />
-                <span>Feedback</span>
-              </button>
-            )}
-          </SignedIn>
-
-          <SignedIn>
             {isAdminUser && step !== "analyzing" && (
               <button
                 className="header-btn"
                 onClick={() => {
+                  setPendingExportFormat(null);
                   setFeedbackInitialTab("admin");
                   setShowFeedbackPanel(true);
                   trackEvent("feedback_panel_opened", { tab: "admin" });
@@ -3007,6 +3062,28 @@ function App() {
         </div>
       )}
 
+      <SignedIn>
+        {!showFeedbackPanel && step !== "analyzing" && (
+          <button
+            className="floating-feedback-cta"
+            onClick={() => {
+              setPendingExportFormat(null);
+              setFeedbackInitialTab("my");
+              setShowFeedbackPanel(true);
+              trackEvent("feedback_panel_opened", {
+                tab: "my",
+                source: "floating_cta",
+              });
+            }}
+            title="Give Feedback"
+            aria-label="Give Feedback"
+          >
+            <MessageSquare size={18} />
+            <span>Give Feedback</span>
+          </button>
+        )}
+      </SignedIn>
+
       {/* Modals/Panels */}
       {showTemplatePicker && (
         <Suspense fallback={null}>
@@ -3026,11 +3103,21 @@ function App() {
       {showFeedbackPanel && user?.id && userEmail && (
         <Suspense fallback={null}>
           <FeedbackPanel
-            onClose={() => setShowFeedbackPanel(false)}
+            onClose={() => {
+              if (pendingExportFormat) {
+                trackEvent("feedback_export_gate_cancelled", {
+                  format: pendingExportFormat,
+                });
+                setPendingExportFormat(null);
+              }
+              setShowFeedbackPanel(false);
+            }}
             userId={user.id}
             userEmail={userEmail}
             isAdmin={isAdminUser}
             initialTab={feedbackInitialTab}
+            requireFeedbackForDownload={Boolean(pendingExportFormat)}
+            onFeedbackSubmitted={handleFeedbackSubmitted}
           />
         </Suspense>
       )}

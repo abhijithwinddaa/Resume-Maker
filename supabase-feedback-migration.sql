@@ -54,6 +54,23 @@ drop policy if exists "Public can read approved app feedback" on public.app_feed
 drop policy if exists "Admins can read all app feedback" on public.app_feedback;
 drop policy if exists "Admins can moderate app feedback" on public.app_feedback;
 
+create or replace function public.feedback_actor_email()
+returns text
+language sql
+stable
+as $$
+  select lower(
+    coalesce(
+      auth.jwt()->>'email',
+      auth.jwt()->>'email_address',
+      auth.jwt()->>'primary_email_address',
+      auth.jwt()->>'https://clerk.dev/email',
+      auth.jwt()#>>'{email_addresses,0,email_address}',
+      ''
+    )
+  );
+$$;
+
 create policy "Users can read own app feedback"
   on public.app_feedback for select
   using (user_id = auth.jwt()->>'sub');
@@ -86,7 +103,7 @@ create policy "Public can read approved app feedback"
 create policy "Admins can read all app feedback"
   on public.app_feedback for select
   using (
-    lower(coalesce(auth.jwt()->>'email', auth.jwt()->>'primary_email_address', '')) in (
+    public.feedback_actor_email() in (
       'abhijithyadav786@gmail.com',
       'abhijithwinddaa@gmail.com'
     )
@@ -95,13 +112,13 @@ create policy "Admins can read all app feedback"
 create policy "Admins can moderate app feedback"
   on public.app_feedback for update
   using (
-    lower(coalesce(auth.jwt()->>'email', auth.jwt()->>'primary_email_address', '')) in (
+    public.feedback_actor_email() in (
       'abhijithyadav786@gmail.com',
       'abhijithwinddaa@gmail.com'
     )
   )
   with check (
-    lower(coalesce(auth.jwt()->>'email', auth.jwt()->>'primary_email_address', '')) in (
+    public.feedback_actor_email() in (
       'abhijithyadav786@gmail.com',
       'abhijithwinddaa@gmail.com'
     )

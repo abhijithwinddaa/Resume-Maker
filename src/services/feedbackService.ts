@@ -10,6 +10,16 @@ const FEEDBACK_TABLE = "app_feedback";
 const FEEDBACK_COLUMNS =
   "id, user_id, user_email, rating, comment, is_public, status, admin_notes, approved_by, approved_at, created_at, updated_at";
 
+export interface AdminFeedbackResult {
+  rows: FeedbackRow[];
+  error: string | null;
+}
+
+export interface FeedbackSubmissionCheckResult {
+  hasSubmitted: boolean;
+  hadError: boolean;
+}
+
 export async function loadPublicFeedback(limit = 30): Promise<FeedbackRow[]> {
   const { data, error } = await supabase
     .from(FEEDBACK_TABLE)
@@ -77,6 +87,13 @@ export async function upsertMyFeedback(
 export async function loadAdminFeedback(
   status: FeedbackStatus | "all" = "pending",
 ): Promise<FeedbackRow[]> {
+  const result = await loadAdminFeedbackWithStatus(status);
+  return result.rows;
+}
+
+export async function loadAdminFeedbackWithStatus(
+  status: FeedbackStatus | "all" = "pending",
+): Promise<AdminFeedbackResult> {
   let query = supabase
     .from(FEEDBACK_TABLE)
     .select(FEEDBACK_COLUMNS)
@@ -89,11 +106,41 @@ export async function loadAdminFeedback(
   const { data, error } = await query;
 
   if (error) {
+    const message = error.message || "Unknown admin feedback error";
     console.error("Error loading admin feedback queue:", error);
-    return [];
+    return {
+      rows: [],
+      error: message,
+    };
   }
 
-  return (data || []) as FeedbackRow[];
+  return {
+    rows: (data || []) as FeedbackRow[],
+    error: null,
+  };
+}
+
+export async function checkUserHasSubmittedFeedback(
+  userId: string,
+): Promise<FeedbackSubmissionCheckResult> {
+  const { count, error } = await supabase
+    .from(FEEDBACK_TABLE)
+    .select("id", { head: true, count: "exact" })
+    .eq("user_id", userId)
+    .limit(1);
+
+  if (error) {
+    console.error("Error checking feedback submission status:", error);
+    return {
+      hasSubmitted: false,
+      hadError: true,
+    };
+  }
+
+  return {
+    hasSubmitted: Number(count || 0) > 0,
+    hadError: false,
+  };
 }
 
 export async function moderateFeedback(

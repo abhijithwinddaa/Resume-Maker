@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, MessageSquare, Shield, Star, X } from "lucide-react";
 import {
-  loadAdminFeedback,
+  loadAdminFeedbackWithStatus,
   loadMyFeedback,
   loadPublicFeedback,
   moderateFeedback,
@@ -31,6 +31,8 @@ interface FeedbackPanelProps {
   userEmail: string;
   isAdmin: boolean;
   initialTab?: FeedbackTab;
+  requireFeedbackForDownload?: boolean;
+  onFeedbackSubmitted?: (saved: FeedbackRow) => void;
 }
 
 const COMMENT_MIN_LENGTH = 10;
@@ -61,6 +63,8 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   userEmail,
   isAdmin,
   initialTab = "community",
+  requireFeedbackForDownload = false,
+  onFeedbackSubmitted,
 }) => {
   const [activeTab, setActiveTab] = useState<FeedbackTab>(initialTab);
   const [loading, setLoading] = useState(false);
@@ -70,6 +74,7 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   const [myFeedback, setMyFeedback] = useState<FeedbackRow | null>(null);
   const [publicFeedback, setPublicFeedback] = useState<FeedbackRow[]>([]);
   const [adminQueue, setAdminQueue] = useState<FeedbackRow[]>([]);
+  const [adminQueueError, setAdminQueueError] = useState<string | null>(null);
   const [popularity, setPopularity] = useState<PopularitySnapshot>(
     emptyPopularitySnapshot,
   );
@@ -112,9 +117,14 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   }, []);
 
   const loadAdminQueue = useCallback(async () => {
-    if (!isAdmin) return;
-    const rows = await loadAdminFeedback(adminFilter);
-    setAdminQueue(rows);
+    if (!isAdmin) {
+      setAdminQueueError(null);
+      return;
+    }
+
+    const result = await loadAdminFeedbackWithStatus(adminFilter);
+    setAdminQueue(result.rows);
+    setAdminQueueError(result.error);
   }, [adminFilter, isAdmin]);
 
   useEffect(() => {
@@ -176,7 +186,9 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
 
     setMyFeedback(saved);
     setNotice(
-      "Thanks. Your feedback has been submitted and is waiting for admin approval.",
+      requireFeedbackForDownload
+        ? "Thanks. Your feedback is submitted. Continuing your download..."
+        : "Thanks. Your feedback has been submitted and is waiting for admin approval.",
     );
     trackEvent("feedback_submitted", {
       rating: saved.rating,
@@ -184,6 +196,8 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
       status: saved.status,
       is_edit: Boolean(myFeedback),
     });
+
+    onFeedbackSubmitted?.(saved);
 
     await loadCommunity();
     if (isAdmin) {
@@ -303,6 +317,13 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
 
         {activeTab === "my" && (
           <section className="feedback-section">
+            {requireFeedbackForDownload && (
+              <p className="feedback-gate-note">
+                Give feedback once to unlock this download. After submitting,
+                your future downloads will work directly.
+              </p>
+            )}
+
             <p className="feedback-muted">
               Rate your experience and share what can be improved.
             </p>
@@ -343,7 +364,11 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
 
             <button className="feedback-submit" onClick={handleSubmit}>
               <Check size={14} />
-              {myFeedback ? "Update Feedback" : "Submit Feedback"}
+              {requireFeedbackForDownload && !myFeedback
+                ? "Submit Feedback & Continue Download"
+                : myFeedback
+                  ? "Update Feedback"
+                  : "Submit Feedback"}
             </button>
           </section>
         )}
@@ -406,6 +431,12 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
 
         {activeTab === "admin" && isAdmin && (
           <section className="feedback-section">
+            {adminQueueError && (
+              <p className="feedback-error">
+                Could not load admin queue: {adminQueueError}
+              </p>
+            )}
+
             <div className="feedback-admin-toolbar">
               <label htmlFor="feedback-filter">Filter</label>
               <select
@@ -424,7 +455,11 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
 
             <div className="feedback-list">
               {adminQueue.length === 0 && (
-                <p className="feedback-muted">No items in this queue.</p>
+                <p className="feedback-muted">
+                  No items in this queue. If you expected pending feedback,
+                  confirm your Clerk-Supabase token template includes an email
+                  claim.
+                </p>
               )}
               {adminQueue.map((row) => (
                 <article key={row.id} className="feedback-item admin-item">
