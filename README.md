@@ -73,6 +73,7 @@ npm run dev
 3. Run [`supabase-schema.sql`](./supabase-schema.sql).
 4. For existing projects, run [`supabase-rls-migration.sql`](./supabase-rls-migration.sql).
 5. Run [`supabase-ai-cache-migration.sql`](./supabase-ai-cache-migration.sql) to enable server-side ATS and optimize caching.
+6. Run [`supabase-feedback-migration.sql`](./supabase-feedback-migration.sql) to enable user ratings/feedback, admin moderation, and live popularity counters.
 
 The app now expects JWT-backed RLS with `auth.jwt()->>'sub'` matching the Clerk user ID.
 

@@ -104,6 +104,27 @@
     "download": "Descargar",
     "close": "Cerrar"
   },
+  "feedback": {
+    "title": "Opiniones y Calificaciones",
+    "myFeedback": "Mi Opinión",
+    "community": "Comunidad",
+    "admin": "Admin",
+    "rating": "Tu Calificación",
+    "comment": "Comentario",
+    "commentPlaceholder": "Cuéntanos qué te ayudó y qué podemos mejorar.",
+    "allowPublic": "Permitir que esta opinión aparezca públicamente tras la aprobación.",
+    "submit": "Enviar Opinión",
+    "update": "Actualizar Opinión",
+    "status": "Estado actual",
+    "approvedReviews": "reseña(s) aprobada(s)",
+    "pending": "Pendiente",
+    "approved": "Aprobada",
+    "rejected": "Rechazada",
+    "adminFilter": "Filtro",
+    "approve": "Aprobar",
+    "reject": "Rechazar",
+    "adminNotes": "Nota opcional de admin"
+  },
   "template": {
     "title": "Plantilla y Estilo",
     "chooseTemplate": "Elegir Plantilla",

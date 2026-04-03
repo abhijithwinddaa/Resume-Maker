@@ -66,6 +66,8 @@ import {
   trackEvent,
   trackPageView,
 } from "./utils/analytics";
+import { recordFeatureUsage } from "./services/popularityService";
+import { isAdminEmail } from "./utils/adminAccess";
 import { useDebounce } from "./hooks/useDebounce";
 import { validateResumeData } from "./utils/zodSchemas";
 import { exportToDocx } from "./utils/docxExporter";
@@ -93,11 +95,13 @@ import {
   HardDrive,
   Undo2,
   Redo2,
+  MessageSquare,
   Palette,
   FileType,
   Mail,
   FolderOpen,
   Eye,
+  Shield,
   PlusCircle,
   CheckCircle2,
   AlertTriangle,
@@ -111,8 +115,11 @@ const TemplatePicker = lazy(() => import("./components/TemplatePicker"));
 const CoverLetterPanel = lazy(() => import("./components/CoverLetter"));
 const ResumeManagerPanel = lazy(() => import("./components/ResumeManager"));
 const PdfPreviewPanel = lazy(() => import("./components/PdfPreview"));
+const FeedbackPanel = lazy(() => import("./components/FeedbackPanel"));
 const CLERK_SUPABASE_TEMPLATE =
   import.meta.env.VITE_CLERK_SUPABASE_TEMPLATE || "";
+const FEEDBACK_PROMPT_COOLDOWN_MS = 1000 * 60 * 60 * 24 * 14;
+const FEEDBACK_PROMPT_LAST_AT_KEY = "feedback-prompt-last-at";
 
 /* ─── Score Visualization Components ─────────────────── */
 
@@ -296,6 +303,11 @@ function App() {
   const { getToken } = useAuth();
   const { user } = useUser();
   const { openSignIn } = useClerk();
+  const userEmail =
+    user?.primaryEmailAddress?.emailAddress ||
+    user?.emailAddresses?.[0]?.emailAddress ||
+    "";
+  const isAdminUser = isAdminEmail(userEmail);
 
   // Zustand store
   const step = useAppStore((s) => s.step);
@@ -355,6 +367,10 @@ function App() {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCoverLetter, setShowCoverLetter] = useState(false);
   const [showResumeManager, setShowResumeManager] = useState(false);
+  const [showFeedbackPanel, setShowFeedbackPanel] = useState(false);
+  const [feedbackInitialTab, setFeedbackInitialTab] = useState<
+    "my" | "community" | "admin"
+  >("community");
 
   // Save status tracking
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
@@ -420,6 +436,8 @@ function App() {
   const authStartTimeoutRef = useRef<number | null>(null);
   const activeResumeIdRef = useRef<string | null>(activeResumeId);
   const modeSelectionInProgressRef = useRef(false);
+  const trackedUsageRef = useRef<Set<string>>(new Set());
+  const trackedAtsUsageRef = useRef(false);
   const pendingResumeCreationRef = useRef<Promise<
     Awaited<ReturnType<typeof saveResume>>
   > | null>(null);
@@ -434,6 +452,7 @@ function App() {
         setShowTemplatePicker(false);
         setShowCoverLetter(false);
         setShowResumeManager(false);
+        setShowFeedbackPanel(false);
         return;
       }
       if (e.ctrlKey || e.metaKey) {
@@ -480,6 +499,8 @@ function App() {
   useEffect(() => {
     if (!user?.id) {
       setSupabaseAccessTokenGetter(null);
+      trackedUsageRef.current.clear();
+      trackedAtsUsageRef.current = false;
       return;
     }
 
@@ -496,6 +517,35 @@ function App() {
 
     return () => setSupabaseAccessTokenGetter(null);
   }, [getToken, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || step !== "editor") return;
+
+    const featureKey =
+      mode === "edit"
+        ? "resume_edit"
+        : mode === "create"
+          ? "create_resume"
+          : null;
+
+    if (!featureKey) return;
+
+    const trackingKey = `${user.id}:${featureKey}`;
+    if (trackedUsageRef.current.has(trackingKey)) return;
+    trackedUsageRef.current.add(trackingKey);
+
+    void recordFeatureUsage(featureKey);
+  }, [mode, step, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || mode !== "ats" || step !== "score" || !atsResult) {
+      return;
+    }
+
+    if (trackedAtsUsageRef.current) return;
+    trackedAtsUsageRef.current = true;
+    void recordFeatureUsage("ats_resume_edit");
+  }, [atsResult, mode, step, user?.id]);
 
   useEffect(() => {
     if (user || step !== "landing") {
@@ -652,6 +702,37 @@ function App() {
     }, 450);
     return () => window.clearInterval(interval);
   }, [isPdfLoading]);
+
+  useEffect(() => {
+    if (!user?.id || step !== "score" || !atsResult) return;
+
+    let lastPromptAt = 0;
+    try {
+      lastPromptAt = Number(localStorage.getItem(FEEDBACK_PROMPT_LAST_AT_KEY));
+    } catch {
+      lastPromptAt = 0;
+    }
+
+    if (
+      Number.isFinite(lastPromptAt) &&
+      Date.now() - lastPromptAt < FEEDBACK_PROMPT_COOLDOWN_MS
+    ) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(FEEDBACK_PROMPT_LAST_AT_KEY, String(Date.now()));
+    } catch {
+      // ignore storage errors
+    }
+
+    setFeedbackInitialTab("my");
+    setShowFeedbackPanel(true);
+    trackEvent("feedback_prompt_shown", {
+      trigger: "ats_score",
+      overall_score: atsResult.overallScore,
+    });
+  }, [atsResult, step, user?.id]);
 
   useEffect(() => {
     if (step !== "score" && step !== "editor") {
@@ -882,12 +963,14 @@ function App() {
           );
           // Brief pause so user sees the toast and the hidden template re-renders with fixed data
           await new Promise((r) => setTimeout(r, 600));
-          
+
           // Re-acquire the freshly rendered DOM element
           el = resumeRef.current;
           if (!el) {
-             setError("Resume preview not available for export. Please try again.");
-             return;
+            setError(
+              "Resume preview not available for export. Please try again.",
+            );
+            return;
           }
         }
       }
@@ -895,12 +978,15 @@ function App() {
     }
     setIsExporting(true);
     setExportToastMessage("Preparing PDF...");
-    
+
     trackEvent("resume_exported", {
       format: "pdf",
       has_resume_data: Boolean(resumeData),
       embedded_resume_data: privacySettings.embedResumeDataInPdf,
     });
+    if (user?.id) {
+      void recordFeatureUsage("resume_download");
+    }
     setPreferredExportFormat("pdf");
     try {
       localStorage.setItem("preferred-export-format", "pdf");
@@ -921,6 +1007,7 @@ function App() {
     resumeData,
     setError,
     reactToPrintFn,
+    user?.id,
   ]);
 
   /* ── Mode Selection (landing page) ───────────────── */
@@ -1617,7 +1704,9 @@ function App() {
 
   const handleExportDocx = async () => {
     if (!resumeData) {
-      setError("No resume data to export. Please create or load a resume first.");
+      setError(
+        "No resume data to export. Please create or load a resume first.",
+      );
       return;
     }
     const validation = validateForExport(resumeData);
@@ -1642,6 +1731,9 @@ function App() {
     try {
       await exportToDocx(resumeData);
       trackEvent("resume_exported", { format: "docx" });
+      if (user?.id) {
+        void recordFeatureUsage("resume_download");
+      }
       setPreferredExportFormat("docx");
       try {
         localStorage.setItem("preferred-export-format", "docx");
@@ -1774,6 +1866,42 @@ function App() {
 
           <SignedIn>
             <UserButton afterSignOutUrl="/" />
+          </SignedIn>
+
+          <SignedIn>
+            {step !== "analyzing" && (
+              <button
+                className="header-btn"
+                onClick={() => {
+                  setFeedbackInitialTab("my");
+                  setShowFeedbackPanel(true);
+                  trackEvent("feedback_panel_opened", { tab: "my" });
+                }}
+                title="Feedback & Ratings"
+                aria-label="Feedback & Ratings"
+              >
+                <MessageSquare size={14} />
+                <span>Feedback</span>
+              </button>
+            )}
+          </SignedIn>
+
+          <SignedIn>
+            {isAdminUser && step !== "analyzing" && (
+              <button
+                className="header-btn"
+                onClick={() => {
+                  setFeedbackInitialTab("admin");
+                  setShowFeedbackPanel(true);
+                  trackEvent("feedback_panel_opened", { tab: "admin" });
+                }}
+                title="Feedback Admin"
+                aria-label="Feedback Admin"
+              >
+                <Shield size={14} />
+                <span>Admin</span>
+              </button>
+            )}
           </SignedIn>
 
           {step !== "landing" && step !== "analyzing" && (
@@ -2893,6 +3021,17 @@ function App() {
       {showResumeManager && (
         <Suspense fallback={null}>
           <ResumeManagerPanel onClose={() => setShowResumeManager(false)} />
+        </Suspense>
+      )}
+      {showFeedbackPanel && user?.id && userEmail && (
+        <Suspense fallback={null}>
+          <FeedbackPanel
+            onClose={() => setShowFeedbackPanel(false)}
+            userId={user.id}
+            userEmail={userEmail}
+            isAdmin={isAdminUser}
+            initialTab={feedbackInitialTab}
+          />
         </Suspense>
       )}
 

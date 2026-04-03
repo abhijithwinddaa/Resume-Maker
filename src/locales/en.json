@@ -104,6 +104,27 @@
     "download": "Download",
     "close": "Close"
   },
+  "feedback": {
+    "title": "Feedback & Ratings",
+    "myFeedback": "My Feedback",
+    "community": "Community",
+    "admin": "Admin",
+    "rating": "Your Rating",
+    "comment": "Feedback",
+    "commentPlaceholder": "Tell us what helped and what should improve.",
+    "allowPublic": "Allow this feedback to appear publicly after approval.",
+    "submit": "Submit Feedback",
+    "update": "Update Feedback",
+    "status": "Current status",
+    "approvedReviews": "approved review(s)",
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "adminFilter": "Filter",
+    "approve": "Approve",
+    "reject": "Reject",
+    "adminNotes": "Optional admin note"
+  },
   "template": {
     "title": "Template & Style",
     "chooseTemplate": "Choose Template",
