@@ -12,11 +12,14 @@ import {
   writeServerCache,
 } from "../../src/server/aiCacheStore";
 import { callServerAI } from "../../src/server/aiRuntime";
+import { authenticateClerkRequest } from "../../src/server/requestAuth";
 import type {
   RewriteResumeRequest,
   RewriteResumeResponse,
 } from "../../src/types/serverAI";
 import type { ResumeData } from "../../src/types/resume";
+
+const MAX_REQUEST_BYTES = 512_000;
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -46,9 +49,29 @@ function validateRequest(body: Partial<RewriteResumeRequest>): string | null {
   return null;
 }
 
+function isRequestTooLarge(request: Request): boolean {
+  const contentLengthHeader = request.headers.get("content-length");
+  if (!contentLengthHeader) return false;
+
+  const contentLength = Number(contentLengthHeader);
+  return Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES;
+}
+
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
+  }
+
+  if (isRequestTooLarge(request)) {
+    return jsonResponse(
+      { error: "Request body too large. Please reduce input size." },
+      413,
+    );
+  }
+
+  const authResult = await authenticateClerkRequest(request);
+  if (!authResult.ok) {
+    return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
   let body: RewriteResumeRequest;
@@ -63,8 +86,14 @@ export default async function handler(request: Request): Promise<Response> {
     return jsonResponse({ error: validationError }, 400);
   }
 
-  const { resumeData, jobDescription, atsResult, iteration, mode, cacheAllowed } =
-    body;
+  const {
+    resumeData,
+    jobDescription,
+    atsResult,
+    iteration,
+    mode,
+    cacheAllowed,
+  } = body;
   const cacheKey = buildRewriteCacheKey(
     mode,
     resumeData,
@@ -73,7 +102,8 @@ export default async function handler(request: Request): Promise<Response> {
     iteration,
     OPTIMIZE_PROMPT_VERSION,
   );
-  const operation = mode === "jd" ? "optimize-rewrite" : "self-optimize-rewrite";
+  const operation =
+    mode === "jd" ? "optimize-rewrite" : "self-optimize-rewrite";
 
   try {
     const optimizedResume = await withInFlightDedup<ResumeData>(

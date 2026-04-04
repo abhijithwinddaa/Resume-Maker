@@ -50,13 +50,7 @@ function readEnv(...keys: string[]): string {
 
 function readGithubTokens(): string[] {
   const env = getEnvMap();
-  const multiTokenValues = [
-    env.GITHUB_TOKENS,
-    env.VITE_GITHUB_TOKENS,
-    env.GITHUB_TOKEN,
-    env.VITE_GITHUB_TOKEN,
-    env.VITE_GITHUB_TOKEN_2,
-  ]
+  const multiTokenValues = [env.GITHUB_TOKENS, env.GITHUB_TOKEN]
     .filter((value): value is string => Boolean(value && value.trim()))
     .flatMap((value) => value.split(","))
     .map((value) => value.trim())
@@ -68,11 +62,10 @@ function readGithubTokens(): string[] {
 function getServerAIConfig(): ServerAIConfig {
   return {
     githubTokens: readGithubTokens(),
-    githubModel: readEnv("GITHUB_MODEL", "VITE_GITHUB_MODEL") || "gpt-4o-mini",
-    geminiApiKey: readEnv("GEMINI_API_KEY", "VITE_GEMINI_API_KEY"),
-    groqApiKey: readEnv("GROQ_API_KEY", "VITE_GROQ_API_KEY"),
-    groqModel:
-      readEnv("GROQ_MODEL", "VITE_GROQ_MODEL") || "llama-3.3-70b-versatile",
+    githubModel: readEnv("GITHUB_MODEL") || "gpt-4o-mini",
+    geminiApiKey: readEnv("GEMINI_API_KEY"),
+    groqApiKey: readEnv("GROQ_API_KEY"),
+    groqModel: readEnv("GROQ_MODEL") || "llama-3.3-70b-versatile",
   };
 }
 
@@ -188,20 +181,23 @@ async function callGroq(
     throw new Error("Groq API key is not configured on the server.");
   }
 
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.groqApiKey}`,
-      "Content-Type": "application/json",
+  const response = await fetch(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.groqApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: config.groqModel,
+        messages,
+        temperature: 0.3,
+        max_tokens: 16000,
+      }),
+      signal,
     },
-    body: JSON.stringify({
-      model: config.groqModel,
-      messages,
-      temperature: 0.3,
-      max_tokens: 16000,
-    }),
-    signal,
-  });
+  );
 
   if (!response.ok) {
     const errBody = await response.text();
@@ -253,7 +249,10 @@ export async function callServerAI(
       return await callGitHub(config, messages, signal);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (message !== "ALL_GITHUB_RATE_LIMITED" && !message.includes("not configured")) {
+      if (
+        message !== "ALL_GITHUB_RATE_LIMITED" &&
+        !message.includes("not configured")
+      ) {
         throw error;
       }
     }

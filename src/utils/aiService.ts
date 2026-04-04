@@ -1,11 +1,6 @@
 import type { AISettings } from "../types/aiSettings";
 import type { ResumeData } from "../types/resume";
 import { buildResumePrompt } from "./aiPrompt";
-import { buildATSPrompt } from "./atsPrompt";
-import { buildOptimizePrompt } from "./optimizePrompt";
-import { buildSelfATSPrompt } from "./selfATSPrompt";
-import { buildSelfOptimizePrompt } from "./selfOptimizePrompt";
-import { buildResumeParsePrompt } from "./resumeParser";
 import { getCacheKey, getCached, setCache } from "./aiCache";
 import { loadPrivacySettings } from "../types/privacySettings";
 import {
@@ -15,6 +10,8 @@ import {
 import type {
   AnalyzeATSRequest,
   AnalyzeATSResponse,
+  ParseResumeRequest,
+  ParseResumeResponse,
   RewriteResumeRequest,
   RewriteResumeResponse,
 } from "../types/serverAI";
@@ -748,7 +745,9 @@ export function parseATSResultResponse(
     !parsed.breakdown ||
     !parsed.topSuggestions
   ) {
-    throw new Error(`AI response is missing required fields for ${errorLabel}.`);
+    throw new Error(
+      `AI response is missing required fields for ${errorLabel}.`,
+    );
   }
 
   parsed.overallScore = Math.max(
@@ -782,21 +781,41 @@ export function parseOptimizedResumeResponse(
     !parsed.projects ||
     !parsed.skills
   ) {
-    throw new Error(`AI response is missing required fields for ${errorLabel}.`);
+    throw new Error(
+      `AI response is missing required fields for ${errorLabel}.`,
+    );
   }
 
   return finalizeOptimizedResume(parsed, originalResume);
 }
 
-async function postServerAIRequest<TRequest, TResponse>(
+let serverAuthTokenGetter: (() => Promise<string | null>) | null = null;
+
+export function setServerAuthTokenGetter(
+  getter: (() => Promise<string | null>) | null,
+): void {
+  serverAuthTokenGetter = getter;
+}
+
+export async function postServerAIRequest<TRequest, TResponse>(
   path: string,
   payload: TRequest,
   signal?: AbortSignal,
 ): Promise<TResponse> {
+  if (!serverAuthTokenGetter) {
+    throw new Error("Please sign in to continue.");
+  }
+
+  const token = await serverAuthTokenGetter();
+  if (!token) {
+    throw new Error("Please sign in to continue.");
+  }
+
   const response = await fetch(path, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
     signal,
@@ -818,129 +837,16 @@ async function postServerAIRequest<TRequest, TResponse>(
   return (await response.json()) as TResponse;
 }
 
-function canUseClientFallback(settings: AISettings): boolean {
-  return Boolean(
-    settings.githubToken ||
-      settings.githubTokens.length > 0 ||
-      settings.geminiApiKey ||
-      settings.groqApiKey,
-  );
-}
-
-async function analyzeATSScoreDirect(
-  settings: AISettings,
-  resumeData: ResumeData,
-  jobDescription: string,
-  signal?: AbortSignal,
-): Promise<ATSResult> {
-  const prompt = buildATSPrompt(resumeData, jobDescription);
-  const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content:
-        "You are an expert ATS analyzer. You output ONLY valid JSON. No markdown, no explanation, no code fences.",
-    },
-    {
-      role: "user",
-      content: prompt,
-    },
-  ];
-
-  const rawResponse = await callAI(settings, messages, signal);
-  return parseATSResultResponse(rawResponse, resumeData, "ATS analysis");
-}
-
-async function selfATSScoreDirect(
-  settings: AISettings,
-  resumeData: ResumeData,
-  signal?: AbortSignal,
-): Promise<ATSResult> {
-  const prompt = buildSelfATSPrompt(resumeData);
-  const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content:
-        "You are an expert ATS resume auditor. You output ONLY valid JSON. No markdown, no explanation, no code fences.",
-    },
-    {
-      role: "user",
-      content: prompt,
-    },
-  ];
-
-  const rawResponse = await callAI(settings, messages, signal);
-  return parseATSResultResponse(rawResponse, resumeData, "self ATS analysis");
-}
-
-async function rewriteResumeDirect(
-  settings: AISettings,
-  resumeData: ResumeData,
-  jobDescription: string,
-  atsResult: ATSResult,
-  iteration: number,
-  signal?: AbortSignal,
-): Promise<ResumeData> {
-  const optimizePrompt = buildOptimizePrompt(
-    resumeData,
-    jobDescription,
-    atsResult,
-    iteration,
-  );
-
-  const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content:
-        "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. You must incorporate ALL missing keywords and skills from the ATS report.",
-    },
-    { role: "user", content: optimizePrompt },
-  ];
-
-  const rawResponse = await callAI(settings, messages, signal);
-  return parseOptimizedResumeResponse(
-    rawResponse,
-    resumeData,
-    "resume optimization",
-  );
-}
-
-async function rewriteSelfResumeDirect(
-  settings: AISettings,
-  resumeData: ResumeData,
-  atsResult: ATSResult,
-  iteration: number,
-  signal?: AbortSignal,
-): Promise<ResumeData> {
-  const optimizePrompt = buildSelfOptimizePrompt(
-    resumeData,
-    atsResult,
-    iteration,
-  );
-
-  const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content:
-        "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. You must improve the resume based on general best practices.",
-    },
-    { role: "user", content: optimizePrompt },
-  ];
-
-  const rawResponse = await callAI(settings, messages, signal);
-  return parseOptimizedResumeResponse(
-    rawResponse,
-    resumeData,
-    "self resume optimization",
-  );
-}
-
 async function analyzeATSViaServer(
   resumeData: ResumeData,
   jobDescription: string,
   signal?: AbortSignal,
 ): Promise<ATSResult> {
   const cacheAllowed = loadPrivacySettings().cacheAIResponses;
-  const response = await postServerAIRequest<AnalyzeATSRequest, AnalyzeATSResponse>(
+  const response = await postServerAIRequest<
+    AnalyzeATSRequest,
+    AnalyzeATSResponse
+  >(
     "/api/ats/analyze",
     {
       resumeData,
@@ -958,7 +864,10 @@ async function selfATSViaServer(
   signal?: AbortSignal,
 ): Promise<ATSResult> {
   const cacheAllowed = loadPrivacySettings().cacheAIResponses;
-  const response = await postServerAIRequest<AnalyzeATSRequest, AnalyzeATSResponse>(
+  const response = await postServerAIRequest<
+    AnalyzeATSRequest,
+    AnalyzeATSResponse
+  >(
     "/api/ats/analyze",
     {
       resumeData,
@@ -1021,7 +930,7 @@ async function rewriteSelfResumeViaServer(
 }
 
 export async function analyzeATSScore(
-  settings: AISettings,
+  _settings: AISettings,
   resumeData: ResumeData,
   jobDescription: string,
   signal?: AbortSignal,
@@ -1040,30 +949,15 @@ export async function analyzeATSScore(
     return enrichedCached;
   }
 
-  try {
-    const parsed = await analyzeATSViaServer(resumeData, jobDescription, signal);
-    setCache(cacheKey, parsed);
-    return parsed;
-  } catch (error) {
-    if (!canUseClientFallback(settings)) {
-      throw error;
-    }
-
-    const parsed = await analyzeATSScoreDirect(
-      settings,
-      resumeData,
-      jobDescription,
-      signal,
-    );
-    setCache(cacheKey, parsed);
-    return parsed;
-  }
+  const parsed = await analyzeATSViaServer(resumeData, jobDescription, signal);
+  setCache(cacheKey, parsed);
+  return parsed;
 }
 
 // ─── Self ATS Score (No JD) ─────────────────────────────
 
 export async function selfATSScore(
-  settings: AISettings,
+  _settings: AISettings,
   resumeData: ResumeData,
   signal?: AbortSignal,
 ): Promise<ATSResult> {
@@ -1077,19 +971,9 @@ export async function selfATSScore(
     return enrichedCached;
   }
 
-  try {
-    const parsed = await selfATSViaServer(resumeData, signal);
-    setCache(cacheKey, parsed);
-    return parsed;
-  } catch (error) {
-    if (!canUseClientFallback(settings)) {
-      throw error;
-    }
-
-    const parsed = await selfATSScoreDirect(settings, resumeData, signal);
-    setCache(cacheKey, parsed);
-    return parsed;
-  }
+  const parsed = await selfATSViaServer(resumeData, signal);
+  setCache(cacheKey, parsed);
+  return parsed;
 }
 
 // ─── Auto-Optimize Loop ─────────────────────────────────
@@ -1262,50 +1146,20 @@ export async function optimizeResumeLoop(
         i,
         abortSignal,
       );
-    } catch (serverError) {
-      if (!canUseClientFallback(settings)) {
-        const progress: OptimizeProgress = {
-          currentIteration: i,
-          maxIterations,
-          phase: "error",
-          message: `AI rewrite failed on iteration ${i}.`,
-          history,
-          finalResume: bestResume,
-          finalATSResult: bestATSResult,
-          finalScore: bestScore,
-          error:
-            serverError instanceof Error
-              ? serverError.message
-              : "AI rewrite failed",
-        };
-        onProgress(progress);
-        return progress;
-      }
-
-      try {
-        rewrittenResume = await rewriteResumeDirect(
-          settings,
-          currentResume,
-          jobDescription,
-          currentATSResult,
-          i,
-          abortSignal,
-        );
-      } catch (err) {
-        const progress: OptimizeProgress = {
-          currentIteration: i,
-          maxIterations,
-          phase: "error",
-          message: `AI rewrite failed on iteration ${i}.`,
-          history,
-          finalResume: bestResume,
-          finalATSResult: bestATSResult,
-          finalScore: bestScore,
-          error: err instanceof Error ? err.message : "AI rewrite failed",
-        };
-        onProgress(progress);
-        return progress;
-      }
+    } catch (err) {
+      const progress: OptimizeProgress = {
+        currentIteration: i,
+        maxIterations,
+        phase: "error",
+        message: `AI rewrite failed on iteration ${i}.`,
+        history,
+        finalResume: bestResume,
+        finalATSResult: bestATSResult,
+        finalScore: bestScore,
+        error: err instanceof Error ? err.message : "AI rewrite failed",
+      };
+      onProgress(progress);
+      return progress;
     }
 
     onProgress({
@@ -1458,7 +1312,11 @@ export async function selfOptimizeLoop(
       });
 
       try {
-        currentATSResult = await selfATSScore(settings, currentResume, abortSignal);
+        currentATSResult = await selfATSScore(
+          settings,
+          currentResume,
+          abortSignal,
+        );
       } catch (err) {
         const progress: OptimizeProgress = {
           currentIteration: i,
@@ -1525,49 +1383,20 @@ export async function selfOptimizeLoop(
         i,
         abortSignal,
       );
-    } catch (serverError) {
-      if (!canUseClientFallback(settings)) {
-        const progress: OptimizeProgress = {
-          currentIteration: i,
-          maxIterations,
-          phase: "error",
-          message: `AI rewrite failed on iteration ${i}.`,
-          history,
-          finalResume: bestResume,
-          finalATSResult: bestATSResult,
-          finalScore: bestScore,
-          error:
-            serverError instanceof Error
-              ? serverError.message
-              : "AI rewrite failed",
-        };
-        onProgress(progress);
-        return progress;
-      }
-
-      try {
-        rewrittenResume = await rewriteSelfResumeDirect(
-          settings,
-          currentResume,
-          currentATSResult,
-          i,
-          abortSignal,
-        );
-      } catch (err) {
-        const progress: OptimizeProgress = {
-          currentIteration: i,
-          maxIterations,
-          phase: "error",
-          message: `AI rewrite failed on iteration ${i}.`,
-          history,
-          finalResume: bestResume,
-          finalATSResult: bestATSResult,
-          finalScore: bestScore,
-          error: err instanceof Error ? err.message : "AI rewrite failed",
-        };
-        onProgress(progress);
-        return progress;
-      }
+    } catch (err) {
+      const progress: OptimizeProgress = {
+        currentIteration: i,
+        maxIterations,
+        phase: "error",
+        message: `AI rewrite failed on iteration ${i}.`,
+        history,
+        finalResume: bestResume,
+        finalATSResult: bestATSResult,
+        finalScore: bestScore,
+        error: err instanceof Error ? err.message : "AI rewrite failed",
+      };
+      onProgress(progress);
+      return progress;
     }
 
     onProgress({
@@ -1656,8 +1485,6 @@ export async function selfOptimizeLoop(
     }
   }
 
-
-
   // Exhausted all iterations — return best result
   const progress: OptimizeProgress = {
     currentIteration: maxIterations,
@@ -1676,9 +1503,10 @@ export async function selfOptimizeLoop(
 // ─── Resume Parser ───────────────────────────────────────
 
 export async function parseResumeFromText(
-  settings: AISettings,
+  _settings: AISettings,
   resumeText: string,
   extractedLinks?: string[],
+  signal?: AbortSignal,
 ): Promise<ResumeData> {
   // Check cache first
   const cacheKey = getCacheKey(
@@ -1692,27 +1520,21 @@ export async function parseResumeFromText(
     return cached;
   }
 
-  const prompt = buildResumeParsePrompt(resumeText, extractedLinks);
-  const messages: ChatMessage[] = [
+  const cacheAllowed = loadPrivacySettings().cacheAIResponses;
+  const response = await postServerAIRequest<
+    ParseResumeRequest,
+    ParseResumeResponse
+  >(
+    "/api/parse/resume",
     {
-      role: "system",
-      content:
-        "You are an expert resume parser. You MUST preserve ALL URLs/links from the resume. Output ONLY valid JSON. No markdown, no explanation, no code fences.",
+      resumeText,
+      extractedLinks,
+      cacheAllowed,
     },
-    { role: "user", content: prompt },
-  ];
+    signal,
+  );
 
-  const rawResponse = await callAI(settings, messages);
-  const jsonStr = extractJSON(rawResponse);
-
-  let parsed: ResumeData;
-  try {
-    parsed = JSON.parse(jsonStr) as ResumeData;
-  } catch {
-    throw new Error(
-      `AI returned invalid JSON when parsing resume. Try again.\n\nRaw preview: ${rawResponse.substring(0, 300)}...`,
-    );
-  }
+  const parsed = response.resumeData;
 
   if (!parsed.contact?.name) {
     throw new Error("Could not parse resume: missing contact name");

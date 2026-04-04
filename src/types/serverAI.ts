@@ -1,5 +1,6 @@
 import type { ResumeData } from "./resume";
 import type { ATSResult } from "../utils/aiService";
+import type { DetectedStyle } from "../utils/templateDetector";
 
 export type AnalyzeMode = "jd" | "self";
 
@@ -26,5 +27,39 @@ export interface RewriteResumeRequest {
 
 export interface RewriteResumeResponse {
   resumeData: ResumeData;
+  cached: boolean;
+}
+
+export interface ParseResumeRequest {
+  resumeText: string;
+  extractedLinks?: string[];
+  cacheAllowed: boolean;
+}
+
+export interface ParseResumeResponse {
+  resumeData: ResumeData;
+  cached: boolean;
+}
+
+export interface DetectTemplateRequest {
+  resumeText: string;
+  cacheAllowed: boolean;
+}
+
+export interface DetectTemplateResponse {
+  detectedStyle: DetectedStyle;
+  cached: boolean;
+}
+
+export interface GenerateCoverLetterRequest {
+  resumeText: string;
+  jobDescription: string;
+  companyName: string;
+  position: string;
+  cacheAllowed: boolean;
+}
+
+export interface GenerateCoverLetterResponse {
+  content: string;
   cached: boolean;
 }

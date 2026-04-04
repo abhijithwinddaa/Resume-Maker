@@ -12,7 +12,6 @@ interface CoverLetterPanelProps {
 const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
   const resumeData = useAppStore((s) => s.resumeData);
   const jdText = useAppStore((s) => s.jdText);
-  const aiSettings = useAppStore((s) => s.aiSettings);
   const coverLetter = useAppStore((s) => s.coverLetter);
   const setCoverLetter = useAppStore((s) => s.setCoverLetter);
   const isGenerating = useAppStore((s) => s.isGeneratingCoverLetter);
@@ -62,7 +61,6 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
       const resumeText = JSON.stringify(resumeData);
       const content = await generateCoverLetter(
         {
-          aiSettings,
           resumeText,
           jobDescription: jdText,
           companyName: companyName.trim(),

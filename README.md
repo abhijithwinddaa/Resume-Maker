@@ -30,6 +30,9 @@ Create a `.env` file in the project root:
 ```env
 # Clerk
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_key
+CLERK_JWT_ISSUER=https://your-clerk-issuer
+# Optional override if your issuer does not expose /.well-known/jwks.json
+CLERK_JWKS_URL=https://your-clerk-issuer/.well-known/jwks.json
 
 # Supabase
 VITE_SUPABASE_URL=https://your-project.supabase.co
@@ -45,12 +48,6 @@ GITHUB_TOKENS=github_pat_server_token_1,github_pat_server_token_2
 GEMINI_API_KEY=your_server_google_ai_studio_key
 GROQ_API_KEY=your_server_groq_key_optional
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-
-# Client-side AI for parsing / template detection / cover letters
-VITE_GITHUB_TOKEN=github_pat_your_token_1
-VITE_GITHUB_TOKEN_2=github_pat_your_token_2
-VITE_GEMINI_API_KEY=your_google_ai_studio_key
-VITE_GROQ_API_KEY=your_groq_key_optional
 
 # Site URL / analytics
 VITE_SITE_URL=https://resume.batturaj.in
@@ -81,9 +78,15 @@ For admin remove controls, ensure the Supabase token template includes at least 
 
 ## Vercel Notes
 
-- ATS analysis and optimize requests now go through Vercel Functions in [`api/ats/analyze.ts`](./api/ats/analyze.ts) and [`api/optimize/rewrite.ts`](./api/optimize/rewrite.ts).
-- Provider secrets for those flows should be set as server env vars in Vercel.
-- Parsing, template detection, and cover letters still use the client-side provider settings in this phase.
+- All AI requests go through authenticated Vercel Functions:
+  - [`api/ats/analyze.ts`](./api/ats/analyze.ts)
+  - [`api/optimize/rewrite.ts`](./api/optimize/rewrite.ts)
+  - [`api/parse/resume.ts`](./api/parse/resume.ts)
+  - [`api/detect/template.ts`](./api/detect/template.ts)
+  - [`api/generate/cover-letter.ts`](./api/generate/cover-letter.ts)
+- Provider secrets must be configured as server environment variables only.
+- API routes require a valid Clerk bearer token and verify it against Clerk JWKS.
+- Security headers and CSP report-only policy are configured via [`vercel.json`](./vercel.json).
 
 ## Useful Commands
 

@@ -96,6 +96,38 @@ export function buildRewriteCacheKey(
   ].join(":");
 }
 
+export function buildParseCacheKey(
+  resumeText: string,
+  extractedLinks?: string[],
+): string {
+  return [
+    "parse",
+    "v1",
+    hashString(resumeText.trim()),
+    hashString(JSON.stringify(extractedLinks || [])),
+  ].join(":");
+}
+
+export function buildTemplateDetectCacheKey(resumeText: string): string {
+  return ["template-detect", "v1", hashString(resumeText.trim())].join(":");
+}
+
+export function buildCoverLetterCacheKey(
+  resumeText: string,
+  jobDescription: string,
+  companyName: string,
+  position: string,
+): string {
+  return [
+    "cover-letter",
+    "v1",
+    hashString(resumeText.trim()),
+    hashString(jobDescription.trim()),
+    hashString(companyName.trim().toLowerCase()),
+    hashString(position.trim().toLowerCase()),
+  ].join(":");
+}
+
 function getExpiryIso(): string {
   return new Date(Date.now() + CACHE_TTL_MS).toISOString();
 }

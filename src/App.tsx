@@ -29,6 +29,7 @@ import {
   optimizeResumeLoop,
   selfATSScore,
   selfOptimizeLoop,
+  setServerAuthTokenGetter,
 } from "./utils/aiService";
 import type { ResumeFeedbackSignal } from "./utils/resumeFeedback";
 import { detectTemplateStyle } from "./utils/templateDetector";
@@ -591,12 +592,13 @@ function App() {
   useEffect(() => {
     if (!user?.id) {
       setSupabaseAccessTokenGetter(null);
+      setServerAuthTokenGetter(null);
       trackedUsageRef.current.clear();
       trackedAtsUsageRef.current = false;
       return;
     }
 
-    setSupabaseAccessTokenGetter(async () => {
+    const getAuthToken = async () => {
       try {
         const templatedToken = await getToken({
           template: CLERK_SUPABASE_TEMPLATE,
@@ -613,9 +615,15 @@ function App() {
       } catch {
         return null;
       }
-    });
+    };
 
-    return () => setSupabaseAccessTokenGetter(null);
+    setSupabaseAccessTokenGetter(getAuthToken);
+    setServerAuthTokenGetter(getAuthToken);
+
+    return () => {
+      setSupabaseAccessTokenGetter(null);
+      setServerAuthTokenGetter(null);
+    };
   }, [getToken, user?.id]);
 
   useEffect(() => {
@@ -1323,7 +1331,7 @@ function App() {
       setOriginalPdfUrl(pdfBlobUrl);
 
       // Run template style detection in background (non-blocking)
-      detectTemplateStyle(aiSettings, sanitized)
+      detectTemplateStyle(sanitized)
         .then((detected) => {
           setDetectedStyle(detected);
           if (detected.confidence >= 50) {

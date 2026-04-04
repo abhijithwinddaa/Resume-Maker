@@ -11,10 +11,13 @@ import {
   writeServerCache,
 } from "../../src/server/aiCacheStore";
 import { callServerAI } from "../../src/server/aiRuntime";
+import { authenticateClerkRequest } from "../../src/server/requestAuth";
 import type {
   AnalyzeATSRequest,
   AnalyzeATSResponse,
 } from "../../src/types/serverAI";
+
+const MAX_REQUEST_BYTES = 512_000;
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -38,9 +41,29 @@ function validateRequest(body: Partial<AnalyzeATSRequest>): string | null {
   return null;
 }
 
+function isRequestTooLarge(request: Request): boolean {
+  const contentLengthHeader = request.headers.get("content-length");
+  if (!contentLengthHeader) return false;
+
+  const contentLength = Number(contentLengthHeader);
+  return Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES;
+}
+
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
+  }
+
+  if (isRequestTooLarge(request)) {
+    return jsonResponse(
+      { error: "Request body too large. Please reduce input size." },
+      413,
+    );
+  }
+
+  const authResult = await authenticateClerkRequest(request);
+  if (!authResult.ok) {
+    return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
   let body: AnalyzeATSRequest;
@@ -111,7 +134,9 @@ export default async function handler(request: Request): Promise<Response> {
     return jsonResponse(
       {
         error:
-          error instanceof Error ? error.message : "ATS analysis failed on the server.",
+          error instanceof Error
+            ? error.message
+            : "ATS analysis failed on the server.",
       },
       500,
     );

@@ -12,22 +12,27 @@ export interface AISettings {
   geminiApiKey: string;
 }
 
-const githubTokens = [
-  import.meta.env.VITE_GITHUB_TOKEN,
-  import.meta.env.VITE_GITHUB_TOKEN_2,
-].filter((t): t is string => !!t && t.length > 0);
-
 export const DEFAULT_AI_SETTINGS: AISettings = {
   provider: "github",
-  groqApiKey: import.meta.env.VITE_GROQ_API_KEY || "",
+  groqApiKey: "",
   groqModel: "llama-3.3-70b-versatile",
   ollamaUrl: "http://localhost:11434",
   ollamaModel: "gemma3:4b",
-  githubToken: githubTokens[0] || "",
-  githubTokens,
+  githubToken: "",
+  githubTokens: [],
   githubModel: "gpt-4o-mini",
-  geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || "",
+  geminiApiKey: "",
 };
+
+function withoutClientSecrets(settings: AISettings): AISettings {
+  return {
+    ...settings,
+    groqApiKey: "",
+    githubToken: "",
+    githubTokens: [],
+    geminiApiKey: "",
+  };
+}
 
 export const GROQ_MODELS = [
   { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B (Best quality)" },
@@ -49,14 +54,20 @@ export function loadAISettings(): AISettings {
   try {
     const saved = localStorage.getItem("ai-settings");
     if (saved) {
-      return { ...DEFAULT_AI_SETTINGS, ...JSON.parse(saved) };
+      return withoutClientSecrets({
+        ...DEFAULT_AI_SETTINGS,
+        ...JSON.parse(saved),
+      });
     }
   } catch {
     // ignore
   }
-  return DEFAULT_AI_SETTINGS;
+  return withoutClientSecrets(DEFAULT_AI_SETTINGS);
 }
 
 export function saveAISettings(settings: AISettings): void {
-  localStorage.setItem("ai-settings", JSON.stringify(settings));
+  localStorage.setItem(
+    "ai-settings",
+    JSON.stringify(withoutClientSecrets(settings)),
+  );
 }
