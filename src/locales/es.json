@@ -12,8 +12,10 @@
   "header": {
     "startOver": "Empezar de Nuevo",
     "newJD": "Nueva Oferta",
+    "moreActions": "Más acciones",
     "loadJSON": "Cargar JSON",
     "saveJSON": "Guardar JSON",
+    "selfScore": "Autoevaluar",
     "reAnalyze": "Re-analizar",
     "coverLetter": "Carta de Presentación",
     "docx": "DOCX",

@@ -358,9 +358,6 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
                     <article key={metricKey} className="popularity-card">
                       <h5>{POPULARITY_LABELS[metricKey]}</h5>
                       <p>{metric.totalCount.toLocaleString()} total uses</p>
-                      <small>
-                        {metric.uniqueUsers.toLocaleString()} unique users
-                      </small>
                     </article>
                   );
                 })}

@@ -12,8 +12,10 @@
   "header": {
     "startOver": "शुरू से करें",
     "newJD": "नई JD",
+    "moreActions": "और क्रियाएं",
     "loadJSON": "JSON लोड करें",
     "saveJSON": "JSON सहेजें",
+    "selfScore": "स्वयं स्कोर",
     "reAnalyze": "पुनः विश्लेषण",
     "coverLetter": "कवर लेटर",
     "docx": "DOCX",

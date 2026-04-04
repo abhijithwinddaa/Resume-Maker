@@ -8,6 +8,7 @@ import {
   Suspense,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { useReactToPrint } from "react-to-print";
 import { validateForExport, autoFixTypos } from "./utils/exportValidation";
 import {
@@ -106,6 +107,7 @@ import {
   PlusCircle,
   CheckCircle2,
   AlertTriangle,
+  Settings,
 } from "lucide-react";
 import "./App.css";
 
@@ -304,6 +306,7 @@ function App() {
   const { getToken } = useAuth();
   const { user } = useUser();
   const { openSignIn } = useClerk();
+  const { t } = useTranslation();
   const userEmail =
     user?.primaryEmailAddress?.emailAddress ||
     user?.emailAddresses?.[0]?.emailAddress ||
@@ -375,6 +378,7 @@ function App() {
   const [pendingExportFormat, setPendingExportFormat] = useState<
     "pdf" | "docx" | null
   >(null);
+  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
 
   // Save status tracking
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
@@ -418,6 +422,8 @@ function App() {
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const resumeRef = useRef<HTMLDivElement>(null);
+  const settingsMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
 
   const reactToPrintFn = useReactToPrint({
     contentRef: resumeRef,
@@ -453,6 +459,7 @@ function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        setIsSettingsMenuOpen(false);
         setShowTemplatePicker(false);
         setShowCoverLetter(false);
         setShowResumeManager(false);
@@ -478,6 +485,38 @@ function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [pendingExportFormat, redo, undo]);
+
+  useEffect(() => {
+    if (!isSettingsMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+
+      if (
+        settingsMenuRef.current?.contains(target) ||
+        settingsMenuButtonRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      setIsSettingsMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [isSettingsMenuOpen]);
+
+  useEffect(() => {
+    if (step !== "editor" && step !== "score") {
+      setIsSettingsMenuOpen(false);
+    }
+  }, [step]);
 
   /* ── Navigation guard: warn on tab close with unsaved changes ── */
   useEffect(() => {
@@ -1874,7 +1913,7 @@ function App() {
       <header className="app-header" role="banner">
         <div className="header-left">
           <FileText size={22} className="logo-icon" />
-          <h1 className="app-title">Resume Maker</h1>
+          <h1 className="app-title">{t("app.title")}</h1>
         </div>
         <div className="header-actions">
           {saveStatus === "saving" && (
@@ -1962,7 +2001,7 @@ function App() {
           {step !== "landing" && step !== "analyzing" && (
             <button className="header-btn" onClick={handleStartOver}>
               <RotateCcw size={14} />
-              <span>Start Over</span>
+              <span>{t("header.startOver")}</span>
             </button>
           )}
 
@@ -1975,54 +2014,116 @@ function App() {
                     onClick={handleNewJD}
                   >
                     <Target size={14} />
-                    <span>New JD</span>
-                  </button>
-                  <button className="header-btn" onClick={handleLoadJSON}>
-                    <Upload size={14} />
-                    <span>Load JSON</span>
-                  </button>
-                  <button className="header-btn" onClick={handleSaveJSON}>
-                    <Save size={14} />
-                    <span>Save JSON</span>
-                  </button>
-                  <button
-                    className="header-btn"
-                    onClick={handleSelfScore}
-                    title="Score resume on general best practices (no JD needed)"
-                  >
-                    <Trophy size={14} />
-                    <span>Self Score</span>
-                  </button>
-                  <button className="header-btn" onClick={handleReAnalyze}>
-                    <Search size={14} />
-                    <span>Re-Analyze</span>
-                  </button>
-                  <button
-                    className="header-btn"
-                    onClick={() => setShowCoverLetter(true)}
-                    title="Generate Cover Letter"
-                  >
-                    <Mail size={14} />
-                    <span>Cover Letter</span>
+                    <span>{t("header.newJD")}</span>
                   </button>
                 </>
               )}
-              <button
-                className={`header-btn ${preferredExportFormat === "docx" ? "btn-primary" : ""}`}
-                onClick={handleExportDocx}
-                disabled={isExporting}
-                title="Export as DOCX"
-              >
-                <FileType size={14} />
-                <span>DOCX</span>
-              </button>
+
+              <div className="settings-menu">
+                <button
+                  ref={settingsMenuButtonRef}
+                  className={`header-btn ${isSettingsMenuOpen ? "btn-accent" : ""}`}
+                  onClick={() => setIsSettingsMenuOpen((prev) => !prev)}
+                  title={t("header.moreActions")}
+                  aria-label={t("header.moreActions")}
+                  aria-haspopup="menu"
+                  aria-expanded={isSettingsMenuOpen}
+                >
+                  <Settings size={14} />
+                </button>
+
+                {isSettingsMenuOpen && (
+                  <div
+                    className="settings-dropdown"
+                    role="menu"
+                    ref={settingsMenuRef}
+                  >
+                    {step === "editor" && (
+                      <>
+                        <button
+                          className="settings-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setIsSettingsMenuOpen(false);
+                            handleLoadJSON();
+                          }}
+                        >
+                          <Upload size={14} />
+                          <span>{t("header.loadJSON")}</span>
+                        </button>
+                        <button
+                          className="settings-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setIsSettingsMenuOpen(false);
+                            handleSaveJSON();
+                          }}
+                        >
+                          <Save size={14} />
+                          <span>{t("header.saveJSON")}</span>
+                        </button>
+                        <button
+                          className="settings-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setIsSettingsMenuOpen(false);
+                            handleSelfScore();
+                          }}
+                          title="Score resume on general best practices (no JD needed)"
+                        >
+                          <Trophy size={14} />
+                          <span>{t("header.selfScore")}</span>
+                        </button>
+                        <button
+                          className="settings-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setIsSettingsMenuOpen(false);
+                            handleReAnalyze();
+                          }}
+                        >
+                          <Search size={14} />
+                          <span>{t("header.reAnalyze")}</span>
+                        </button>
+                        <button
+                          className="settings-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setIsSettingsMenuOpen(false);
+                            setShowCoverLetter(true);
+                          }}
+                          title="Generate Cover Letter"
+                        >
+                          <Mail size={14} />
+                          <span>{t("header.coverLetter")}</span>
+                        </button>
+                      </>
+                    )}
+
+                    <button
+                      className="settings-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsSettingsMenuOpen(false);
+                        handleExportDocx();
+                      }}
+                      disabled={isExporting}
+                      title="Export as DOCX"
+                    >
+                      <FileType size={14} />
+                      <span>{t("header.docx")}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <button
                 className={`header-btn ${preferredExportFormat === "pdf" ? "btn-primary" : ""}`}
                 onClick={handleExportPDF}
                 disabled={isExporting}
               >
                 <Download size={14} />
-                <span>Export PDF</span>
+                <span>{t("header.exportPDF")}</span>
               </button>
             </>
           )}

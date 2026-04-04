@@ -215,11 +215,6 @@
   color: var(--text-primary, #0f172a);
 }
 
-.popularity-card small {
-  color: var(--text-secondary, #64748b);
-  font-size: 11px;
-}
-
 .feedback-list {
   display: grid;
   gap: 8px;

@@ -12,8 +12,10 @@
   "header": {
     "startOver": "Start Over",
     "newJD": "New JD",
+    "moreActions": "More actions",
     "loadJSON": "Load JSON",
     "saveJSON": "Save JSON",
+    "selfScore": "Self Score",
     "reAnalyze": "Re-Analyze",
     "coverLetter": "Cover Letter",
     "docx": "DOCX",

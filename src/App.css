@@ -94,6 +94,61 @@
   background: var(--accent-dark);
 }
 
+.settings-menu {
+  position: relative;
+}
+
+.settings-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 190px;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-md);
+  z-index: 30;
+}
+
+.settings-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  padding: 8px 10px;
+  font-family: "Inter", sans-serif;
+}
+
+.settings-menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.settings-menu-item:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+}
+
+.settings-menu-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settings-menu-item svg {
+  flex-shrink: 0;
+}
+
 .mode-switch {
   display: inline-flex;
   align-items: center;
@@ -1261,6 +1316,14 @@
     min-width: max-content;
   }
 
+  .settings-dropdown {
+    min-width: 170px;
+  }
+
+  .settings-menu-item {
+    padding: 10px;
+  }
+
   .input-step {
     padding: 20px 12px;
   }
@@ -1350,6 +1413,10 @@
 @media (max-width: 480px) {
   .app-header {
     padding: 6px 8px;
+  }
+
+  .settings-dropdown {
+    right: -4px;
   }
 
   .logo-icon {
