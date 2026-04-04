@@ -99,9 +99,7 @@
 }
 
 .settings-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
   min-width: 190px;
   display: grid;
   gap: 4px;
@@ -110,7 +108,9 @@
   border-radius: 10px;
   background: var(--bg-primary);
   box-shadow: var(--shadow-md);
-  z-index: 30;
+  max-height: min(70vh, 380px);
+  overflow-y: auto;
+  z-index: 1100;
 }
 
 .settings-menu-item {
@@ -1413,10 +1413,6 @@
 @media (max-width: 480px) {
   .app-header {
     padding: 6px 8px;
-  }
-
-  .settings-dropdown {
-    right: -4px;
   }
 
   .logo-icon {

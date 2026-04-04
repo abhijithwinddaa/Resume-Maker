@@ -379,6 +379,10 @@ function App() {
     "pdf" | "docx" | null
   >(null);
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
+  const [settingsMenuPosition, setSettingsMenuPosition] = useState({
+    top: 0,
+    left: 0,
+  });
 
   // Save status tracking
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
@@ -509,6 +513,45 @@ function App() {
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [isSettingsMenuOpen]);
+
+  useEffect(() => {
+    if (!isSettingsMenuOpen) return;
+
+    const updateMenuPosition = () => {
+      const button = settingsMenuButtonRef.current;
+      if (!button) return;
+
+      const rect = button.getBoundingClientRect();
+      const menuWidth = settingsMenuRef.current?.offsetWidth ?? 190;
+      const menuHeight = settingsMenuRef.current?.offsetHeight ?? 280;
+      const viewportPadding = 8;
+      const gap = 6;
+
+      const left = Math.min(
+        window.innerWidth - menuWidth - viewportPadding,
+        Math.max(viewportPadding, rect.right - menuWidth),
+      );
+
+      const preferredTop = rect.bottom + gap;
+      const top =
+        preferredTop + menuHeight <= window.innerHeight - viewportPadding
+          ? preferredTop
+          : Math.max(viewportPadding, rect.top - menuHeight - gap);
+
+      setSettingsMenuPosition({ top, left });
+    };
+
+    updateMenuPosition();
+    const rafId = window.requestAnimationFrame(updateMenuPosition);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
     };
   }, [isSettingsMenuOpen]);
 
@@ -2037,6 +2080,10 @@ function App() {
                     className="settings-dropdown"
                     role="menu"
                     ref={settingsMenuRef}
+                    style={{
+                      top: `${settingsMenuPosition.top}px`,
+                      left: `${settingsMenuPosition.left}px`,
+                    }}
                   >
                     {step === "editor" && (
                       <>
