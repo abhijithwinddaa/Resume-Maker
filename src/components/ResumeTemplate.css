@@ -20,6 +20,23 @@
   box-sizing: border-box;
 }
 
+.resume-page--export {
+  padding: 6mm 8mm;
+}
+
+.resume-page--export a,
+.resume-page--export a:visited,
+.resume-page--export a:active {
+  color: var(--resume-primary) !important;
+}
+
+.template-ats.resume-page--export a,
+.template-ats.resume-page--export a:visited,
+.template-ats.resume-page--export a:active {
+  color: #000 !important;
+  text-decoration: underline !important;
+}
+
 /* Header */
 .resume-header {
   text-align: center;
@@ -675,7 +692,8 @@
     gap: 14px !important;
   }
 
-  .resume-page {
+  .resume-page,
+  .resume-page--export {
     margin: 0;
     padding: 6mm 8mm;
     box-shadow: none;
@@ -683,14 +701,19 @@
     print-color-adjust: exact;
   }
 
-  .github-badge {
+  .resume-page--export a,
+  .resume-page--export a:visited,
+  .resume-page--export a:active {
     color: var(--resume-primary) !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  .cert-link {
-    color: var(--resume-primary) !important;
+  .template-ats.resume-page--export a,
+  .template-ats.resume-page--export a:visited,
+  .template-ats.resume-page--export a:active {
+    color: #000 !important;
+    text-decoration: underline !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

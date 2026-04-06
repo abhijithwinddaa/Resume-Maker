@@ -422,8 +422,9 @@ function estimateRenderedPages(element: HTMLElement): number {
     element.scrollHeight,
     element.getBoundingClientRect().height,
   );
+  const tolerancePx = Math.max(2, Math.round(onePagePx * 0.004));
 
-  return Math.max(1, Math.ceil(contentHeightPx / onePagePx));
+  return Math.max(1, Math.ceil((contentHeightPx - tolerancePx) / onePagePx));
 }
 
 /* ─── Main App ─────────────────────────────────────────── */
@@ -1312,8 +1313,7 @@ function App() {
     setIsExporting(true);
     setExportToastMessage("Preparing PDF...");
 
-    const fitResult = await evaluatePdfFit(singlePageRequired);
-    setLastExportPageEstimate(fitResult.estimatedPages);
+    let fitResult = await evaluatePdfFit(singlePageRequired);
 
     if (singlePageRequired && fitResult.estimatedPages > 1) {
       setIsExporting(false);
@@ -1332,11 +1332,12 @@ function App() {
       }
 
       // User explicitly accepted multi-page output, so restore normal
-      // layout instead of keeping compressed one-page overrides.
-      setExportCustomizationOverride(null);
-      await waitForNextPaint();
+      // layout and re-estimate using the same export surface that will print.
+      fitResult = await evaluatePdfFit(false);
       setIsExporting(true);
     }
+
+    setLastExportPageEstimate(fitResult.estimatedPages);
 
     const stageLabels: Record<CompressionStage, string> = {
       none: "standard layout",
@@ -3553,6 +3554,7 @@ function App() {
                 ref={resumeRef}
                 data={resumeData}
                 customizationOverride={exportCustomizationOverride || undefined}
+                forExport
               />
             </Suspense>
           </ErrorBoundary>

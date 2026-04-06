@@ -10,6 +10,7 @@ interface ResumeTemplateProps {
   data: ResumeData;
   highlightKeywords?: string[];
   customizationOverride?: Partial<TemplateCustomization>;
+  forExport?: boolean;
 }
 
 const FONT_SIZE_MAP = {
@@ -26,7 +27,7 @@ const LINE_HEIGHT_MAP = { compact: 1.2, normal: 1.3, relaxed: 1.5 } as const;
 const SPACING_MAP = { tight: "2px", normal: "4px", spacious: "8px" } as const;
 
 const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
-  ({ data, highlightKeywords = [], customizationOverride }, ref) => {
+  ({ data, highlightKeywords = [], customizationOverride, forExport }, ref) => {
     const templateId = useAppStore((s) => s.templateId);
     const customization = useAppStore((s) => s.customization);
 
@@ -344,7 +345,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
 
       return (
         <div
-          className={`resume-page template-${templateId}`}
+          className={`resume-page template-${templateId}${forExport ? " resume-page--export" : ""}`}
           ref={ref}
           style={rootStyle}
         >
@@ -635,7 +636,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
 
     return (
       <div
-        className={`resume-page template-${templateId}`}
+        className={`resume-page template-${templateId}${forExport ? " resume-page--export" : ""}`}
         ref={ref}
         style={rootStyle}
       >
