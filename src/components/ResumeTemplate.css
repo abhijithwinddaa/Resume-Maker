@@ -683,15 +683,6 @@
     print-color-adjust: exact;
   }
 
-  .resume-section,
-  .education-item,
-  .experience-item,
-  .project-item,
-  .certificate-item {
-    break-inside: avoid-page;
-    page-break-inside: avoid;
-  }
-
   .github-badge {
     color: var(--resume-primary) !important;
     -webkit-print-color-adjust: exact;

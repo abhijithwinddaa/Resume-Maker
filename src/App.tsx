@@ -1331,6 +1331,10 @@ function App() {
         return;
       }
 
+      // User explicitly accepted multi-page output, so restore normal
+      // layout instead of keeping compressed one-page overrides.
+      setExportCustomizationOverride(null);
+      await waitForNextPaint();
       setIsExporting(true);
     }
 
