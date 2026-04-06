@@ -13,7 +13,10 @@ import {
   sendNodeResponse,
   toWebRequest,
 } from "../../src/server/httpAdapter.js";
-import { DEFAULT_CUSTOMIZATION, FONT_OPTIONS } from "../../src/types/templates.js";
+import {
+  DEFAULT_CUSTOMIZATION,
+  FONT_OPTIONS,
+} from "../../src/types/templates.js";
 import type {
   DetectTemplateRequest,
   DetectTemplateResponse,

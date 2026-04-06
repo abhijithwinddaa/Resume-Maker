@@ -177,7 +177,8 @@ function restoreLinks(parsed: ResumeData, original: ResumeData): void {
     for (const project of parsed.projects) {
       const originalProject = original.projects.find(
         (item) =>
-          item.title.toLowerCase().trim() === project.title.toLowerCase().trim(),
+          item.title.toLowerCase().trim() ===
+          project.title.toLowerCase().trim(),
       );
       if (originalProject) {
         if (!project.githubLink && originalProject.githubLink) {
@@ -207,9 +208,14 @@ function restoreLinks(parsed: ResumeData, original: ResumeData): void {
     for (const certificate of parsed.certificates) {
       const originalCertificate = original.certificates.find(
         (item) =>
-          item.name.toLowerCase().trim() === certificate.name.toLowerCase().trim(),
+          item.name.toLowerCase().trim() ===
+          certificate.name.toLowerCase().trim(),
       );
-      if (originalCertificate && !certificate.link && originalCertificate.link) {
+      if (
+        originalCertificate &&
+        !certificate.link &&
+        originalCertificate.link
+      ) {
         certificate.link = originalCertificate.link;
       }
     }

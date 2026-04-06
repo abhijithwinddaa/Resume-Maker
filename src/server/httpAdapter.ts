@@ -71,7 +71,9 @@ export function toWebRequest(request: Request | NodeLikeRequest): Request {
   const body = normalizeBody(method, requestBody);
   const headers = normalizeHeaders(nodeRequest.headers, requestBody);
   const url = nodeRequest.url || "https://local.invalid/api";
-  const absoluteUrl = url.startsWith("http") ? url : `https://local.invalid${url}`;
+  const absoluteUrl = url.startsWith("http")
+    ? url
+    : `https://local.invalid${url}`;
 
   return new Request(absoluteUrl, {
     method,

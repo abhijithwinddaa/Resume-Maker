@@ -38,6 +38,7 @@ export interface ResumeMeta {
 export type AppStep = "landing" | "input" | "analyzing" | "score" | "editor";
 export type AppMode = "ats" | "edit" | "create" | null;
 export type ThemeMode = "light" | "dark" | "system";
+export type ExportPageMode = "auto" | "force-single-page" | "allow-multi-page";
 
 interface AppState {
   // ─── Core State ─────────────────────────
@@ -71,6 +72,9 @@ interface AppState {
 
   // ─── Theme ──────────────────────────────
   theme: ThemeMode;
+
+  // ─── Export Behavior ─────────────────────
+  exportPageMode: ExportPageMode;
 
   // ─── AI Settings ────────────────────────
   aiSettings: AISettings;
@@ -120,6 +124,9 @@ interface AppState {
 
   // Theme actions
   setTheme: (theme: ThemeMode) => void;
+
+  // Export behavior actions
+  setExportPageMode: (mode: ExportPageMode) => void;
 
   // AI Settings actions
   setAISettings: (settings: Partial<AISettings>) => void;
@@ -176,6 +183,22 @@ function loadCustomization(): TemplateCustomization {
   return DEFAULT_CUSTOMIZATION;
 }
 
+function loadExportPageMode(): ExportPageMode {
+  try {
+    const saved = localStorage.getItem("export-page-mode");
+    if (
+      saved === "auto" ||
+      saved === "force-single-page" ||
+      saved === "allow-multi-page"
+    ) {
+      return saved;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "auto";
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   // ─── Initial State ──────────────────
   step: "landing",
@@ -203,6 +226,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   originalPdfUrl: null,
   showOriginalPdf: false,
   theme: loadTheme(),
+  exportPageMode: loadExportPageMode(),
   aiSettings: loadAISettings(),
   resumes: [],
   activeResumeId: null,
@@ -284,6 +308,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setTheme: (theme) => {
     localStorage.setItem("theme-mode", theme);
     set({ theme });
+  },
+
+  // Export behavior
+  setExportPageMode: (exportPageMode) => {
+    localStorage.setItem("export-page-mode", exportPageMode);
+    set({ exportPageMode });
   },
 
   // AI Settings

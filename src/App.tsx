@@ -23,6 +23,7 @@ import { useAppStore } from "./store/appStore";
 import type { AppMode } from "./store/appStore";
 import type { ResumeData } from "./types/resume";
 import { createEmptyResume } from "./types/resume";
+import type { TemplateCustomization } from "./types/templates";
 import {
   parseResumeFromText,
   analyzeATSScore,
@@ -302,6 +303,129 @@ function getOptimizeProgressPercent(
   return clampPercent(base + 10);
 }
 
+type ExperienceTier = "fresher" | "experienced";
+type CompressionStage = "none" | "tight-spacing" | "compact" | "small-compact";
+
+const MONTH_INDEX: Record<string, number> = {
+  jan: 0,
+  january: 0,
+  feb: 1,
+  february: 1,
+  mar: 2,
+  march: 2,
+  apr: 3,
+  april: 3,
+  may: 4,
+  jun: 5,
+  june: 5,
+  jul: 6,
+  july: 6,
+  aug: 7,
+  august: 7,
+  sep: 8,
+  sept: 8,
+  september: 8,
+  oct: 9,
+  october: 9,
+  nov: 10,
+  november: 10,
+  dec: 11,
+  december: 11,
+};
+
+function parseDateToken(rawToken: string): Date | null {
+  const token = rawToken.trim().toLowerCase();
+  if (!token) return null;
+  if (/present|current|now/.test(token)) {
+    return new Date();
+  }
+
+  const monthMatch = token.match(
+    /(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)/,
+  );
+  const yearMatch = token.match(/(19|20)\d{2}/);
+
+  if (yearMatch) {
+    const year = Number(yearMatch[0]);
+    const month = monthMatch ? (MONTH_INDEX[monthMatch[0]] ?? 0) : 6;
+    return new Date(year, month, 1);
+  }
+
+  const parsed = new Date(rawToken);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  return null;
+}
+
+function estimateExperienceMonths(resumeData: ResumeData | null): number {
+  if (!resumeData) return 0;
+
+  let totalMonths = 0;
+  const meaningfulEntries = resumeData.experience.filter(
+    (entry) =>
+      entry.company.trim() ||
+      entry.role.trim() ||
+      entry.dateRange.trim() ||
+      entry.bullets.some((bullet) => bullet.trim()),
+  );
+
+  for (const entry of meaningfulEntries) {
+    const dateRange = entry.dateRange.trim();
+    if (!dateRange) continue;
+
+    const [startRaw, endRaw] = dateRange
+      .split(/\s*(?:-|–|to)\s*/i)
+      .filter(Boolean);
+    const start = parseDateToken(startRaw || "");
+    const end = parseDateToken(endRaw || "present");
+
+    if (!start || !end) continue;
+
+    const startIndex = start.getFullYear() * 12 + start.getMonth();
+    const endIndex = end.getFullYear() * 12 + end.getMonth();
+    if (endIndex >= startIndex) {
+      totalMonths += endIndex - startIndex + 1;
+    }
+  }
+
+  if (totalMonths > 0) return totalMonths;
+
+  // Conservative fallback when date parsing fails but experience exists.
+  return meaningfulEntries.length >= 2
+    ? 24
+    : meaningfulEntries.length === 1
+      ? 12
+      : 0;
+}
+
+function getExperienceTier(resumeData: ResumeData | null): ExperienceTier {
+  const months = estimateExperienceMonths(resumeData);
+  return months < 18 ? "fresher" : "experienced";
+}
+
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+function estimateRenderedPages(element: HTMLElement): number {
+  const widthPx = element.getBoundingClientRect().width || element.offsetWidth;
+  if (!widthPx) return 1;
+
+  const onePagePx = (297 * widthPx) / 210;
+  const contentHeightPx = Math.max(
+    element.scrollHeight,
+    element.getBoundingClientRect().height,
+  );
+
+  return Math.max(1, Math.ceil(contentHeightPx / onePagePx));
+}
+
 /* ─── Main App ─────────────────────────────────────────── */
 
 function App() {
@@ -368,6 +492,8 @@ function App() {
   const setActiveResumeId = useAppStore((s) => s.setActiveResumeId);
   const activeResumeName = useAppStore((s) => s.activeResumeName);
   const setActiveResumeName = useAppStore((s) => s.setActiveResumeName);
+  const exportPageMode = useAppStore((s) => s.exportPageMode);
+  const setExportPageMode = useAppStore((s) => s.setExportPageMode);
 
   // Panel visibility
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -409,6 +535,11 @@ function App() {
   const [exportToastMessage, setExportToastMessage] = useState<string | null>(
     null,
   );
+  const [exportCustomizationOverride, setExportCustomizationOverride] =
+    useState<Partial<TemplateCustomization> | null>(null);
+  const [lastExportPageEstimate, setLastExportPageEstimate] = useState<
+    number | null
+  >(null);
   const [preferredExportFormat, setPreferredExportFormat] = useState<
     "pdf" | "docx"
   >(() => {
@@ -437,6 +568,7 @@ function App() {
       ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
       : "Resume",
     onAfterPrint: () => {
+      setExportCustomizationOverride(null);
       setIsExporting(false);
       setExportToastMessage(null);
     },
@@ -444,6 +576,7 @@ function App() {
       console.error("PDF export failed:", error);
       trackEvent("resume_export_failed", { format: "pdf" });
       setError("PDF export failed. Please try again.");
+      setExportCustomizationOverride(null);
       setIsExporting(false);
       setExportToastMessage(null);
     },
@@ -859,6 +992,14 @@ function App() {
     () => getAnalyzeProgressPercent(loadingMessage),
     [loadingMessage],
   );
+  const experienceTier = useMemo(
+    () => getExperienceTier(resumeData),
+    [resumeData],
+  );
+  const autoModeLabel =
+    experienceTier === "fresher"
+      ? "Auto: single-page target"
+      : "Auto: multi-page allowed";
   const optimizePercent = useMemo(
     () => getOptimizeProgressPercent(optimizeProgress),
     [optimizeProgress],
@@ -1050,6 +1191,73 @@ function App() {
     ],
   );
 
+  const evaluatePdfFit = useCallback(
+    async (
+      requireSinglePage: boolean,
+    ): Promise<{
+      estimatedPages: number;
+      stage: CompressionStage;
+      override: Partial<TemplateCustomization> | null;
+    }> => {
+      const fitAttempts: Array<{
+        stage: CompressionStage;
+        override: Partial<TemplateCustomization> | null;
+      }> = requireSinglePage
+        ? [
+            { stage: "none", override: null },
+            { stage: "tight-spacing", override: { sectionSpacing: "tight" } },
+            {
+              stage: "compact",
+              override: { sectionSpacing: "tight", lineHeight: "compact" },
+            },
+            {
+              stage: "small-compact",
+              override: {
+                fontSize: "small",
+                lineHeight: "compact",
+                sectionSpacing: "tight",
+              },
+            },
+          ]
+        : [{ stage: "none", override: null }];
+
+      let bestPages = Number.POSITIVE_INFINITY;
+      let bestStage: CompressionStage = "none";
+      let bestOverride: Partial<TemplateCustomization> | null = null;
+
+      for (const attempt of fitAttempts) {
+        setExportCustomizationOverride(attempt.override);
+        await waitForNextPaint();
+
+        const node = resumeRef.current;
+        if (!node) {
+          continue;
+        }
+
+        const estimatedPages = estimateRenderedPages(node);
+        if (estimatedPages < bestPages) {
+          bestPages = estimatedPages;
+          bestStage = attempt.stage;
+          bestOverride = attempt.override;
+        }
+
+        if (requireSinglePage && estimatedPages <= 1) {
+          break;
+        }
+      }
+
+      setExportCustomizationOverride(bestOverride);
+      await waitForNextPaint();
+
+      return {
+        estimatedPages: Number.isFinite(bestPages) ? bestPages : 1,
+        stage: bestStage,
+        override: bestOverride,
+      };
+    },
+    [],
+  );
+
   const runExportPDF = useCallback(async () => {
     let el = resumeRef.current;
     if (!el) {
@@ -1085,13 +1293,54 @@ function App() {
       }
       setError(null);
     }
+
+    const singlePageRequired =
+      exportPageMode === "force-single-page" ||
+      (exportPageMode === "auto" && experienceTier === "fresher");
+
     setIsExporting(true);
     setExportToastMessage("Preparing PDF...");
+
+    const fitResult = await evaluatePdfFit(singlePageRequired);
+    setLastExportPageEstimate(fitResult.estimatedPages);
+
+    if (singlePageRequired && fitResult.estimatedPages > 1) {
+      setIsExporting(false);
+      setExportToastMessage(null);
+
+      const shouldContinueAsMultiPage = window.confirm(
+        `This resume is still ${fitResult.estimatedPages} pages after compact formatting.\n\nPress OK to export as multi-page, or Cancel to trim content first.`,
+      );
+
+      if (!shouldContinueAsMultiPage) {
+        setExportCustomizationOverride(null);
+        setError(
+          "Single-page export cancelled. Trim content or set PDF page mode to allow multi-page.",
+        );
+        return;
+      }
+
+      setIsExporting(true);
+    }
+
+    const stageLabels: Record<CompressionStage, string> = {
+      none: "standard layout",
+      "tight-spacing": "tight spacing",
+      compact: "compact spacing",
+      "small-compact": "small + compact",
+    };
+
+    setExportToastMessage(
+      `Preparing PDF (${fitResult.estimatedPages} page${fitResult.estimatedPages > 1 ? "s" : ""}, ${stageLabels[fitResult.stage]})...`,
+    );
 
     trackEvent("resume_exported", {
       format: "pdf",
       has_resume_data: Boolean(resumeData),
       embedded_resume_data: privacySettings.embedResumeDataInPdf,
+      page_mode: exportPageMode,
+      estimated_pages: fitResult.estimatedPages,
+      compression_stage: fitResult.stage,
     });
     if (user?.id) {
       void recordFeatureUsage("resume_download");
@@ -1112,9 +1361,14 @@ function App() {
       setExportToastMessage(null);
     }
   }, [
+    evaluatePdfFit,
+    experienceTier,
+    exportPageMode,
     privacySettings.embedResumeDataInPdf,
     resumeData,
     setError,
+    setExportCustomizationOverride,
+    setLastExportPageEstimate,
     setResumeData,
     reactToPrintFn,
     user?.id,
@@ -2162,6 +2416,72 @@ function App() {
                         </button>
                       </>
                     )}
+
+                    <div
+                      className="settings-menu-group"
+                      role="group"
+                      aria-label="PDF page mode"
+                    >
+                      <div className="settings-menu-label">PDF Page Mode</div>
+                      <button
+                        className={`settings-menu-item settings-menu-item-compact ${
+                          exportPageMode === "auto" ? "is-active" : ""
+                        }`}
+                        role="menuitemradio"
+                        aria-checked={exportPageMode === "auto"}
+                        onClick={() => setExportPageMode("auto")}
+                        title={autoModeLabel}
+                      >
+                        {exportPageMode === "auto" ? (
+                          <CheckCircle2 size={14} />
+                        ) : (
+                          <PlusCircle size={14} />
+                        )}
+                        <span>{autoModeLabel}</span>
+                      </button>
+                      <button
+                        className={`settings-menu-item settings-menu-item-compact ${
+                          exportPageMode === "force-single-page"
+                            ? "is-active"
+                            : ""
+                        }`}
+                        role="menuitemradio"
+                        aria-checked={exportPageMode === "force-single-page"}
+                        onClick={() => setExportPageMode("force-single-page")}
+                        title="Always target one page"
+                      >
+                        {exportPageMode === "force-single-page" ? (
+                          <CheckCircle2 size={14} />
+                        ) : (
+                          <PlusCircle size={14} />
+                        )}
+                        <span>Force single page</span>
+                      </button>
+                      <button
+                        className={`settings-menu-item settings-menu-item-compact ${
+                          exportPageMode === "allow-multi-page"
+                            ? "is-active"
+                            : ""
+                        }`}
+                        role="menuitemradio"
+                        aria-checked={exportPageMode === "allow-multi-page"}
+                        onClick={() => setExportPageMode("allow-multi-page")}
+                        title="Allow two or more pages"
+                      >
+                        {exportPageMode === "allow-multi-page" ? (
+                          <CheckCircle2 size={14} />
+                        ) : (
+                          <PlusCircle size={14} />
+                        )}
+                        <span>Allow multi-page</span>
+                      </button>
+                      {lastExportPageEstimate !== null && (
+                        <div className="settings-menu-hint">
+                          Last estimate: {lastExportPageEstimate} page
+                          {lastExportPageEstimate > 1 ? "s" : ""}
+                        </div>
+                      )}
+                    </div>
 
                     <button
                       className="settings-menu-item"
@@ -3220,7 +3540,11 @@ function App() {
         >
           <ErrorBoundary>
             <Suspense fallback={null}>
-              <ResumeTemplate ref={resumeRef} data={resumeData} />
+              <ResumeTemplate
+                ref={resumeRef}
+                data={resumeData}
+                customizationOverride={exportCustomizationOverride || undefined}
+              />
             </Suspense>
           </ErrorBoundary>
         </div>

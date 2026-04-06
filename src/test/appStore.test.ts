@@ -53,6 +53,14 @@ describe("appStore", () => {
     useAppStore.getState().setTemplateId("classic");
   });
 
+  it("should update export page mode", () => {
+    useAppStore.getState().setExportPageMode("force-single-page");
+    expect(useAppStore.getState().exportPageMode).toBe("force-single-page");
+    useAppStore.getState().setExportPageMode("allow-multi-page");
+    expect(useAppStore.getState().exportPageMode).toBe("allow-multi-page");
+    useAppStore.getState().setExportPageMode("auto");
+  });
+
   it("should handle undo/redo with no history gracefully", () => {
     expect(useAppStore.getState().canUndo()).toBe(false);
     expect(useAppStore.getState().canRedo()).toBe(false);

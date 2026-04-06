@@ -8,7 +8,10 @@ import {
 } from "../../src/server/aiCacheStore.js";
 import { callServerAI } from "../../src/server/aiRuntime.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
-import { DEFAULT_SECTION_ORDER, type ResumeData } from "../../src/types/resume.js";
+import {
+  DEFAULT_SECTION_ORDER,
+  type ResumeData,
+} from "../../src/types/resume.js";
 import type {
   ParseResumeRequest,
   ParseResumeResponse,

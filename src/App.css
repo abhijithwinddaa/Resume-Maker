@@ -149,6 +149,38 @@
   flex-shrink: 0;
 }
 
+.settings-menu-group {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color);
+}
+
+.settings-menu-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 2px 10px 6px;
+}
+
+.settings-menu-item.settings-menu-item-compact {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.settings-menu-item.is-active {
+  background: color-mix(in srgb, var(--accent-color) 16%, transparent);
+  color: var(--text-primary);
+}
+
+.settings-menu-hint {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  padding: 5px 10px 2px;
+}
+
 .mode-switch {
   display: inline-flex;
   align-items: center;

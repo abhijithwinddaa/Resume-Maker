@@ -2,12 +2,14 @@ import React, { useMemo } from "react";
 import { Github, House, Linkedin, Mail, Phone } from "lucide-react";
 import type { ResumeData, SectionKey } from "../types/resume";
 import { DEFAULT_SECTION_LABELS } from "../types/resume";
+import type { TemplateCustomization } from "../types/templates";
 import { useAppStore } from "../store/appStore";
 import "./ResumeTemplate.css";
 
 interface ResumeTemplateProps {
   data: ResumeData;
   highlightKeywords?: string[];
+  customizationOverride?: Partial<TemplateCustomization>;
 }
 
 const FONT_SIZE_MAP = {
@@ -15,25 +17,38 @@ const FONT_SIZE_MAP = {
   medium: "9pt",
   large: "9.5pt",
 } as const;
+const FONT_SCALE_MAP = {
+  small: 0.94,
+  medium: 1,
+  large: 1.08,
+} as const;
 const LINE_HEIGHT_MAP = { compact: 1.2, normal: 1.3, relaxed: 1.5 } as const;
 const SPACING_MAP = { tight: "2px", normal: "4px", spacious: "8px" } as const;
 
 const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
-  ({ data, highlightKeywords = [] }, ref) => {
+  ({ data, highlightKeywords = [], customizationOverride }, ref) => {
     const templateId = useAppStore((s) => s.templateId);
     const customization = useAppStore((s) => s.customization);
+
+    const resolvedCustomization = useMemo(
+      () => ({ ...customization, ...(customizationOverride || {}) }),
+      [customization, customizationOverride],
+    );
 
     const rootStyle = useMemo(
       () =>
         ({
-          "--resume-primary": customization.primaryColor,
-          "--resume-secondary": customization.secondaryColor,
-          "--resume-font": `"${customization.fontFamily}", "Segoe UI", Arial, sans-serif`,
-          "--resume-font-size": FONT_SIZE_MAP[customization.fontSize],
-          "--resume-line-height": LINE_HEIGHT_MAP[customization.lineHeight],
-          "--resume-section-spacing": SPACING_MAP[customization.sectionSpacing],
+          "--resume-primary": resolvedCustomization.primaryColor,
+          "--resume-secondary": resolvedCustomization.secondaryColor,
+          "--resume-font": `"${resolvedCustomization.fontFamily}", "Segoe UI", Arial, sans-serif`,
+          "--resume-font-size": FONT_SIZE_MAP[resolvedCustomization.fontSize],
+          "--resume-font-scale": FONT_SCALE_MAP[resolvedCustomization.fontSize],
+          "--resume-line-height":
+            LINE_HEIGHT_MAP[resolvedCustomization.lineHeight],
+          "--resume-section-spacing":
+            SPACING_MAP[resolvedCustomization.sectionSpacing],
         }) as React.CSSProperties,
-      [customization],
+      [resolvedCustomization],
     );
     const highlightText = (text: string): React.ReactNode => {
       if (highlightKeywords.length === 0) return text;
