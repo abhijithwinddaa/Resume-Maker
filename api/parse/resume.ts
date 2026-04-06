@@ -14,6 +14,11 @@ import type {
   ParseResumeResponse,
 } from "../../src/types/serverAI";
 import { isRequestTooLarge } from "../../src/server/requestUtils";
+import {
+  isNodeResponse,
+  sendNodeResponse,
+  toWebRequest,
+} from "../../src/server/httpAdapter";
 
 const MAX_REQUEST_BYTES = 512_000;
 const MIN_RESUME_TEXT_LENGTH = 100;
@@ -112,7 +117,7 @@ function normalizeParsedResume(resumeData: ResumeData): ResumeData {
   return resumeData;
 }
 
-export default async function handler(request: Request): Promise<Response> {
+async function handleRequest(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
@@ -203,4 +208,19 @@ export default async function handler(request: Request): Promise<Response> {
       500,
     );
   }
+}
+
+export default async function handler(
+  requestOrNodeReq: Request | Record<string, unknown>,
+  maybeNodeRes?: unknown,
+): Promise<Response | void> {
+  const request = toWebRequest(requestOrNodeReq);
+  const response = await handleRequest(request);
+
+  if (isNodeResponse(maybeNodeRes)) {
+    await sendNodeResponse(maybeNodeRes, response);
+    return;
+  }
+
+  return response;
 }

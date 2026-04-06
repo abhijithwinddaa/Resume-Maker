@@ -14,6 +14,11 @@ import {
 import { callServerAI } from "../../src/server/aiRuntime";
 import { authenticateClerkRequest } from "../../src/server/requestAuth";
 import { isRequestTooLarge } from "../../src/server/requestUtils";
+import {
+  isNodeResponse,
+  sendNodeResponse,
+  toWebRequest,
+} from "../../src/server/httpAdapter";
 import type {
   RewriteResumeRequest,
   RewriteResumeResponse,
@@ -50,7 +55,7 @@ function validateRequest(body: Partial<RewriteResumeRequest>): string | null {
   return null;
 }
 
-export default async function handler(request: Request): Promise<Response> {
+async function handleRequest(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
@@ -171,4 +176,19 @@ export default async function handler(request: Request): Promise<Response> {
       500,
     );
   }
+}
+
+export default async function handler(
+  requestOrNodeReq: Request | Record<string, unknown>,
+  maybeNodeRes?: unknown,
+): Promise<Response | void> {
+  const request = toWebRequest(requestOrNodeReq);
+  const response = await handleRequest(request);
+
+  if (isNodeResponse(maybeNodeRes)) {
+    await sendNodeResponse(maybeNodeRes, response);
+    return;
+  }
+
+  return response;
 }
