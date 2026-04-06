@@ -44,6 +44,7 @@ import {
   isRateLimited,
   getRateLimitRemaining,
   recordAction,
+  resetCooldown,
   formatCooldown,
 } from "./utils/rateLimiter";
 import {
@@ -1371,6 +1372,7 @@ function App() {
       trackEvent("pdf_upload_failed", {
         reason: err instanceof Error ? err.message : "unknown",
       });
+      resetCooldown("analyze");
       setUploadedFileName(null);
       setError(err instanceof Error ? err.message : "Failed to read PDF");
       setStep("input");
@@ -1430,6 +1432,7 @@ function App() {
       setStep("editor");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      resetCooldown("analyze");
       setError(err instanceof Error ? err.message : "Parsing failed");
       setStep("input");
     } finally {
@@ -1516,6 +1519,7 @@ function App() {
       setStep("score");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      resetCooldown("analyze");
       setError(err instanceof Error ? err.message : "Analysis failed");
       setStep("input");
     } finally {
@@ -1582,6 +1586,7 @@ function App() {
       setStep("score");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      resetCooldown("analyze");
       setError(err instanceof Error ? err.message : "Analysis failed");
       setStep("input");
     } finally {
@@ -1621,6 +1626,7 @@ function App() {
       setStep("score");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      resetCooldown("analyze");
       setError(err instanceof Error ? err.message : "Self scoring failed");
       setStep("editor");
     } finally {
@@ -1675,6 +1681,7 @@ function App() {
       setOptimizeDone(true);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      resetCooldown("optimize");
       setError(err instanceof Error ? err.message : "Optimization failed");
     } finally {
       setIsOptimizing(false);
@@ -1731,6 +1738,7 @@ function App() {
       setOptimizeDone(true);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      resetCooldown("optimize");
       setError(err instanceof Error ? err.message : "Optimization failed");
     } finally {
       setIsOptimizing(false);

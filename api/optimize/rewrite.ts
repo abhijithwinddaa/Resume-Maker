@@ -13,6 +13,7 @@ import {
 } from "../../src/server/aiCacheStore";
 import { callServerAI } from "../../src/server/aiRuntime";
 import { authenticateClerkRequest } from "../../src/server/requestAuth";
+import { isRequestTooLarge } from "../../src/server/requestUtils";
 import type {
   RewriteResumeRequest,
   RewriteResumeResponse,
@@ -49,20 +50,12 @@ function validateRequest(body: Partial<RewriteResumeRequest>): string | null {
   return null;
 }
 
-function isRequestTooLarge(request: Request): boolean {
-  const contentLengthHeader = request.headers.get("content-length");
-  if (!contentLengthHeader) return false;
-
-  const contentLength = Number(contentLengthHeader);
-  return Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES;
-}
-
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
 
-  if (isRequestTooLarge(request)) {
+  if (isRequestTooLarge(request, MAX_REQUEST_BYTES)) {
     return jsonResponse(
       { error: "Request body too large. Please reduce input size." },
       413,

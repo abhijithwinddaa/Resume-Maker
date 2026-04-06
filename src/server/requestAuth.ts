@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload } from "jose";
+import { getHeaderValue } from "./requestUtils";
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -73,7 +74,14 @@ function getAuthConfig():
 }
 
 function extractBearerToken(request: Request): string | null {
-  const authHeader = request.headers.get("authorization") || "";
+  const authHeader = getHeaderValue(
+    (
+      request as Request & {
+        headers?: Headers | Record<string, string | string[] | undefined>;
+      }
+    ).headers,
+    "authorization",
+  );
   const match = AUTH_HEADER_PATTERN.exec(authHeader);
   return match?.[1]?.trim() || null;
 }

@@ -6,6 +6,7 @@ import {
 } from "../../src/server/aiCacheStore";
 import { callServerAI } from "../../src/server/aiRuntime";
 import { authenticateClerkRequest } from "../../src/server/requestAuth";
+import { isRequestTooLarge } from "../../src/server/requestUtils";
 import type {
   GenerateCoverLetterRequest,
   GenerateCoverLetterResponse,
@@ -24,14 +25,6 @@ function jsonResponse(body: unknown, status = 200): Response {
       "Content-Type": "application/json",
     },
   });
-}
-
-function isRequestTooLarge(request: Request): boolean {
-  const contentLengthHeader = request.headers.get("content-length");
-  if (!contentLengthHeader) return false;
-
-  const contentLength = Number(contentLengthHeader);
-  return Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES;
 }
 
 function validateRequest(
@@ -102,7 +95,7 @@ export default async function handler(request: Request): Promise<Response> {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
 
-  if (isRequestTooLarge(request)) {
+  if (isRequestTooLarge(request, MAX_REQUEST_BYTES)) {
     return jsonResponse(
       { error: "Request body too large. Please reduce input size." },
       413,

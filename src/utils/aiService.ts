@@ -822,15 +822,44 @@ export async function postServerAIRequest<TRequest, TResponse>(
   });
 
   if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
+    let message = `${response.status} ${response.statusText}`.trim();
+    if (!message) {
+      message = `Request failed with status ${response.status}.`;
+    }
+
     try {
-      const body = (await response.json()) as { error?: string };
-      if (body.error) {
-        message = body.error;
+      const bodyText = await response.text();
+
+      if (bodyText.trim()) {
+        try {
+          const body = JSON.parse(bodyText) as {
+            error?: string;
+            message?: string;
+          };
+
+          if (body.error?.trim()) {
+            message = body.error.trim();
+          } else if (body.message?.trim()) {
+            message = body.message.trim();
+          } else if (response.status >= 500) {
+            message = "Server error. Please try again in a moment.";
+          }
+        } catch {
+          if (response.status >= 500) {
+            message = "Server error. Please try again in a moment.";
+          } else {
+            message = bodyText.trim().slice(0, 240);
+          }
+        }
+      } else if (response.status >= 500) {
+        message = "Server error. Please try again in a moment.";
       }
     } catch {
-      // ignore
+      if (response.status >= 500) {
+        message = "Server error. Please try again in a moment.";
+      }
     }
+
     throw new Error(message);
   }
 

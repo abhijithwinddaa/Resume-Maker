@@ -13,6 +13,7 @@ import type {
   ParseResumeRequest,
   ParseResumeResponse,
 } from "../../src/types/serverAI";
+import { isRequestTooLarge } from "../../src/server/requestUtils";
 
 const MAX_REQUEST_BYTES = 512_000;
 const MIN_RESUME_TEXT_LENGTH = 100;
@@ -27,14 +28,6 @@ function jsonResponse(body: unknown, status = 200): Response {
       "Content-Type": "application/json",
     },
   });
-}
-
-function isRequestTooLarge(request: Request): boolean {
-  const contentLengthHeader = request.headers.get("content-length");
-  if (!contentLengthHeader) return false;
-
-  const contentLength = Number(contentLengthHeader);
-  return Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES;
 }
 
 function validateRequest(body: Partial<ParseResumeRequest>): string | null {
@@ -124,7 +117,7 @@ export default async function handler(request: Request): Promise<Response> {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
 
-  if (isRequestTooLarge(request)) {
+  if (isRequestTooLarge(request, MAX_REQUEST_BYTES)) {
     return jsonResponse(
       { error: "Request body too large. Please reduce input size." },
       413,
