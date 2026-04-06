@@ -3,19 +3,19 @@ import {
   readServerCache,
   withInFlightDedup,
   writeServerCache,
-} from "../../src/server/aiCacheStore";
-import { callServerAI } from "../../src/server/aiRuntime";
-import { authenticateClerkRequest } from "../../src/server/requestAuth";
-import { isRequestTooLarge } from "../../src/server/requestUtils";
+} from "../../src/server/aiCacheStore.js";
+import { callServerAI } from "../../src/server/aiRuntime.js";
+import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
   sendNodeResponse,
   toWebRequest,
-} from "../../src/server/httpAdapter";
+} from "../../src/server/httpAdapter.js";
 import type {
   GenerateCoverLetterRequest,
   GenerateCoverLetterResponse,
-} from "../../src/types/serverAI";
+} from "../../src/types/serverAI.js";
 
 const MAX_REQUEST_BYTES = 768_000;
 const MAX_RESUME_TEXT_LENGTH = 80_000;

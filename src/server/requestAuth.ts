@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload } from "jose";
-import { getHeaderValue } from "./requestUtils";
+import { getHeaderValue } from "./requestUtils.js";
 
 type EnvMap = Record<string, string | undefined>;
 

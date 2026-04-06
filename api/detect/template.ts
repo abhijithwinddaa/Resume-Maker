@@ -1,28 +1,28 @@
-import { buildTemplateDetectorPrompt } from "../../src/utils/templateDetectorPrompt";
+import { buildTemplateDetectorPrompt } from "../../src/utils/templateDetectorPrompt.js";
 import {
   buildTemplateDetectCacheKey,
   readServerCache,
   withInFlightDedup,
   writeServerCache,
-} from "../../src/server/aiCacheStore";
-import { callServerAI } from "../../src/server/aiRuntime";
-import { authenticateClerkRequest } from "../../src/server/requestAuth";
-import { isRequestTooLarge } from "../../src/server/requestUtils";
+} from "../../src/server/aiCacheStore.js";
+import { callServerAI } from "../../src/server/aiRuntime.js";
+import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
   sendNodeResponse,
   toWebRequest,
-} from "../../src/server/httpAdapter";
-import { DEFAULT_CUSTOMIZATION, FONT_OPTIONS } from "../../src/types/templates";
+} from "../../src/server/httpAdapter.js";
+import { DEFAULT_CUSTOMIZATION, FONT_OPTIONS } from "../../src/types/templates.js";
 import type {
   DetectTemplateRequest,
   DetectTemplateResponse,
-} from "../../src/types/serverAI";
+} from "../../src/types/serverAI.js";
 import type {
   TemplateCustomization,
   TemplateId,
-} from "../../src/types/templates";
-import type { DetectedStyle } from "../../src/utils/templateDetector";
+} from "../../src/types/templates.js";
+import type { DetectedStyle } from "../../src/utils/templateDetector.js";
 
 const MAX_REQUEST_BYTES = 256_000;
 const MIN_RESUME_TEXT_LENGTH = 100;

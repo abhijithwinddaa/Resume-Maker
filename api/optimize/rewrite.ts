@@ -1,29 +1,29 @@
-import { buildOptimizePrompt } from "../../src/utils/optimizePrompt";
+import { buildOptimizePrompt } from "../../src/utils/optimizePrompt.js";
 import {
   parseOptimizedResumeResponse,
   type ATSResult,
-} from "../../src/utils/aiService";
-import { buildSelfOptimizePrompt } from "../../src/utils/selfOptimizePrompt";
-import { OPTIMIZE_PROMPT_VERSION } from "../../src/utils/optimizePromptShared";
+} from "../../src/server/aiParsing.js";
+import { buildSelfOptimizePrompt } from "../../src/utils/selfOptimizePrompt.js";
+import { OPTIMIZE_PROMPT_VERSION } from "../../src/utils/optimizePromptShared.js";
 import {
   buildRewriteCacheKey,
   readServerCache,
   withInFlightDedup,
   writeServerCache,
-} from "../../src/server/aiCacheStore";
-import { callServerAI } from "../../src/server/aiRuntime";
-import { authenticateClerkRequest } from "../../src/server/requestAuth";
-import { isRequestTooLarge } from "../../src/server/requestUtils";
+} from "../../src/server/aiCacheStore.js";
+import { callServerAI } from "../../src/server/aiRuntime.js";
+import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
   sendNodeResponse,
   toWebRequest,
-} from "../../src/server/httpAdapter";
+} from "../../src/server/httpAdapter.js";
 import type {
   RewriteResumeRequest,
   RewriteResumeResponse,
-} from "../../src/types/serverAI";
-import type { ResumeData } from "../../src/types/resume";
+} from "../../src/types/serverAI.js";
+import type { ResumeData } from "../../src/types/resume.js";
 
 const MAX_REQUEST_BYTES = 512_000;
 

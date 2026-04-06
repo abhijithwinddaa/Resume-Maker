@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import type { ATSResult } from "../utils/aiService";
-import type { ResumeData } from "../types/resume";
+import type { ATSResult } from "./aiParsing.js";
+import type { ResumeData } from "../types/resume.js";
 
 const CACHE_TTL_MS = 60 * 60 * 1000;
 

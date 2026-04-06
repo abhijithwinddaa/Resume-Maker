@@ -1,5 +1,5 @@
-import type { ATSResult } from "./aiService";
-import type { ResumeFeedbackSignal } from "./resumeFeedback";
+import type { ATSResult } from "../server/aiParsing.js";
+import type { ResumeFeedbackSignal } from "./resumeFeedback.js";
 
 export const OPTIMIZE_PROMPT_VERSION = "v2-structured-safe";
 

@@ -1,27 +1,27 @@
-import { buildATSPrompt } from "../../src/utils/atsPrompt";
+import { buildATSPrompt } from "../../src/utils/atsPrompt.js";
 import {
   parseATSResultResponse,
   type ATSResult,
-} from "../../src/utils/aiService";
-import { buildSelfATSPrompt } from "../../src/utils/selfATSPrompt";
+} from "../../src/server/aiParsing.js";
+import { buildSelfATSPrompt } from "../../src/utils/selfATSPrompt.js";
 import {
   buildAnalyzeCacheKey,
   readServerCache,
   withInFlightDedup,
   writeServerCache,
-} from "../../src/server/aiCacheStore";
-import { callServerAI } from "../../src/server/aiRuntime";
-import { authenticateClerkRequest } from "../../src/server/requestAuth";
-import { isRequestTooLarge } from "../../src/server/requestUtils";
+} from "../../src/server/aiCacheStore.js";
+import { callServerAI } from "../../src/server/aiRuntime.js";
+import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
   sendNodeResponse,
   toWebRequest,
-} from "../../src/server/httpAdapter";
+} from "../../src/server/httpAdapter.js";
 import type {
   AnalyzeATSRequest,
   AnalyzeATSResponse,
-} from "../../src/types/serverAI";
+} from "../../src/types/serverAI.js";
 
 const MAX_REQUEST_BYTES = 512_000;
 

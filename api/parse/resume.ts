@@ -1,24 +1,24 @@
-import { buildResumeParsePrompt } from "../../src/utils/resumeParser";
-import { extractJSON } from "../../src/utils/aiService";
+import { buildResumeParsePrompt } from "../../src/utils/resumeParser.js";
+import { extractJSON } from "../../src/server/aiParsing.js";
 import {
   buildParseCacheKey,
   readServerCache,
   withInFlightDedup,
   writeServerCache,
-} from "../../src/server/aiCacheStore";
-import { callServerAI } from "../../src/server/aiRuntime";
-import { authenticateClerkRequest } from "../../src/server/requestAuth";
-import { DEFAULT_SECTION_ORDER, type ResumeData } from "../../src/types/resume";
+} from "../../src/server/aiCacheStore.js";
+import { callServerAI } from "../../src/server/aiRuntime.js";
+import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import { DEFAULT_SECTION_ORDER, type ResumeData } from "../../src/types/resume.js";
 import type {
   ParseResumeRequest,
   ParseResumeResponse,
-} from "../../src/types/serverAI";
-import { isRequestTooLarge } from "../../src/server/requestUtils";
+} from "../../src/types/serverAI.js";
+import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
   sendNodeResponse,
   toWebRequest,
-} from "../../src/server/httpAdapter";
+} from "../../src/server/httpAdapter.js";
 
 const MAX_REQUEST_BYTES = 512_000;
 const MIN_RESUME_TEXT_LENGTH = 100;

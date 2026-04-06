@@ -1,10 +1,10 @@
-import type { ResumeData } from "../types/resume";
-import type { ATSResult } from "./aiService";
+import type { ResumeData } from "../types/resume.js";
+import type { ATSResult } from "../server/aiParsing.js";
 import {
   buildOptimizationWritingContract,
   buildQualitySignalsBlock,
   OPTIMIZE_PROMPT_VERSION,
-} from "./optimizePromptShared";
+} from "./optimizePromptShared.js";
 
 export function buildOptimizePrompt(
   resumeData: ResumeData,
