@@ -68,7 +68,7 @@ function findKnownTypos(
       const key = `${path}|${rule.wrong}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      results.push(`${path}: \"${rule.wrong}\" -> \"${rule.suggestion}\"`);
+      results.push(`${path}: "${rule.wrong}" -> "${rule.suggestion}"`);
     }
     return;
   }

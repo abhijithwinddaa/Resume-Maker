@@ -101,8 +101,19 @@ export function validateJDText(text: string): ValidationResult {
  * Sanitize text input — strip control characters, normalize whitespace.
  */
 export function sanitizeText(text: string): string {
-  return text
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Remove control chars (keep \t, \n, \r)
+  const withoutControlChars = Array.from(text)
+    .filter((char) => {
+      const code = char.charCodeAt(0);
+      return (
+        code === 9 ||
+        code === 10 ||
+        code === 13 ||
+        (code >= 32 && code !== 127)
+      );
+    })
+    .join("");
+
+  return withoutControlChars
     .replace(/\r\n/g, "\n") // Normalize line endings
     .replace(/\r/g, "\n")
     .trim();

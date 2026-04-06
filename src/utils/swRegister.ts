@@ -9,7 +9,7 @@ export function registerServiceWorker(): void {
       navigator.serviceWorker
         .register("/sw.js")
         .then((registration) => {
-          console.log("[SW] Registered:", registration.scope);
+          console.warn("[SW] Registered:", registration.scope);
         })
         .catch((err) => {
           console.warn("[SW] Registration failed:", err);

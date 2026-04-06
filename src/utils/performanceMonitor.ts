@@ -44,7 +44,7 @@ function recordMetric(metric: PerformanceMetric) {
         : metric.rating === "needs-improvement"
           ? "#f59e0b"
           : "#ef4444";
-    console.log(
+    console.warn(
       `%c[Perf] ${metric.name}: ${metric.value.toFixed(1)}ms (${metric.rating})`,
       `color: ${color}; font-weight: bold`,
     );

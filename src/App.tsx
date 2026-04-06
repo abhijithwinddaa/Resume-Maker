@@ -995,11 +995,13 @@ function App() {
     [loadingMessage],
   );
   const analyzeCooldownRemaining = useMemo(
-    () => getRateLimitRemaining("analyze", 30000),
+    () =>
+      cooldownRemaining < 0 ? 0 : getRateLimitRemaining("analyze", 30000),
     [cooldownRemaining],
   );
   const optimizeCooldownRemaining = useMemo(
-    () => getRateLimitRemaining("optimize", 30000),
+    () =>
+      cooldownRemaining < 0 ? 0 : getRateLimitRemaining("optimize", 30000),
     [cooldownRemaining],
   );
   const isAnalyzeCoolingDown = analyzeCooldownRemaining > 0;

@@ -40,6 +40,35 @@ type SectionName =
   | "certificates"
   | "sectionOrder";
 
+interface SectionHeaderProps {
+  title: string;
+  section: SectionName;
+  expandedSections: Set<SectionName>;
+  onToggleSection: (section: SectionName) => void;
+}
+
+const SectionHeader: React.FC<SectionHeaderProps> = ({
+  title,
+  section,
+  expandedSections,
+  onToggleSection,
+}) => (
+  <button
+    type="button"
+    className="editor-section-header"
+    onClick={() => onToggleSection(section)}
+    aria-expanded={expandedSections.has(section)}
+    aria-label={`${title} section`}
+  >
+    <h3>{title}</h3>
+    {expandedSections.has(section) ? (
+      <ChevronUp size={18} />
+    ) : (
+      <ChevronDown size={18} />
+    )}
+  </button>
+);
+
 const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   const [expandedSections, setExpandedSections] = useState<Set<SectionName>>(
     new Set([
@@ -325,26 +354,6 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
     onChange({ ...data, sectionOrder: newOrder });
   };
 
-  const SectionHeader: React.FC<{ title: string; section: SectionName }> = ({
-    title,
-    section,
-  }) => (
-    <button
-      type="button"
-      className="editor-section-header"
-      onClick={() => toggleSection(section)}
-      aria-expanded={expandedSections.has(section)}
-      aria-label={`${title} section`}
-    >
-      <h3>{title}</h3>
-      {expandedSections.has(section) ? (
-        <ChevronUp size={18} />
-      ) : (
-        <ChevronDown size={18} />
-      )}
-    </button>
-  );
-
   return (
     <div className="resume-editor" role="form" aria-label="Resume editor form">
       <h2 className="editor-title">Resume Editor</h2>
@@ -390,7 +399,12 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
       {/* Contact Information */}
       <div className="editor-section">
-        <SectionHeader title="Contact Information" section="contact" />
+        <SectionHeader
+          title="Contact Information"
+          section="contact"
+          expandedSections={expandedSections}
+          onToggleSection={toggleSection}
+        />
         {expandedSections.has("contact") && (
           <div className="editor-fields">
             <div className="field-group">
@@ -451,7 +465,12 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
       {/* Summary */}
       <div className="editor-section">
-        <SectionHeader title="Summary" section="summary" />
+        <SectionHeader
+          title="Summary"
+          section="summary"
+          expandedSections={expandedSections}
+          onToggleSection={toggleSection}
+        />
         {expandedSections.has("summary") && (
           <div className="editor-fields">
             <textarea
@@ -466,7 +485,12 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
       {/* Education */}
       <div className="editor-section">
-        <SectionHeader title="Education" section="education" />
+        <SectionHeader
+          title="Education"
+          section="education"
+          expandedSections={expandedSections}
+          onToggleSection={toggleSection}
+        />
         {expandedSections.has("education") && (
           <div className="editor-fields">
             {data.education.map((edu, i) => (
@@ -671,7 +695,12 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
       {/* Projects */}
       <div className="editor-section">
-        <SectionHeader title="Projects" section="projects" />
+        <SectionHeader
+          title="Projects"
+          section="projects"
+          expandedSections={expandedSections}
+          onToggleSection={toggleSection}
+        />
         {expandedSections.has("projects") && (
           <div className="editor-fields">
             {data.projects.map((project, i) => (
@@ -761,7 +790,12 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
       {/* Skills */}
       <div className="editor-section">
-        <SectionHeader title="Skills" section="skills" />
+        <SectionHeader
+          title="Skills"
+          section="skills"
+          expandedSections={expandedSections}
+          onToggleSection={toggleSection}
+        />
         {expandedSections.has("skills") && (
           <div className="editor-fields">
             {data.skills.map((skill, i) => (
@@ -799,7 +833,12 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
       {/* Achievements */}
       <div className="editor-section">
-        <SectionHeader title="Achievements" section="achievements" />
+        <SectionHeader
+          title="Achievements"
+          section="achievements"
+          expandedSections={expandedSections}
+          onToggleSection={toggleSection}
+        />
         {expandedSections.has("achievements") && (
           <div className="editor-fields">
             {data.achievements.map((ach, i) => (

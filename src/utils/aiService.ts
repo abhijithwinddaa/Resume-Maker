@@ -640,8 +640,7 @@ export async function generateAIResume(
     },
   ];
 
-  let rawResponse: string;
-  rawResponse = await callAI(settings, messages);
+  const rawResponse = await callAI(settings, messages);
 
   const jsonStr = extractJSON(rawResponse);
 
@@ -972,7 +971,7 @@ export async function analyzeATSScore(
   );
   const cached = getCached<ATSResult>(cacheKey);
   if (cached) {
-    console.log("ATS score loaded from cache");
+    console.warn("ATS score loaded from cache");
     const enrichedCached = enrichATSResult(cached, resumeData);
     setCache(cacheKey, enrichedCached);
     return enrichedCached;
@@ -994,7 +993,7 @@ export async function selfATSScore(
   const cacheKey = getCacheKey("self-ats", JSON.stringify(resumeData));
   const cached = getCached<ATSResult>(cacheKey);
   if (cached) {
-    console.log("Self ATS score loaded from cache");
+    console.warn("Self ATS score loaded from cache");
     const enrichedCached = enrichATSResult(cached, resumeData);
     setCache(cacheKey, enrichedCached);
     return enrichedCached;
@@ -1545,7 +1544,7 @@ export async function parseResumeFromText(
   );
   const cached = getCached<ResumeData>(cacheKey);
   if (cached) {
-    console.log("Parsed resume loaded from cache");
+    console.warn("Parsed resume loaded from cache");
     return cached;
   }
 
