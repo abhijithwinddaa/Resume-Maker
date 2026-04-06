@@ -472,6 +472,7 @@ function App() {
   const setIsSaving = useAppStore((s) => s.setIsSaving);
   const isDbLoading = useAppStore((s) => s.isDbLoading);
   const setIsDbLoading = useAppStore((s) => s.setIsDbLoading);
+  const cooldownRemaining = useAppStore((s) => s.cooldownRemaining);
   const setCooldownRemaining = useAppStore((s) => s.setCooldownRemaining);
   const hasBackup = useAppStore((s) => s.hasBackup);
   const setHasBackup = useAppStore((s) => s.setHasBackup);
@@ -992,6 +993,16 @@ function App() {
     () => getAnalyzeProgressPercent(loadingMessage),
     [loadingMessage],
   );
+  const analyzeCooldownRemaining = useMemo(
+    () => getRateLimitRemaining("analyze", 30000),
+    [cooldownRemaining],
+  );
+  const optimizeCooldownRemaining = useMemo(
+    () => getRateLimitRemaining("optimize", 30000),
+    [cooldownRemaining],
+  );
+  const isAnalyzeCoolingDown = analyzeCooldownRemaining > 0;
+  const isOptimizeCoolingDown = optimizeCooldownRemaining > 0;
   const experienceTier = useMemo(
     () => getExperienceTier(resumeData),
     [resumeData],
@@ -3004,13 +3015,12 @@ function App() {
                 <button
                   className="analyze-btn"
                   onClick={handleAnalyzeExisting}
-                  disabled={!jdText.trim() || isRateLimited("analyze", 30000)}
+                  disabled={!jdText.trim() || isAnalyzeCoolingDown}
                 >
-                  {isRateLimited("analyze", 30000) ? (
+                  {isAnalyzeCoolingDown ? (
                     <>
                       <Clock size={18} />
-                      Wait{" "}
-                      {formatCooldown(getRateLimitRemaining("analyze", 30000))}
+                      Wait {formatCooldown(analyzeCooldownRemaining)}
                     </>
                   ) : (
                     <>
@@ -3029,14 +3039,13 @@ function App() {
                       : !resumeText.trim() && !resumeData) ||
                     !jdText.trim() ||
                     isPdfLoading ||
-                    isRateLimited("analyze", 30000)
+                    isAnalyzeCoolingDown
                   }
                 >
-                  {isRateLimited("analyze", 30000) ? (
+                  {isAnalyzeCoolingDown ? (
                     <>
                       <Clock size={18} />
-                      Wait{" "}
-                      {formatCooldown(getRateLimitRemaining("analyze", 30000))}
+                      Wait {formatCooldown(analyzeCooldownRemaining)}
                     </>
                   ) : (
                     <>
@@ -3164,13 +3173,12 @@ function App() {
               <button
                 className="analyze-btn"
                 onClick={handleParseResume}
-                disabled={!resumeText.trim() || isRateLimited("analyze", 30000)}
+                disabled={!resumeText.trim() || isAnalyzeCoolingDown}
               >
-                {isRateLimited("analyze", 30000) ? (
+                {isAnalyzeCoolingDown ? (
                   <>
                     <Clock size={18} />
-                    Wait{" "}
-                    {formatCooldown(getRateLimitRemaining("analyze", 30000))}
+                    Wait {formatCooldown(analyzeCooldownRemaining)}
                   </>
                 ) : (
                   <>
@@ -3361,15 +3369,12 @@ function App() {
                     onClick={
                       jdText.trim() ? handleOptimize : handleSelfOptimize
                     }
-                    disabled={isRateLimited("optimize", 30000)}
+                    disabled={isOptimizeCoolingDown}
                   >
-                    {isRateLimited("optimize", 30000) ? (
+                    {isOptimizeCoolingDown ? (
                       <>
                         <Clock size={18} />
-                        Wait{" "}
-                        {formatCooldown(
-                          getRateLimitRemaining("optimize", 30000),
-                        )}
+                        Wait {formatCooldown(optimizeCooldownRemaining)}
                       </>
                     ) : (
                       <>
