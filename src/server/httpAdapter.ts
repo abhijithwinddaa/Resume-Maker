@@ -2,13 +2,16 @@ type NodeLikeRequest = {
   method?: string;
   headers?: Record<string, string | string[] | undefined>;
   body?: unknown;
+  rawBody?: unknown;
   url?: string;
 };
 
 type NodeLikeResponse = {
-  status: (code: number) => NodeLikeResponse;
-  setHeader: (name: string, value: string) => void;
-  send: (body: string) => void;
+  status?: (code: number) => NodeLikeResponse | unknown;
+  statusCode?: number;
+  setHeader?: (name: string, value: string) => void;
+  send?: (body: string) => void;
+  end?: (body?: string) => void;
 };
 
 function normalizeBody(method: string, body: unknown): BodyInit | undefined {
@@ -58,14 +61,16 @@ function normalizeHeaders(
 }
 
 export function toWebRequest(request: Request | NodeLikeRequest): Request {
-  if (request instanceof Request) {
+  if (typeof Request !== "undefined" && request instanceof Request) {
     return request;
   }
 
-  const method = (request.method || "GET").toUpperCase();
-  const body = normalizeBody(method, request.body);
-  const headers = normalizeHeaders(request.headers, request.body);
-  const url = request.url || "https://local.invalid/api";
+  const nodeRequest = request as NodeLikeRequest;
+  const method = (nodeRequest.method || "GET").toUpperCase();
+  const requestBody = nodeRequest.body ?? nodeRequest.rawBody;
+  const body = normalizeBody(method, requestBody);
+  const headers = normalizeHeaders(nodeRequest.headers, requestBody);
+  const url = nodeRequest.url || "https://local.invalid/api";
   const absoluteUrl = url.startsWith("http") ? url : `https://local.invalid${url}`;
 
   return new Request(absoluteUrl, {
@@ -82,9 +87,11 @@ export function isNodeResponse(value: unknown): value is NodeLikeResponse {
 
   const candidate = value as Partial<NodeLikeResponse>;
   return (
-    typeof candidate.status === "function" &&
-    typeof candidate.setHeader === "function" &&
-    typeof candidate.send === "function"
+    typeof candidate.status === "function" ||
+    typeof candidate.setHeader === "function" ||
+    typeof candidate.send === "function" ||
+    typeof candidate.end === "function" ||
+    typeof candidate.statusCode === "number"
   );
 }
 
@@ -92,14 +99,24 @@ export async function sendNodeResponse(
   response: NodeLikeResponse,
   webResponse: Response,
 ): Promise<void> {
-  response.status(webResponse.status);
+  if (typeof response.status === "function") {
+    response.status(webResponse.status);
+  } else {
+    response.statusCode = webResponse.status;
+  }
 
   webResponse.headers.forEach((value, key) => {
     if (key.toLowerCase() === "content-length") {
       return;
     }
-    response.setHeader(key, value);
+    response.setHeader?.(key, value);
   });
 
-  response.send(await webResponse.text());
+  const textBody = await webResponse.text();
+  if (typeof response.send === "function") {
+    response.send(textBody);
+    return;
+  }
+
+  response.end?.(textBody);
 }
