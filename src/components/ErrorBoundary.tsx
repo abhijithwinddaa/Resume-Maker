@@ -17,6 +17,10 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
+const DYNAMIC_IMPORT_ERROR_PATTERN =
+  /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk/i;
+const RETRY_RELOAD_KEY = "resume-maker-retry-reloaded";
+
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -33,6 +37,22 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   handleRetry = (): void => {
+    const message = this.state.error?.message || "";
+    if (DYNAMIC_IMPORT_ERROR_PATTERN.test(message)) {
+      try {
+        if (!sessionStorage.getItem(RETRY_RELOAD_KEY)) {
+          sessionStorage.setItem(RETRY_RELOAD_KEY, "1");
+          window.location.reload();
+          return;
+        }
+
+        sessionStorage.removeItem(RETRY_RELOAD_KEY);
+      } catch {
+        window.location.reload();
+        return;
+      }
+    }
+
     this.setState({ hasError: false, error: null });
   };
 

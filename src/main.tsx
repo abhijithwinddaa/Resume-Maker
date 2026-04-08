@@ -11,6 +11,24 @@ import "./i18n";
 import "./index.css";
 
 const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
+const PRELOAD_RECOVERY_KEY = "resume-maker-preload-recovered";
+
+// Recover automatically when a deployment invalidates lazy-loaded chunk URLs.
+window.addEventListener("vite:preloadError", (event) => {
+  event.preventDefault();
+
+  try {
+    if (!sessionStorage.getItem(PRELOAD_RECOVERY_KEY)) {
+      sessionStorage.setItem(PRELOAD_RECOVERY_KEY, "1");
+      window.location.reload();
+      return;
+    }
+
+    sessionStorage.removeItem(PRELOAD_RECOVERY_KEY);
+  } catch {
+    window.location.reload();
+  }
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -30,6 +48,13 @@ registerServiceWorker();
 // Initialize traffic and product analytics in production.
 initAnalytics();
 trackPageView(window.location.pathname);
+
+// Clear recovery marker after a successful boot so future deploys can recover once.
+try {
+  sessionStorage.removeItem(PRELOAD_RECOVERY_KEY);
+} catch {
+  // ignore storage restrictions
+}
 
 // Defer performance monitoring to idle time
 if ("requestIdleCallback" in window) {
