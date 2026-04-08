@@ -304,6 +304,13 @@
   padding: 40px 24px;
   overflow-y: auto;
   height: 100%;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.input-step::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .input-hero {

@@ -20,7 +20,7 @@ AI-powered resume builder, ATS scorer, optimizer, and editor built with React, C
 - Vite 7
 - Clerk for auth
 - Supabase for persistence
-- GitHub Models with Gemini fallback
+- GitHub Models with Groq fallback
 - `pdfjs-dist`, `tesseract.js`, `html2canvas-pro`, `pdf-lib`, `docx`
 
 ## Environment
@@ -45,7 +45,6 @@ VITE_CLERK_SUPABASE_TEMPLATE=supabase
 # Server-side AI for ATS analyze + optimize
 GITHUB_TOKEN=github_pat_server_token_1
 GITHUB_TOKENS=github_pat_server_token_1,github_pat_server_token_2
-GEMINI_API_KEY=your_server_google_ai_studio_key
 GROQ_API_KEY=your_server_groq_key_optional
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 

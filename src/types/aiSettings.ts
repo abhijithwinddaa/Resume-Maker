@@ -1,28 +1,54 @@
-export type AIProvider = "groq" | "ollama" | "github";
+export type AIProvider = "groq" | "github";
 
 export interface AISettings {
   provider: AIProvider;
   groqApiKey: string;
   groqModel: string;
-  ollamaUrl: string;
-  ollamaModel: string;
   githubToken: string;
   githubTokens: string[];
   githubModel: string;
-  geminiApiKey: string;
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   provider: "github",
   groqApiKey: "",
   groqModel: "llama-3.3-70b-versatile",
-  ollamaUrl: "http://localhost:11434",
-  ollamaModel: "gemma3:4b",
   githubToken: "",
   githubTokens: [],
   githubModel: "gpt-4o-mini",
-  geminiApiKey: "",
 };
+
+function normalizeProvider(value: unknown): AIProvider {
+  return value === "groq" ? "groq" : "github";
+}
+
+function sanitizeLoadedSettings(raw: unknown): AISettings {
+  const parsed =
+    raw && typeof raw === "object"
+      ? (raw as Partial<Record<keyof AISettings | "provider", unknown>>)
+      : {};
+
+  return {
+    provider: normalizeProvider(parsed.provider),
+    groqApiKey: typeof parsed.groqApiKey === "string" ? parsed.groqApiKey : "",
+    groqModel:
+      typeof parsed.groqModel === "string" && parsed.groqModel.trim()
+        ? parsed.groqModel
+        : DEFAULT_AI_SETTINGS.groqModel,
+    githubToken:
+      typeof parsed.githubToken === "string" ? parsed.githubToken : "",
+    githubTokens: Array.isArray(parsed.githubTokens)
+      ? parsed.githubTokens.filter(
+          (token): token is string =>
+            typeof token === "string" && token.trim().length > 0,
+        )
+      : [],
+    githubModel:
+      typeof parsed.githubModel === "string" && parsed.githubModel.trim()
+        ? parsed.githubModel
+        : DEFAULT_AI_SETTINGS.githubModel,
+  };
+}
 
 function withoutClientSecrets(settings: AISettings): AISettings {
   return {
@@ -30,7 +56,6 @@ function withoutClientSecrets(settings: AISettings): AISettings {
     groqApiKey: "",
     githubToken: "",
     githubTokens: [],
-    geminiApiKey: "",
   };
 }
 
@@ -54,10 +79,7 @@ export function loadAISettings(): AISettings {
   try {
     const saved = localStorage.getItem("ai-settings");
     if (saved) {
-      return withoutClientSecrets({
-        ...DEFAULT_AI_SETTINGS,
-        ...JSON.parse(saved),
-      });
+      return withoutClientSecrets(sanitizeLoadedSettings(JSON.parse(saved)));
     }
   } catch {
     // ignore

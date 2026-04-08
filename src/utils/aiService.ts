@@ -396,54 +396,35 @@ async function callGitHub(
   throw new Error("ALL_GITHUB_RATE_LIMITED");
 }
 
-/* ── Google Gemini fallback ──────────────────────────── */
+/* ── Groq fallback ───────────────────────────────────── */
 
-interface GeminiResponse {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
+interface GroqResponse {
+  choices?: { message?: { content?: string } }[];
   error?: { message?: string };
 }
 
-async function callGemini(
+async function callGroq(
   settings: AISettings,
   messages: ChatMessage[],
   signal?: AbortSignal,
 ): Promise<string> {
-  if (!settings.geminiApiKey) {
-    throw new Error("Gemini API key is not set.");
-  }
-
-  // Convert ChatMessage format to Gemini format
-  const systemMsg = messages.find((m) => m.role === "system");
-  const userMsgs = messages.filter((m) => m.role !== "system");
-
-  const contents = userMsgs.map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
-
-  // Prepend system instruction as first user message if present
-  if (systemMsg) {
-    contents.unshift({
-      role: "user",
-      parts: [{ text: `[System Instructions]\n${systemMsg.content}` }],
-    });
-    contents.splice(1, 0, {
-      role: "model",
-      parts: [{ text: "Understood. I will follow these instructions." }],
-    });
+  if (!settings.groqApiKey) {
+    throw new Error("Groq API key is not set.");
   }
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`,
+    "https://api.groq.com/openai/v1/chat/completions",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${settings.groqApiKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        contents,
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 16000,
-        },
+        model: settings.groqModel,
+        messages,
+        temperature: 0.3,
+        max_tokens: 16000,
       }),
       signal,
     },
@@ -452,15 +433,15 @@ async function callGemini(
   if (!response.ok) {
     const errBody = await response.text();
     if (response.status === 429) {
-      throw new Error("Gemini rate limit exceeded. Please wait and try again.");
+      throw new Error("Groq rate limit exceeded. Please wait and try again.");
     }
-    throw new Error(`Gemini API error (${response.status}): ${errBody}`);
+    throw new Error(`Groq API error (${response.status}): ${errBody}`);
   }
 
-  const data = (await response.json()) as GeminiResponse;
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const data = (await response.json()) as GroqResponse;
+  const text = data.choices?.[0]?.message?.content;
   if (!text) {
-    throw new Error("Gemini returned no content.");
+    throw new Error("Groq returned no content.");
   }
   return text;
 }
@@ -518,10 +499,10 @@ export async function callAI(
       return await callGitHub(settings, messages, signal);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
-      // If all GitHub tokens are rate limited, fall back to Gemini
-      if (msg === "ALL_GITHUB_RATE_LIMITED" && settings.geminiApiKey) {
-        console.warn("All GitHub tokens rate limited — falling back to Gemini");
-        return callGemini(settings, messages, signal);
+      // If all GitHub tokens are rate limited, fall back to Groq
+      if (msg === "ALL_GITHUB_RATE_LIMITED" && settings.groqApiKey) {
+        console.warn("All GitHub tokens rate limited — falling back to Groq");
+        return callGroq(settings, messages, signal);
       }
       throw err;
     }

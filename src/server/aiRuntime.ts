@@ -7,10 +7,6 @@ interface ChatAPIResponse {
   choices: { message: { content: string } }[];
 }
 
-interface GeminiResponse {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
-}
-
 interface GroqResponse {
   choices?: { message?: { content?: string } }[];
 }
@@ -20,7 +16,6 @@ type EnvMap = Record<string, string | undefined>;
 interface ServerAIConfig {
   githubTokens: string[];
   githubModel: string;
-  geminiApiKey: string;
   groqApiKey: string;
   groqModel: string;
 }
@@ -63,7 +58,6 @@ function getServerAIConfig(): ServerAIConfig {
   return {
     githubTokens: readGithubTokens(),
     githubModel: readEnv("GITHUB_MODEL") || "gpt-4o-mini",
-    geminiApiKey: readEnv("GEMINI_API_KEY"),
     groqApiKey: readEnv("GROQ_API_KEY"),
     groqModel: readEnv("GROQ_MODEL") || "llama-3.3-70b-versatile",
   };
@@ -114,62 +108,6 @@ async function callGitHub(
   }
 
   throw new Error("ALL_GITHUB_RATE_LIMITED");
-}
-
-async function callGemini(
-  config: ServerAIConfig,
-  messages: ChatMessage[],
-  signal?: AbortSignal,
-): Promise<string> {
-  if (!config.geminiApiKey) {
-    throw new Error("Gemini API key is not configured on the server.");
-  }
-
-  const systemMsg = messages.find((message) => message.role === "system");
-  const userMessages = messages.filter((message) => message.role !== "system");
-  const contents = userMessages.map((message) => ({
-    role: message.role === "assistant" ? "model" : "user",
-    parts: [{ text: message.content }],
-  }));
-
-  if (systemMsg) {
-    contents.unshift({
-      role: "user",
-      parts: [{ text: `[System Instructions]\n${systemMsg.content}` }],
-    });
-    contents.splice(1, 0, {
-      role: "model",
-      parts: [{ text: "Understood. I will follow these instructions." }],
-    });
-  }
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${config.geminiApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 16000,
-        },
-      }),
-      signal,
-    },
-  );
-
-  if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`Gemini API error (${response.status}): ${errBody}`);
-  }
-
-  const data = (await response.json()) as GeminiResponse;
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error("Gemini returned no content.");
-  }
-  return text;
 }
 
 async function callGroq(
@@ -257,16 +195,12 @@ export async function callServerAI(
       }
     }
 
-    if (config.geminiApiKey) {
-      return callGemini(config, messages, signal);
-    }
-
     if (config.groqApiKey) {
       return callGroq(config, messages, signal);
     }
 
     throw new Error(
-      "No server-side AI provider is configured. Set GITHUB_TOKEN, GITHUB_TOKENS, GEMINI_API_KEY, or GROQ_API_KEY.",
+      "No server-side AI provider is configured. Set GITHUB_TOKEN, GITHUB_TOKENS, or GROQ_API_KEY.",
     );
   });
 }
