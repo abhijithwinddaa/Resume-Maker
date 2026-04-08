@@ -38,7 +38,11 @@ export interface ResumeMeta {
 export type AppStep = "landing" | "input" | "analyzing" | "score" | "editor";
 export type AppMode = "ats" | "edit" | "create" | null;
 export type ThemeMode = "light" | "dark" | "system";
-export type ExportPageMode = "auto" | "force-single-page" | "allow-multi-page";
+export type ExportPageMode =
+  | "auto"
+  | "auto-adaptive"
+  | "force-single-page"
+  | "allow-multi-page";
 
 interface AppState {
   // ─── Core State ─────────────────────────
@@ -188,6 +192,7 @@ function loadExportPageMode(): ExportPageMode {
     const saved = localStorage.getItem("export-page-mode");
     if (
       saved === "auto" ||
+      saved === "auto-adaptive" ||
       saved === "force-single-page" ||
       saved === "allow-multi-page"
     ) {

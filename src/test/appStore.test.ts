@@ -58,6 +58,9 @@ describe("appStore", () => {
     expect(useAppStore.getState().exportPageMode).toBe("force-single-page");
     useAppStore.getState().setExportPageMode("allow-multi-page");
     expect(useAppStore.getState().exportPageMode).toBe("allow-multi-page");
+    useAppStore.getState().setExportPageMode("auto-adaptive");
+    expect(useAppStore.getState().exportPageMode).toBe("auto-adaptive");
+    expect(localStorage.getItem("export-page-mode")).toBe("auto-adaptive");
     useAppStore.getState().setExportPageMode("auto");
   });
 

@@ -80,6 +80,7 @@ import {
 import { useDebounce } from "./hooks/useDebounce";
 import { validateResumeData } from "./utils/zodSchemas";
 import { exportToDocx } from "./utils/docxExporter";
+import { resolveExportPageMode } from "./utils/exportPageMode";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { EditorSkeleton, PreviewSkeleton } from "./components/Skeleton";
 import ThemeToggle from "./components/ThemeToggle";
@@ -1018,6 +1019,7 @@ function App() {
     experienceTier === "fresher"
       ? "Auto: single-page target"
       : "Auto: multi-page allowed";
+  const adaptiveModeLabel = "Adaptive: fit content density";
   const optimizePercent = useMemo(
     () => getOptimizeProgressPercent(optimizeProgress),
     [optimizeProgress],
@@ -1312,14 +1314,18 @@ function App() {
       setError(null);
     }
 
-    const singlePageRequired =
-      exportPageMode === "force-single-page" ||
-      (exportPageMode === "auto" && experienceTier === "fresher");
+    const pageModeDecision = resolveExportPageMode(
+      exportPageMode,
+      experienceTier,
+    );
+    const singlePageRequired = pageModeDecision.singlePageRequired;
 
     setIsExporting(true);
     setExportToastMessage("Preparing PDF...");
 
-    let fitResult = await evaluatePdfFit(singlePageRequired);
+    let fitResult = await evaluatePdfFit(
+      pageModeDecision.fitRequiresSinglePageAttempts,
+    );
 
     if (singlePageRequired && fitResult.estimatedPages > 1) {
       setIsExporting(false);
@@ -2482,6 +2488,22 @@ function App() {
                           <PlusCircle size={14} />
                         )}
                         <span>{autoModeLabel}</span>
+                      </button>
+                      <button
+                        className={`settings-menu-item settings-menu-item-compact ${
+                          exportPageMode === "auto-adaptive" ? "is-active" : ""
+                        }`}
+                        role="menuitemradio"
+                        aria-checked={exportPageMode === "auto-adaptive"}
+                        onClick={() => setExportPageMode("auto-adaptive")}
+                        title={adaptiveModeLabel}
+                      >
+                        {exportPageMode === "auto-adaptive" ? (
+                          <CheckCircle2 size={14} />
+                        ) : (
+                          <PlusCircle size={14} />
+                        )}
+                        <span>{adaptiveModeLabel}</span>
                       </button>
                       <button
                         className={`settings-menu-item settings-menu-item-compact ${
