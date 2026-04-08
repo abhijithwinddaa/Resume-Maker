@@ -73,6 +73,10 @@ import {
 import { recordFeatureUsage } from "./services/popularityService";
 import { isAdminEmail } from "./utils/adminAccess";
 import { checkUserHasSubmittedFeedback } from "./services/feedbackService";
+import {
+  evaluateFeedbackExportGate,
+  FEEDBACK_GATE_STATUS_ERROR_MESSAGE,
+} from "./utils/feedbackExportGate";
 import { useDebounce } from "./hooks/useDebounce";
 import { validateResumeData } from "./utils/zodSchemas";
 import { exportToDocx } from "./utils/docxExporter";
@@ -592,6 +596,7 @@ function App() {
   const pendingResumeCreationRef = useRef<Promise<
     Awaited<ReturnType<typeof saveResume>>
   > | null>(null);
+  const feedbackGateCheckInFlightRef = useRef(false);
   const initialViewportHeightRef = useRef<number>(
     typeof window !== "undefined" ? window.innerHeight : 0,
   );
@@ -1393,31 +1398,53 @@ function App() {
 
   const requestExportWithFeedbackGate = useCallback(
     async (format: "pdf" | "docx", exportAction: () => Promise<void>) => {
-      if (isExporting) return;
+      if (isExporting || feedbackGateCheckInFlightRef.current) return;
 
       if (!user?.id) {
         openSignIn();
         return;
       }
 
-      if (isAdminUser) {
-        await exportAction();
-        return;
+      feedbackGateCheckInFlightRef.current = true;
+
+      try {
+        const submissionState = await checkUserHasSubmittedFeedback(user.id);
+        const gateDecision = evaluateFeedbackExportGate(submissionState);
+
+        if (gateDecision.outcome === "allow-export") {
+          await exportAction();
+          return;
+        }
+
+        if (gateDecision.outcome === "block-export") {
+          setPendingExportFormat(null);
+          setShowFeedbackPanel(false);
+          setError(gateDecision.message);
+          trackEvent("feedback_export_gate_blocked", {
+            format,
+            reason: "status_check_error",
+          });
+          return;
+        }
+
+        setPendingExportFormat(format);
+        setFeedbackInitialTab("my");
+        setShowFeedbackPanel(true);
+        trackEvent("feedback_export_gate_shown", { format });
+      } catch (error) {
+        console.error("Feedback gate status check failed:", error);
+        setPendingExportFormat(null);
+        setShowFeedbackPanel(false);
+        setError(FEEDBACK_GATE_STATUS_ERROR_MESSAGE);
+        trackEvent("feedback_export_gate_blocked", {
+          format,
+          reason: "status_check_exception",
+        });
+      } finally {
+        feedbackGateCheckInFlightRef.current = false;
       }
-
-      const submissionState = await checkUserHasSubmittedFeedback(user.id);
-
-      if (submissionState.hadError || submissionState.hasSubmitted) {
-        await exportAction();
-        return;
-      }
-
-      setPendingExportFormat(format);
-      setFeedbackInitialTab("my");
-      setShowFeedbackPanel(true);
-      trackEvent("feedback_export_gate_shown", { format });
     },
-    [isAdminUser, isExporting, openSignIn, user?.id],
+    [isExporting, openSignIn, setError, user?.id],
   );
 
   const handleExportPDF = useCallback(async () => {
