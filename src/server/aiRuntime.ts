@@ -96,7 +96,11 @@ async function callGitHub(
     if (response.ok) {
       currentTokenIndex = idx;
       const data = (await response.json()) as ChatAPIResponse;
-      return data.choices[0]?.message?.content || "";
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error("GitHub Models API returned an empty response.");
+      }
+      return content;
     }
 
     if (response.status === 401 || response.status === 429) {

@@ -84,4 +84,14 @@ describe("sanitizeText", () => {
     expect(result).toContain("a");
     expect(result).toContain("b");
   });
+
+  it("should preserve valid Unicode characters", () => {
+    const input = " José García – développeur React ";
+    expect(sanitizeText(input)).toBe("José García – développeur React");
+  });
+
+  it("should remove invisible directional control characters", () => {
+    const input = `hello\u202Eworld\u200B!`;
+    expect(sanitizeText(input)).toBe("helloworld!");
+  });
 });

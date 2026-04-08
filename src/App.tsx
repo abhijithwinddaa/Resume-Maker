@@ -701,13 +701,13 @@ function App() {
   /* ── Navigation guard: warn on tab close with unsaved changes ── */
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isSaving || (step === "editor" && resumeData)) {
+      if (isSaving || isOptimizing || (step === "editor" && resumeData)) {
         e.preventDefault();
       }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isSaving, step, resumeData]);
+  }, [isSaving, isOptimizing, step, resumeData]);
 
   /* ── Cooldown timer tick ──────────────────────────── */
   useEffect(() => {
@@ -995,8 +995,7 @@ function App() {
     [loadingMessage],
   );
   const analyzeCooldownRemaining = useMemo(
-    () =>
-      cooldownRemaining < 0 ? 0 : getRateLimitRemaining("analyze", 30000),
+    () => (cooldownRemaining < 0 ? 0 : getRateLimitRemaining("analyze", 30000)),
     [cooldownRemaining],
   );
   const optimizeCooldownRemaining = useMemo(

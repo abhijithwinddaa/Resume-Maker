@@ -103,13 +103,28 @@ export function validateJDText(text: string): ValidationResult {
 export function sanitizeText(text: string): string {
   const withoutControlChars = Array.from(text)
     .filter((char) => {
-      const code = char.charCodeAt(0);
-      return (
-        code === 9 ||
-        code === 10 ||
-        code === 13 ||
-        (code >= 32 && code !== 127)
-      );
+      const code = char.codePointAt(0);
+      if (code === undefined) return false;
+
+      // Keep tab/newline/carriage return for formatting consistency.
+      if (code === 9 || code === 10 || code === 13) return true;
+
+      // Drop C0/C1 and DEL control blocks.
+      if (code <= 31 || code === 127 || (code >= 128 && code <= 159)) {
+        return false;
+      }
+
+      // Drop invisible directional/formatting controls that can spoof text.
+      if (
+        (code >= 0x200b && code <= 0x200f) ||
+        (code >= 0x202a && code <= 0x202e) ||
+        (code >= 0x2066 && code <= 0x2069) ||
+        code === 0xfeff
+      ) {
+        return false;
+      }
+
+      return true;
     })
     .join("");
 

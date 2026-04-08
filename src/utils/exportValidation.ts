@@ -141,11 +141,19 @@ export function validateForExport(data: ResumeData): ExportValidationResult {
 }
 
 /** Auto-fix all known typos in resume data, returning the corrected data and a list of fixes applied */
-export function autoFixTypos(
-  data: ResumeData,
-): { fixed: ResumeData; corrections: string[] } {
+export function autoFixTypos(data: ResumeData): {
+  fixed: ResumeData;
+  corrections: string[];
+} {
   const corrections: string[] = [];
   const clone: ResumeData = JSON.parse(JSON.stringify(data));
+
+  if (typeof clone.summary !== "string") clone.summary = "";
+  if (!Array.isArray(clone.experience)) clone.experience = [];
+  if (!Array.isArray(clone.projects)) clone.projects = [];
+  if (!Array.isArray(clone.skills)) clone.skills = [];
+  if (!Array.isArray(clone.achievements)) clone.achievements = [];
+  if (!Array.isArray(clone.certificates)) clone.certificates = [];
 
   function fixString(text: string, path: string): string {
     let result = text;
@@ -162,52 +170,53 @@ export function autoFixTypos(
   clone.summary = fixString(clone.summary, "summary");
 
   // Fix experience bullets
-  if (clone.experience) {
-    clone.experience.forEach((exp, i) => {
-      exp.role = fixString(exp.role, `experience[${i}].role`);
-      exp.company = fixString(exp.company, `experience[${i}].company`);
-      exp.bullets = exp.bullets.map((b, j) =>
-        fixString(b, `experience[${i}].bullets[${j}]`),
-      );
-    });
-  }
+  clone.experience.forEach((exp, i) => {
+    exp.role = fixString(String(exp.role || ""), `experience[${i}].role`);
+    exp.company = fixString(
+      String(exp.company || ""),
+      `experience[${i}].company`,
+    );
+    const bullets = Array.isArray(exp.bullets) ? exp.bullets : [];
+    exp.bullets = bullets.map((b, j) =>
+      fixString(b, `experience[${i}].bullets[${j}]`),
+    );
+  });
 
   // Fix project fields
-  if (clone.projects) {
-    clone.projects.forEach((proj, i) => {
-      proj.title = fixString(proj.title, `projects[${i}].title`);
-      proj.techStack = fixString(proj.techStack, `projects[${i}].techStack`);
-      proj.bullets = proj.bullets.map((b, j) =>
-        fixString(b, `projects[${i}].bullets[${j}]`),
-      );
-    });
-  }
+  clone.projects.forEach((proj, i) => {
+    proj.title = fixString(String(proj.title || ""), `projects[${i}].title`);
+    proj.techStack = fixString(
+      String(proj.techStack || ""),
+      `projects[${i}].techStack`,
+    );
+    const bullets = Array.isArray(proj.bullets) ? proj.bullets : [];
+    proj.bullets = bullets.map((b, j) =>
+      fixString(b, `projects[${i}].bullets[${j}]`),
+    );
+  });
 
   // Fix skills
-  if (clone.skills) {
-    clone.skills.forEach((skill, i) => {
-      skill.label = fixString(skill.label, `skills[${i}].label`);
-      skill.skills = fixString(skill.skills, `skills[${i}].skills`);
-    });
-  }
+  clone.skills.forEach((skill, i) => {
+    skill.label = fixString(String(skill.label || ""), `skills[${i}].label`);
+    skill.skills = fixString(
+      String(skill.skills || ""),
+      `skills[${i}].skills`,
+    );
+  });
 
   // Fix achievements
-  if (clone.achievements) {
-    clone.achievements.forEach((ach, i) => {
-      ach.text = fixString(ach.text, `achievements[${i}].text`);
-    });
-  }
+  clone.achievements.forEach((ach, i) => {
+    ach.text = fixString(String(ach.text || ""), `achievements[${i}].text`);
+  });
 
   // Fix certificates
-  if (clone.certificates) {
-    clone.certificates.forEach((cert, i) => {
-      cert.name = fixString(cert.name, `certificates[${i}].name`);
-      cert.description = fixString(
-        cert.description,
-        `certificates[${i}].description`,
-      );
-    });
-  }
+  clone.certificates.forEach((cert, i) => {
+    cert.name = fixString(String(cert.name || ""), `certificates[${i}].name`);
+    cert.description = fixString(
+      String(cert.description || ""),
+      `certificates[${i}].description`,
+    );
+  });
 
   return { fixed: clone, corrections };
 }
