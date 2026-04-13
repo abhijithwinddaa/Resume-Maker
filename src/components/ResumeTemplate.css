@@ -22,6 +22,21 @@
 
 .resume-page--export {
   padding: 6mm 8mm;
+
+  /* Improve glyph clarity at low PDF zoom levels. */
+  font-kerning: normal;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "clig" 0, "calt" 0, "kern" 1;
+  font-optical-sizing: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+.resume-page--export p,
+.resume-page--export li,
+.resume-page--export span,
+.resume-page--export a {
+  letter-spacing: 0.008em;
 }
 
 .resume-page--export a,
@@ -699,6 +714,22 @@
     box-shadow: none;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .resume-page--export {
+    font-kerning: normal;
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "clig" 0, "calt" 0, "kern" 1;
+    font-optical-sizing: none;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .resume-page--export p,
+  .resume-page--export li,
+  .resume-page--export span,
+  .resume-page--export a {
+    letter-spacing: 0.008em;
   }
 
   .resume-page--export a,
