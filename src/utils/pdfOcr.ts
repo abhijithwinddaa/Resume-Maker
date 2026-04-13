@@ -5,6 +5,7 @@
  */
 
 import * as pdfjsLib from "pdfjs-dist";
+import { normalizeExtractedResumeText } from "./resumeTextCleanup";
 
 export interface OCRResult {
   text: string;
@@ -78,5 +79,5 @@ export async function extractTextWithOCR(
     await worker.terminate();
   }
 
-  return { text: pageTexts.join("\n\n") };
+  return { text: normalizeExtractedResumeText(pageTexts.join("\n\n")) };
 }

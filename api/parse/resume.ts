@@ -12,6 +12,10 @@ import {
   DEFAULT_SECTION_ORDER,
   type ResumeData,
 } from "../../src/types/resume.js";
+import {
+  normalizeExtractedResumeText,
+  normalizeResumeDataSpacing,
+} from "../../src/utils/resumeTextCleanup.js";
 import type {
   ParseResumeRequest,
   ParseResumeResponse,
@@ -117,7 +121,7 @@ function normalizeParsedResume(resumeData: ResumeData): ResumeData {
     resumeData.sectionOrder = [...DEFAULT_SECTION_ORDER];
   }
 
-  return resumeData;
+  return normalizeResumeDataSpacing(resumeData).normalized;
 }
 
 async function handleRequest(request: Request): Promise<Response> {
@@ -149,7 +153,7 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: validationError }, 400);
   }
 
-  const resumeText = body.resumeText.trim();
+  const resumeText = normalizeExtractedResumeText(body.resumeText.trim());
   const extractedLinks = body.extractedLinks || [];
   const cacheAllowed = body.cacheAllowed;
   const operation = "resume-parse";

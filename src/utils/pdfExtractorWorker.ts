@@ -7,6 +7,7 @@
 import * as pdfjsLib from "pdfjs-dist";
 const RESUME_DATA_MARKER = "%%RESUME_MAKER_DATA_V1%%";
 import type { ResumeData } from "../types/resume";
+import { normalizeExtractedResumeText } from "./resumeTextCleanup";
 
 // Fallback: main-thread worker setup
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -108,7 +109,7 @@ function extractWithWorker(file: File): Promise<string> {
       worker.terminate();
 
       if (e.data.success && e.data.text) {
-        resolve(e.data.text);
+        resolve(normalizeExtractedResumeText(e.data.text));
       } else {
         reject(new Error(e.data.error || "PDF extraction failed in worker"));
       }
@@ -151,7 +152,7 @@ async function extractOnMainThread(file: File): Promise<string> {
     pageTexts.push(pageText);
   }
 
-  return pageTexts.join("\n\n");
+  return normalizeExtractedResumeText(pageTexts.join("\n\n"));
 }
 
 /**
@@ -187,7 +188,7 @@ async function extractOnMainThreadFull(file: File): Promise<PDFExtractResult> {
   }
 
   return {
-    text: pageTexts.join("\n\n"),
+    text: normalizeExtractedResumeText(pageTexts.join("\n\n")),
     links: [...new Set(allLinks)],
   };
 }
@@ -219,7 +220,10 @@ function extractWithWorkerFull(file: File): Promise<PDFExtractResult> {
       worker.terminate();
 
       if (e.data.success && e.data.text) {
-        resolve({ text: e.data.text, links: e.data.links || [] });
+        resolve({
+          text: normalizeExtractedResumeText(e.data.text),
+          links: e.data.links || [],
+        });
       } else {
         reject(new Error(e.data.error || "PDF extraction failed in worker"));
       }

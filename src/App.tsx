@@ -81,6 +81,7 @@ import { useDebounce } from "./hooks/useDebounce";
 import { validateResumeData } from "./utils/zodSchemas";
 import { exportToDocx } from "./utils/docxExporter";
 import { resolveExportPageMode } from "./utils/exportPageMode";
+import { normalizeResumeDataSpacing } from "./utils/resumeTextCleanup";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { EditorSkeleton, PreviewSkeleton } from "./components/Skeleton";
 import ThemeToggle from "./components/ThemeToggle";
@@ -1285,14 +1286,30 @@ function App() {
       return;
     }
     if (resumeData) {
-      const validation = validateForExport(resumeData);
+      let exportData = resumeData;
+
+      const spacingFix = normalizeResumeDataSpacing(exportData);
+      if (spacingFix.changedFields > 0) {
+        exportData = spacingFix.normalized;
+        setResumeData(exportData);
+
+        // Wait for hidden export template to reflect normalized text.
+        await new Promise((r) => setTimeout(r, 200));
+        el = resumeRef.current;
+        if (!el) {
+          setError("Resume preview not available for export. Please try again.");
+          return;
+        }
+      }
+
+      const validation = validateForExport(exportData);
       if (!validation.valid) {
         setError(validation.errors.join("\n"));
         return;
       }
       // Auto-fix typos before export
       if (validation.typoWarnings.length > 0) {
-        const { fixed, corrections } = autoFixTypos(resumeData);
+        const { fixed, corrections } = autoFixTypos(exportData);
         if (corrections.length > 0) {
           setResumeData(fixed);
           setExportToastMessage(
@@ -2163,15 +2180,24 @@ function App() {
       );
       return;
     }
-    const validation = validateForExport(resumeData);
+    let exportData = resumeData;
+
+    const spacingFix = normalizeResumeDataSpacing(exportData);
+    if (spacingFix.changedFields > 0) {
+      exportData = spacingFix.normalized;
+      setResumeData(exportData);
+    }
+
+    const validation = validateForExport(exportData);
     if (!validation.valid) {
       setError(validation.errors.join("\n"));
       return;
     }
     // Auto-fix typos before export
     if (validation.typoWarnings.length > 0) {
-      const { fixed, corrections } = autoFixTypos(resumeData);
+      const { fixed, corrections } = autoFixTypos(exportData);
       if (corrections.length > 0) {
+        exportData = fixed;
         setResumeData(fixed);
         setExportToastMessage(
           `Auto-fixed ${corrections.length} typo${corrections.length > 1 ? "s" : ""}: ${corrections.map((c) => c.split(": ")[1]).join(", ")}`,
@@ -2183,7 +2209,7 @@ function App() {
     setIsExporting(true);
     setExportToastMessage("Generating DOCX...");
     try {
-      await exportToDocx(resumeData);
+      await exportToDocx(exportData);
       trackEvent("resume_exported", { format: "docx" });
       if (user?.id) {
         void recordFeatureUsage("resume_download");
