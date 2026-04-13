@@ -18,6 +18,16 @@ describe("resumeTextCleanup", () => {
     expect(cleaned).toContain("Portfolio: https://github.com/abhi/resume-maker");
   });
 
+  it("preserves sentence spacing while still fixing tech token spacing", () => {
+    const noisy =
+      "Built APIs with Node . js.Expertise in system design.Socket . IO used for real-time events.";
+
+    const cleaned = normalizeExtractedResumeText(noisy);
+
+    expect(cleaned).toContain("Built APIs with Node.js. Expertise in system design.");
+    expect(cleaned).toContain("Socket.IO used for real-time events.");
+  });
+
   it("normalizes resume fields before export", () => {
     const resume = createEmptyResume();
     resume.summary =

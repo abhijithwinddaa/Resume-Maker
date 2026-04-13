@@ -16,10 +16,16 @@ function cleanInlineText(value: string): string {
   text = text.replace(/,\s*/g, ", ");
   text = text.replace(/;\s*/g, "; ");
 
+  // Restore missing sentence spacing introduced by extractor artifacts.
+  text = text.replace(/([a-z0-9])\.([A-Z])/g, "$1. $2");
+
   // Fix split technical tokens (React . js, Node . js, Socket . IO, etc.).
   text = text.replace(/\b([A-Za-z]+)\s*\.\s*(js|ts|jsx|tsx)\b/gi, "$1.$2");
   text = text.replace(/\bSocket\s*\.\s*IO\b/gi, "Socket.IO");
-  text = text.replace(/([A-Za-z0-9])\s*\.\s*([A-Za-z0-9])/g, "$1.$2");
+  text = text.replace(
+    /\b([a-z0-9-]+)\s*\.\s*(com|in|io|dev|org|net|ai|co)\b/gi,
+    "$1.$2",
+  );
   text = text.replace(/([A-Za-z0-9])\s*\/\s*([A-Za-z0-9])/g, "$1/$2");
   text = text.replace(/([A-Za-z0-9])\s*-\s*([A-Za-z0-9])/g, "$1-$2");
 
