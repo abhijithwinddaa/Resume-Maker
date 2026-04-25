@@ -32,6 +32,7 @@ import {
   selfOptimizeLoop,
   setServerAuthTokenGetter,
 } from "./utils/aiService";
+import { setAuthedApiTokenGetter } from "./utils/authedApi";
 import type { ResumeFeedbackSignal } from "./utils/resumeFeedback";
 import { detectTemplateStyle } from "./utils/templateDetector";
 import {
@@ -71,6 +72,7 @@ import {
   trackPageView,
 } from "./utils/analytics";
 import { recordFeatureUsage } from "./services/popularityService";
+import { syncSignedInUser } from "./services/notificationService";
 import { isAdminEmail } from "./utils/adminAccess";
 import { checkUserHasSubmittedFeedback } from "./services/feedbackService";
 import {
@@ -444,6 +446,7 @@ function App() {
     user?.primaryEmailAddress?.emailAddress ||
     user?.emailAddresses?.[0]?.emailAddress ||
     "";
+  const userFirstName = user?.firstName || user?.fullName || "";
   const isAdminUser = isAdminEmail(userEmail);
 
   // Zustand store
@@ -595,6 +598,7 @@ function App() {
   const modeSelectionInProgressRef = useRef(false);
   const trackedUsageRef = useRef<Set<string>>(new Set());
   const trackedAtsUsageRef = useRef(false);
+  const notificationSyncRef = useRef<Set<string>>(new Set());
   const pendingResumeCreationRef = useRef<Promise<
     Awaited<ReturnType<typeof saveResume>>
   > | null>(null);
@@ -736,8 +740,10 @@ function App() {
     if (!user?.id) {
       setSupabaseAccessTokenGetter(null);
       setServerAuthTokenGetter(null);
+      setAuthedApiTokenGetter(null);
       trackedUsageRef.current.clear();
       trackedAtsUsageRef.current = false;
+      notificationSyncRef.current.clear();
       return;
     }
 
@@ -762,12 +768,29 @@ function App() {
 
     setSupabaseAccessTokenGetter(getAuthToken);
     setServerAuthTokenGetter(getAuthToken);
+    setAuthedApiTokenGetter(getAuthToken);
 
     return () => {
       setSupabaseAccessTokenGetter(null);
       setServerAuthTokenGetter(null);
+      setAuthedApiTokenGetter(null);
     };
   }, [getToken, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !userEmail) return;
+
+    const syncKey = `${user.id}:${userEmail}`;
+    if (notificationSyncRef.current.has(syncKey)) {
+      return;
+    }
+
+    notificationSyncRef.current.add(syncKey);
+    void syncSignedInUser(userFirstName).catch((error) => {
+      console.warn("Notification sync failed:", error);
+      notificationSyncRef.current.delete(syncKey);
+    });
+  }, [user?.id, userEmail, userFirstName]);
 
   useEffect(() => {
     if (!user?.id || step !== "editor") return;
@@ -2688,6 +2711,16 @@ function App() {
               >
                 <Palette size={14} />
                 <span>Templates & Style</span>
+              </button>
+
+              <button
+                className="header-btn header-btn-labeled flow-btn"
+                onClick={handleSelfScore}
+                title="Self ATS Score"
+                aria-label="Self ATS Score"
+              >
+                <Trophy size={14} />
+                <span>{t("header.selfScore")}</span>
               </button>
 
               <button

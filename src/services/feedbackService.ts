@@ -1,10 +1,11 @@
 import { supabase } from "../lib/supabase";
 import type { FeedbackRow, FeedbackUpsertInput } from "../types/feedback";
+import { authedJsonRequest } from "../utils/authedApi";
 
 const FEEDBACK_TABLE = "app_feedback";
 
 const FEEDBACK_COLUMNS =
-  "id, user_id, user_email, rating, comment, is_public, status, admin_notes, approved_by, approved_at, created_at, updated_at";
+  "id, user_id, user_email, rating, comment, is_public, status, admin_notes, approved_by, approved_at, admin_reply, admin_reply_by, admin_reply_at, created_at, updated_at";
 
 export interface FeedbackSubmissionCheckResult {
   hasSubmitted: boolean;
@@ -114,13 +115,12 @@ export async function upsertMyFeedback(
   return data as FeedbackRow;
 }
 
-export async function loadAdminFeedbackForRemoval(
+export async function loadAdminFeedbackQueue(
   limit = 120,
 ): Promise<FeedbackRow[]> {
   const { data, error } = await supabase
     .from(FEEDBACK_TABLE)
     .select(FEEDBACK_COLUMNS)
-    .eq("is_public", true)
     .neq("status", "rejected")
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -131,6 +131,26 @@ export async function loadAdminFeedbackForRemoval(
   }
 
   return (data || []) as FeedbackRow[];
+}
+
+export async function replyToFeedback(
+  feedbackId: string,
+  reply: string,
+): Promise<FeedbackRow | null> {
+  try {
+    const response = await authedJsonRequest<
+      { feedbackId: string; reply: string },
+      { feedback: FeedbackRow }
+    >("/api/feedback/reply", {
+      feedbackId,
+      reply,
+    });
+
+    return response.feedback;
+  } catch (error) {
+    console.error("Error replying to feedback:", error);
+    return null;
+  }
 }
 
 export async function checkUserHasSubmittedFeedback(

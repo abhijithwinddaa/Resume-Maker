@@ -299,6 +299,7 @@
   display: flex;
   gap: 8px;
   margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .feedback-approve,
@@ -351,6 +352,36 @@
 
 .feedback-success {
   color: #047857;
+}
+
+.feedback-admin-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.feedback-reply-card {
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.06);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.feedback-reply-card strong {
+  font-size: 12px;
+  color: #1d4ed8;
+}
+
+.feedback-reply-card p,
+.feedback-reply-card small {
+  margin: 0;
+}
+
+.feedback-reply-card small {
+  font-size: 11px;
+  color: var(--text-secondary, #64748b);
 }
 
 @media (max-width: 720px) {

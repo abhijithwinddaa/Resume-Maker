@@ -17,6 +17,9 @@ export interface FeedbackRow {
   admin_notes: string | null;
   approved_by: string | null;
   approved_at: string | null;
+  admin_reply: string | null;
+  admin_reply_by: string | null;
+  admin_reply_at: string | null;
   created_at: string;
   updated_at: string;
 }

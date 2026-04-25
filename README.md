@@ -12,6 +12,7 @@ AI-powered resume builder, ATS scorer, optimizer, and editor built with React, C
 - Manage multiple saved resumes instead of a single profile.
 - Generate cover letters from the current resume + JD context.
 - Control local privacy settings for PDF metadata export, local backups, and AI response caching.
+- Send first-login welcome emails, daily reminder emails, and admin feedback replies through Resend.
 
 ## Stack
 
@@ -50,10 +51,22 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # Site URL / analytics
 VITE_SITE_URL=https://resume.batturaj.in
+SITE_URL=https://resume.batturaj.in
 VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 VITE_CLARITY_PROJECT_ID=your_clarity_project_id
 VITE_POSTHOG_KEY=phc_your_posthog_project_key
 VITE_POSTHOG_HOST=https://us.i.posthog.com
+
+# Resend email + reminder cron
+RESEND_API_KEY=re_your_resend_api_key
+RESEND_FROM_EMAIL=Resume Maker <onboarding@resend.dev>
+RESEND_REPLY_TO_EMAIL=support@resume.batturaj.in
+CRON_SECRET=replace_with_a_random_secret_16_chars_min
+REMINDER_BROADCAST_DAYS=3
+REMINDER_ACTIVE_WINDOW_HOURS=72
+REMINDER_DAILY_LIMIT=200
+# Optional explicit rollout date for reminder audience switching
+# REMINDER_ROLLOUT_STARTED_AT=2026-04-25T00:00:00.000Z
 ```
 
 ## Install
@@ -71,6 +84,7 @@ npm run dev
 4. For existing projects, run [`supabase-rls-migration.sql`](./supabase-rls-migration.sql).
 5. Run [`supabase-ai-cache-migration.sql`](./supabase-ai-cache-migration.sql) to enable server-side ATS and optimize caching.
 6. Run [`supabase-feedback-migration.sql`](./supabase-feedback-migration.sql) to enable user ratings/feedback, admin remove controls, and live popularity counters.
+7. Run [`supabase-notifications-migration.sql`](./supabase-notifications-migration.sql) to add welcome/reminder email tracking and admin feedback replies.
 
 The app now expects JWT-backed RLS with `auth.jwt()->>'sub'` matching the Clerk user ID.
 For admin remove controls, ensure the Supabase token template includes at least one email claim (`email`, `email_address`, or `primary_email_address`).
@@ -83,9 +97,23 @@ For admin remove controls, ensure the Supabase token template includes at least 
   - [`api/parse/resume.ts`](./api/parse/resume.ts)
   - [`api/detect/template.ts`](./api/detect/template.ts)
   - [`api/generate/cover-letter.ts`](./api/generate/cover-letter.ts)
+- Feedback replies and user notification sync also use authenticated Vercel Functions:
+  - [`api/feedback/reply.ts`](./api/feedback/reply.ts)
+  - [`api/notifications/sync-user.ts`](./api/notifications/sync-user.ts)
+- Daily reminder emails are triggered by a Vercel cron route:
+  - [`api/cron/daily-reminders.ts`](./api/cron/daily-reminders.ts)
 - Provider secrets must be configured as server environment variables only.
 - API routes require a valid Clerk bearer token and verify it against Clerk JWKS.
+- Add `CRON_SECRET` in Vercel so cron invocations are authenticated.
 - Security headers and CSP report-only policy are configured via [`vercel.json`](./vercel.json).
+
+## Email Rollout Notes
+
+- Welcome email sends once on the first successful post-login sync for a tracked user.
+- Daily reminders send at most once per user per UTC day.
+- Reminder audience starts in `all` mode for `REMINDER_BROADCAST_DAYS`, then switches to users active in the last `REMINDER_ACTIVE_WINDOW_HOURS`.
+- Existing registered users are only mail-eligible after the app has synced their email into `app_user_notifications`.
+- For production delivery to all users, verify a sending domain in Resend and replace the default `onboarding@resend.dev` sender.
 
 ## Useful Commands
 

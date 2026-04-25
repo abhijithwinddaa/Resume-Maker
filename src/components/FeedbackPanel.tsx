@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, MessageSquare, Shield, Star, X } from "lucide-react";
 import {
-  loadAdminFeedbackForRemoval,
+  loadAdminFeedbackQueue,
   loadMyFeedback,
   loadPublicFeedback,
   moderateFeedback,
+  replyToFeedback,
   upsertMyFeedback,
 } from "../services/feedbackService";
 import {
@@ -74,6 +75,7 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [isPublic, setIsPublic] = useState(true);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -106,7 +108,7 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
 
   const loadAdminQueue = useCallback(async () => {
     if (!isAdmin) return;
-    const rows = await loadAdminFeedbackForRemoval();
+    const rows = await loadAdminFeedbackQueue();
     setAdminQueue(rows);
   }, [isAdmin]);
 
@@ -209,6 +211,38 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
     });
 
     await Promise.all([loadAdminQueue(), loadCommunity()]);
+  };
+
+  const handleReply = async (row: FeedbackRow) => {
+    setError(null);
+    setNotice(null);
+
+    const draft = (replyDrafts[row.id] ?? row.admin_reply ?? "").trim();
+    if (draft.length < 4) {
+      setError("Please write at least 4 characters before replying.");
+      return;
+    }
+
+    setLoading(true);
+    const updated = await replyToFeedback(row.id, draft);
+    setLoading(false);
+
+    if (!updated) {
+      setError("Could not send the reply right now. Please retry.");
+      return;
+    }
+
+    setNotice(`Reply sent to ${row.user_email}.`);
+    trackEvent("feedback_replied", {
+      feedback_id: row.id,
+    });
+
+    setReplyDrafts((current) => ({
+      ...current,
+      [row.id]: updated.admin_reply || draft,
+    }));
+
+    await Promise.all([loadAdminQueue(), loadCommunity(), loadMine()]);
   };
 
   const renderStars = (value: number, interactive = false) => (
@@ -336,6 +370,19 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
                   ? "Update Feedback"
                   : "Submit Feedback"}
             </button>
+
+            {myFeedback?.admin_reply && (
+              <div className="feedback-reply-card">
+                <strong>Team reply</strong>
+                <p>{myFeedback.admin_reply}</p>
+                {myFeedback.admin_reply_at && (
+                  <small>
+                    Replied on{" "}
+                    {new Date(myFeedback.admin_reply_at).toLocaleDateString()}
+                  </small>
+                )}
+              </div>
+            )}
           </section>
         )}
 
@@ -383,6 +430,12 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
                     </small>
                   </div>
                   <p>{row.comment}</p>
+                  {row.admin_reply && (
+                    <div className="feedback-reply-card">
+                      <strong>Team reply</strong>
+                      <p>{row.admin_reply}</p>
+                    </div>
+                  )}
                   <small className="feedback-author">
                     by {maskEmailAddress(row.user_email)}
                   </small>
@@ -395,12 +448,13 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
         {activeTab === "admin" && isAdmin && (
           <section className="feedback-section">
             <p className="feedback-muted">
-              All public feedback appears here. Remove items that are not good.
+              All feedback appears here. Reply from here, and remove only the
+              public ones that should no longer stay visible.
             </p>
 
             <div className="feedback-list">
               {adminQueue.length === 0 && (
-                <p className="feedback-muted">No public feedback to remove.</p>
+                <p className="feedback-muted">No feedback to manage right now.</p>
               )}
               {adminQueue.map((row) => (
                 <article key={row.id} className="feedback-item admin-item">
@@ -415,11 +469,51 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
                     {renderStars(row.rating)}
                   </div>
                   <p>{row.comment}</p>
+                  <div className="feedback-admin-meta">
+                    <span
+                      className={`feedback-status ${row.is_public ? "approved" : "pending"}`}
+                    >
+                      {row.is_public ? "Public" : "Private"}
+                    </span>
+                    <span className={`feedback-status ${row.status}`}>
+                      {row.status}
+                    </span>
+                  </div>
+                  <label className="feedback-label" htmlFor={`reply-${row.id}`}>
+                    Admin reply
+                  </label>
+                  <textarea
+                    id={`reply-${row.id}`}
+                    className="feedback-textarea"
+                    rows={4}
+                    maxLength={1200}
+                    value={replyDrafts[row.id] ?? row.admin_reply ?? ""}
+                    onChange={(event) =>
+                      setReplyDrafts((current) => ({
+                        ...current,
+                        [row.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Short, helpful reply..."
+                  />
+                  {row.admin_reply_at && (
+                    <small className="feedback-status-line">
+                      Last replied on{" "}
+                      {new Date(row.admin_reply_at).toLocaleString()}
+                    </small>
+                  )}
 
                   <div className="feedback-admin-actions">
                     <button
+                      className="feedback-approve"
+                      onClick={() => handleReply(row)}
+                    >
+                      {row.admin_reply ? "Update Reply" : "Send Reply"}
+                    </button>
+                    <button
                       className="feedback-reject"
                       onClick={() => handleModeration(row)}
+                      disabled={!row.is_public || row.status === "rejected"}
                     >
                       Remove
                     </button>
