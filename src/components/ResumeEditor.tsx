@@ -211,6 +211,263 @@ const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
   );
 };
 
+interface SortableEducationItemProps {
+  edu: Education;
+  index: number;
+  updateEducation: (index: number, field: keyof Education, value: string) => void;
+  removeEducation: (index: number) => void;
+}
+
+const SortableEducationItem: React.FC<SortableEducationItemProps> = ({
+  edu,
+  index,
+  updateEducation,
+  removeEducation,
+}) => {
+  const id = edu.id || `edu-${index}`;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="editor-card">
+      <div className="card-header">
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button type="button" className="dnd-grip" {...attributes} {...listeners} aria-label="Drag education">
+            <GripVertical size={16} />
+          </button>
+          <span className="card-number">#{index + 1}</span>
+        </div>
+        <button
+          className="btn-icon btn-danger"
+          onClick={() => removeEducation(index)}
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+      <div className="field-row">
+        <div className="field-group">
+          <label>University</label>
+          <input
+            type="text"
+            value={edu.university}
+            onChange={(e) => updateEducation(index, "university", e.target.value)}
+          />
+        </div>
+        <div className="field-group">
+          <label>Year Range</label>
+          <input
+            type="text"
+            value={edu.yearRange}
+            onChange={(e) => updateEducation(index, "yearRange", e.target.value)}
+            placeholder="2023 - 2025"
+          />
+        </div>
+      </div>
+      <div className="field-row">
+        <div className="field-group">
+          <label>Degree</label>
+          <input
+            type="text"
+            value={edu.degree}
+            onChange={(e) => updateEducation(index, "degree", e.target.value)}
+          />
+        </div>
+        <div className="field-group">
+          <label>CGPA</label>
+          <input
+            type="text"
+            value={edu.cgpa}
+            onChange={(e) => updateEducation(index, "cgpa", e.target.value)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface SortableProjectItemProps {
+  project: Project;
+  index: number;
+  updateProject: (index: number, field: keyof Project, value: string | string[]) => void;
+  removeProject: (index: number) => void;
+  updateBullet: (projectIndex: number, bulletIndex: number, value: string) => void;
+  removeBullet: (projectIndex: number, bulletIndex: number) => void;
+  addBullet: (projectIndex: number) => void;
+}
+
+const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
+  project,
+  index,
+  updateProject,
+  removeProject,
+  updateBullet,
+  removeBullet,
+  addBullet,
+}) => {
+  const id = project.id || `proj-${index}`;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="editor-card">
+      <div className="card-header">
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button type="button" className="dnd-grip" {...attributes} {...listeners} aria-label="Drag project">
+            <GripVertical size={16} />
+          </button>
+          <span className="card-number">Project #{index + 1}</span>
+        </div>
+        <button
+          className="btn-icon btn-danger"
+          onClick={() => removeProject(index)}
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+      <div className="field-group">
+        <label>Project Title</label>
+        <input
+          type="text"
+          value={project.title}
+          onChange={(e) => updateProject(index, "title", e.target.value)}
+        />
+      </div>
+      <div className="field-row">
+        <div className="field-group">
+          <label>GitHub Link</label>
+          <input
+            type="text"
+            value={project.githubLink}
+            onChange={(e) => updateProject(index, "githubLink", e.target.value)}
+          />
+        </div>
+        <div className="field-group">
+          <label>Live Demo Link</label>
+          <input
+            type="text"
+            value={project.liveLink}
+            onChange={(e) => updateProject(index, "liveLink", e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="field-group">
+        <label>Tech Stack</label>
+        <input
+          type="text"
+          value={project.techStack}
+          onChange={(e) => updateProject(index, "techStack", e.target.value)}
+        />
+      </div>
+      <div className="bullets-section">
+        <label>Bullet Points</label>
+        {project.bullets.map((bullet, j) => (
+          <div key={j} className="bullet-row">
+            <textarea
+              rows={2}
+              value={bullet}
+              onChange={(e) => updateBullet(index, j, e.target.value)}
+              placeholder={`Bullet point ${j + 1}...`}
+            />
+            <button
+              className="btn-icon btn-danger"
+              onClick={() => removeBullet(index, j)}
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+        <button className="btn-add btn-small" onClick={() => addBullet(index)}>
+          <Plus size={12} /> Add Bullet
+        </button>
+      </div>
+    </div>
+  );
+};
+
+interface SortableSkillItemProps {
+  skill: SkillCategory;
+  index: number;
+  updateSkill: (index: number, field: keyof SkillCategory, value: string) => void;
+  removeSkill: (index: number) => void;
+}
+
+const SortableSkillItem: React.FC<SortableSkillItemProps> = ({
+  skill,
+  index,
+  updateSkill,
+  removeSkill,
+}) => {
+  const id = skill.id || `skill-${index}`;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="skill-row">
+      <button type="button" className="dnd-grip" {...attributes} {...listeners} aria-label="Drag skill" style={{ background: 'none', border: 'none', cursor: 'grab', padding: '4px', color: '#666' }}>
+        <GripVertical size={16} />
+      </button>
+      <div className="field-group skill-label-group">
+        <input
+          type="text"
+          value={skill.label}
+          onChange={(e) => updateSkill(index, "label", e.target.value)}
+          placeholder="Category"
+        />
+      </div>
+      <div className="field-group skill-value-group">
+        <input
+          type="text"
+          value={skill.skills}
+          onChange={(e) => updateSkill(index, "skills", e.target.value)}
+          placeholder="Skill1, Skill2, Skill3"
+        />
+      </div>
+      <button
+        className="btn-icon btn-danger"
+        onClick={() => removeSkill(index)}
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
+};
+
 const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   const [expandedSections, setExpandedSections] = useState<Set<SectionName>>(
     new Set([
@@ -241,10 +498,41 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       }
       return exp;
     });
+
+    const educationWithIds = (data.education || []).map((edu) => {
+      if (!edu.id) {
+        changed = true;
+        return { ...edu, id: `edu-${Math.random().toString(36).substr(2, 9)}` };
+      }
+      return edu;
+    });
+
+    const projectsWithIds = (data.projects || []).map((proj) => {
+      if (!proj.id) {
+        changed = true;
+        return { ...proj, id: `proj-${Math.random().toString(36).substr(2, 9)}` };
+      }
+      return proj;
+    });
+
+    const skillsWithIds = (data.skills || []).map((skill) => {
+      if (!skill.id) {
+        changed = true;
+        return { ...skill, id: `skill-${Math.random().toString(36).substr(2, 9)}` };
+      }
+      return skill;
+    });
+
     if (changed) {
-      onChange({ ...data, experience: experiencesWithIds });
+      onChange({ 
+        ...data, 
+        experience: experiencesWithIds,
+        education: educationWithIds,
+        projects: projectsWithIds,
+        skills: skillsWithIds
+      });
     }
-  }, [data.experience, onChange]);
+  }, [data.experience, data.education, data.projects, data.skills, onChange]);
 
   const toggleSection = (section: SectionName) => {
     setExpandedSections((prev) => {
@@ -279,7 +567,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       ...data,
       education: [
         ...data.education,
-        { university: "", location: "", degree: "", yearRange: "", cgpa: "" },
+        { id: `edu-${Math.random().toString(36).substr(2, 9)}`, university: "", location: "", degree: "", yearRange: "", cgpa: "" },
       ],
     });
   };
@@ -308,6 +596,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       projects: [
         ...data.projects,
         {
+          id: `proj-${Math.random().toString(36).substr(2, 9)}`,
           title: "",
           githubLink: "#",
           liveLink: "#",
@@ -369,7 +658,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   };
 
   const addSkill = () => {
-    onChange({ ...data, skills: [...data.skills, { label: "", skills: "" }] });
+    onChange({ ...data, skills: [...data.skills, { id: `skill-${Math.random().toString(36).substr(2, 9)}`, label: "", skills: "" }] });
   };
 
   const removeSkill = (index: number) => {
@@ -498,17 +787,43 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   const handleDragEndExperience = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const oldIndex = (data.experience || []).findIndex(
-        (exp) => exp.id === active.id
-      );
-      const newIndex = (data.experience || []).findIndex(
-        (exp) => exp.id === over.id
-      );
+      const oldIndex = (data.experience || []).findIndex((exp) => exp.id === active.id);
+      const newIndex = (data.experience || []).findIndex((exp) => exp.id === over.id);
       if (oldIndex !== -1 && newIndex !== -1) {
-        onChange({
-          ...data,
-          experience: arrayMove(data.experience, oldIndex, newIndex),
-        });
+        onChange({ ...data, experience: arrayMove(data.experience, oldIndex, newIndex) });
+      }
+    }
+  };
+
+  const handleDragEndEducation = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = (data.education || []).findIndex((edu) => edu.id === active.id);
+      const newIndex = (data.education || []).findIndex((edu) => edu.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        onChange({ ...data, education: arrayMove(data.education, oldIndex, newIndex) });
+      }
+    }
+  };
+
+  const handleDragEndProject = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = (data.projects || []).findIndex((proj) => proj.id === active.id);
+      const newIndex = (data.projects || []).findIndex((proj) => proj.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        onChange({ ...data, projects: arrayMove(data.projects, oldIndex, newIndex) });
+      }
+    }
+  };
+
+  const handleDragEndSkill = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = (data.skills || []).findIndex((skill) => skill.id === active.id);
+      const newIndex = (data.skills || []).findIndex((skill) => skill.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        onChange({ ...data, skills: arrayMove(data.skills, oldIndex, newIndex) });
       }
     }
   };
@@ -674,64 +989,26 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
         />
         {expandedSections.has("education") && (
           <div className="editor-fields">
-            {data.education.map((edu, i) => (
-              <div key={i} className="editor-card">
-                <div className="card-header">
-                  <span className="card-number">#{i + 1}</span>
-                  <button
-                    className="btn-icon btn-danger"
-                    onClick={() => removeEducation(i)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-                <div className="field-row">
-                  <div className="field-group">
-                    <label>University</label>
-                    <input
-                      type="text"
-                      value={edu.university}
-                      onChange={(e) =>
-                        updateEducation(i, "university", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="field-group">
-                    <label>Year Range</label>
-                    <input
-                      type="text"
-                      value={edu.yearRange}
-                      onChange={(e) =>
-                        updateEducation(i, "yearRange", e.target.value)
-                      }
-                      placeholder="2023 - 2025"
-                    />
-                  </div>
-                </div>
-                <div className="field-row">
-                  <div className="field-group">
-                    <label>Degree</label>
-                    <input
-                      type="text"
-                      value={edu.degree}
-                      onChange={(e) =>
-                        updateEducation(i, "degree", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="field-group">
-                    <label>CGPA</label>
-                    <input
-                      type="text"
-                      value={edu.cgpa}
-                      onChange={(e) =>
-                        updateEducation(i, "cgpa", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEndEducation}
+            >
+              <SortableContext
+                items={(data.education || []).map((edu) => edu.id || "")}
+                strategy={verticalListSortingStrategy}
+              >
+                {data.education.map((edu, i) => (
+                  <SortableEducationItem
+                    key={edu.id || i}
+                    edu={edu}
+                    index={i}
+                    updateEducation={updateEducation}
+                    removeEducation={removeEducation}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
             <button className="btn-add" onClick={addEducation}>
               <Plus size={14} /> Add Education
             </button>
@@ -823,84 +1100,29 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
         />
         {expandedSections.has("projects") && (
           <div className="editor-fields">
-            {data.projects.map((project, i) => (
-              <div key={i} className="editor-card">
-                <div className="card-header">
-                  <span className="card-number">Project #{i + 1}</span>
-                  <button
-                    className="btn-icon btn-danger"
-                    onClick={() => removeProject(i)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-                <div className="field-group">
-                  <label>Project Title</label>
-                  <input
-                    type="text"
-                    value={project.title}
-                    onChange={(e) => updateProject(i, "title", e.target.value)}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEndProject}
+            >
+              <SortableContext
+                items={(data.projects || []).map((proj) => proj.id || "")}
+                strategy={verticalListSortingStrategy}
+              >
+                {data.projects.map((project, i) => (
+                  <SortableProjectItem
+                    key={project.id || i}
+                    project={project}
+                    index={i}
+                    updateProject={updateProject}
+                    removeProject={removeProject}
+                    updateBullet={updateBullet}
+                    removeBullet={removeBullet}
+                    addBullet={addBullet}
                   />
-                </div>
-                <div className="field-row">
-                  <div className="field-group">
-                    <label>GitHub Link</label>
-                    <input
-                      type="text"
-                      value={project.githubLink}
-                      onChange={(e) =>
-                        updateProject(i, "githubLink", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="field-group">
-                    <label>Live Demo Link</label>
-                    <input
-                      type="text"
-                      value={project.liveLink}
-                      onChange={(e) =>
-                        updateProject(i, "liveLink", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="field-group">
-                  <label>Tech Stack</label>
-                  <input
-                    type="text"
-                    value={project.techStack}
-                    onChange={(e) =>
-                      updateProject(i, "techStack", e.target.value)
-                    }
-                  />
-                </div>
-                <div className="bullets-section">
-                  <label>Bullet Points</label>
-                  {project.bullets.map((bullet, j) => (
-                    <div key={j} className="bullet-row">
-                      <textarea
-                        rows={2}
-                        value={bullet}
-                        onChange={(e) => updateBullet(i, j, e.target.value)}
-                        placeholder={`Bullet point ${j + 1}...`}
-                      />
-                      <button
-                        className="btn-icon btn-danger"
-                        onClick={() => removeBullet(i, j)}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    className="btn-add btn-small"
-                    onClick={() => addBullet(i)}
-                  >
-                    <Plus size={12} /> Add Bullet
-                  </button>
-                </div>
-              </div>
-            ))}
+                ))}
+              </SortableContext>
+            </DndContext>
             <button className="btn-add" onClick={addProject}>
               <Plus size={14} /> Add Project
             </button>
@@ -918,32 +1140,26 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
         />
         {expandedSections.has("skills") && (
           <div className="editor-fields">
-            {data.skills.map((skill, i) => (
-              <div key={i} className="skill-row">
-                <div className="field-group skill-label-group">
-                  <input
-                    type="text"
-                    value={skill.label}
-                    onChange={(e) => updateSkill(i, "label", e.target.value)}
-                    placeholder="Category"
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEndSkill}
+            >
+              <SortableContext
+                items={(data.skills || []).map((skill) => skill.id || "")}
+                strategy={verticalListSortingStrategy}
+              >
+                {data.skills.map((skill, i) => (
+                  <SortableSkillItem
+                    key={skill.id || i}
+                    skill={skill}
+                    index={i}
+                    updateSkill={updateSkill}
+                    removeSkill={removeSkill}
                   />
-                </div>
-                <div className="field-group skill-value-group">
-                  <input
-                    type="text"
-                    value={skill.skills}
-                    onChange={(e) => updateSkill(i, "skills", e.target.value)}
-                    placeholder="Skill1, Skill2, Skill3"
-                  />
-                </div>
-                <button
-                  className="btn-icon btn-danger"
-                  onClick={() => removeSkill(i)}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
+                ))}
+              </SortableContext>
+            </DndContext>
             <button className="btn-add" onClick={addSkill}>
               <Plus size={14} /> Add Skill Category
             </button>

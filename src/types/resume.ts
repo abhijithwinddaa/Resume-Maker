@@ -22,6 +22,7 @@ export interface ContactInfo {
 }
 
 export interface Education {
+  id?: string;
   university: string;
   location: string;
   degree: string;
@@ -39,6 +40,7 @@ export interface Experience {
 }
 
 export interface Project {
+  id?: string;
   title: string;
   githubLink: string;
   liveLink: string;
@@ -47,6 +49,7 @@ export interface Project {
 }
 
 export interface SkillCategory {
+  id?: string;
   label: string;
   skills: string;
 }
@@ -120,16 +123,16 @@ export function createEmptyResume(): ResumeData {
     },
     summary: "",
     education: [
-      { university: "", location: "", degree: "", yearRange: "", cgpa: "" },
+      { id: "edu-1", university: "", location: "", degree: "", yearRange: "", cgpa: "" },
     ],
     experience: [
       { id: "exp-1", company: "", role: "", location: "", dateRange: "", bullets: [""] },
     ],
     showExperience: true,
     projects: [
-      { title: "", githubLink: "", liveLink: "", techStack: "", bullets: [""] },
+      { id: "proj-1", title: "", githubLink: "", liveLink: "", techStack: "", bullets: [""] },
     ],
-    skills: [{ label: "", skills: "" }],
+    skills: [{ id: "skill-1", label: "", skills: "" }],
     achievements: [{ text: "" }],
     certificates: [{ name: "", description: "", link: "" }],
     showCertificates: true,
