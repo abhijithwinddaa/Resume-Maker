@@ -30,6 +30,7 @@ export interface Education {
 }
 
 export interface Experience {
+  id?: string;
   company: string;
   role: string;
   location: string;
@@ -122,7 +123,7 @@ export function createEmptyResume(): ResumeData {
       { university: "", location: "", degree: "", yearRange: "", cgpa: "" },
     ],
     experience: [
-      { company: "", role: "", location: "", dateRange: "", bullets: [""] },
+      { id: "exp-1", company: "", role: "", location: "", dateRange: "", bullets: [""] },
     ],
     showExperience: true,
     projects: [

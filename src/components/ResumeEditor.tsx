@@ -18,7 +18,25 @@ import {
   ToggleLeft,
   ToggleRight,
   Layers,
+  GripVertical,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import "./ResumeEditor.css";
 import CompletenessBar from "./CompletenessBar";
 
@@ -69,6 +87,130 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
   </button>
 );
 
+interface SortableExperienceItemProps {
+  exp: Experience;
+  index: number;
+  updateExperience: (index: number, field: keyof Experience, value: string | string[]) => void;
+  removeExperience: (index: number) => void;
+  updateExpBullet: (expIndex: number, bulletIndex: number, value: string) => void;
+  removeExpBullet: (expIndex: number, bulletIndex: number) => void;
+  addExpBullet: (expIndex: number) => void;
+}
+
+const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
+  exp,
+  index,
+  updateExperience,
+  removeExperience,
+  updateExpBullet,
+  removeExpBullet,
+  addExpBullet,
+}) => {
+  const id = exp.id || `exp-${index}`;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="editor-card">
+      <div className="card-header">
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
+            type="button"
+            className="dnd-grip"
+            {...attributes}
+            {...listeners}
+            aria-label="Drag experience"
+          >
+            <GripVertical size={16} />
+          </button>
+          <span className="card-number">Experience #{index + 1}</span>
+        </div>
+        <button
+          className="btn-icon btn-danger"
+          onClick={() => removeExperience(index)}
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+      <div className="field-row">
+        <div className="field-group">
+          <label>Role / Title</label>
+          <input
+            type="text"
+            value={exp.role}
+            onChange={(e) => updateExperience(index, "role", e.target.value)}
+          />
+        </div>
+        <div className="field-group">
+          <label>Company</label>
+          <input
+            type="text"
+            value={exp.company}
+            onChange={(e) => updateExperience(index, "company", e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="field-row">
+        <div className="field-group">
+          <label>Location</label>
+          <input
+            type="text"
+            value={exp.location}
+            onChange={(e) => updateExperience(index, "location", e.target.value)}
+            placeholder="City, State"
+          />
+        </div>
+        <div className="field-group">
+          <label>Date Range</label>
+          <input
+            type="text"
+            value={exp.dateRange}
+            onChange={(e) => updateExperience(index, "dateRange", e.target.value)}
+            placeholder="Jan 2023 - Present"
+          />
+        </div>
+      </div>
+      <div className="bullets-section">
+        <label>Bullet Points</label>
+        {exp.bullets.map((bullet, j) => (
+          <div key={j} className="bullet-row">
+            <textarea
+              rows={2}
+              value={bullet}
+              onChange={(e) => updateExpBullet(index, j, e.target.value)}
+              placeholder={`Bullet point ${j + 1}...`}
+            />
+            <button
+              className="btn-icon btn-danger"
+              onClick={() => removeExpBullet(index, j)}
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+        <button
+          className="btn-add btn-small"
+          onClick={() => addExpBullet(index)}
+        >
+          <Plus size={12} /> Add Bullet
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   const [expandedSections, setExpandedSections] = useState<Set<SectionName>>(
     new Set([
@@ -82,6 +224,27 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       "certificates",
     ]),
   );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  React.useEffect(() => {
+    let changed = false;
+    const experiencesWithIds = (data.experience || []).map((exp) => {
+      if (!exp.id) {
+        changed = true;
+        return { ...exp, id: `exp-${Math.random().toString(36).substr(2, 9)}` };
+      }
+      return exp;
+    });
+    if (changed) {
+      onChange({ ...data, experience: experiencesWithIds });
+    }
+  }, [data.experience, onChange]);
 
   const toggleSection = (section: SectionName) => {
     setExpandedSections((prev) => {
@@ -286,7 +449,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       ...data,
       experience: [
         ...(data.experience || []),
-        { company: "", role: "", location: "", dateRange: "", bullets: [""] },
+        { id: `exp-${Math.random().toString(36).substr(2, 9)}`, company: "", role: "", location: "", dateRange: "", bullets: [""] },
       ],
     });
   };
@@ -330,6 +493,24 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
   const toggleExperience = () => {
     onChange({ ...data, showExperience: !data.showExperience });
+  };
+
+  const handleDragEndExperience = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = (data.experience || []).findIndex(
+        (exp) => exp.id === active.id
+      );
+      const newIndex = (data.experience || []).findIndex(
+        (exp) => exp.id === over.id
+      );
+      if (oldIndex !== -1 && newIndex !== -1) {
+        onChange({
+          ...data,
+          experience: arrayMove(data.experience, oldIndex, newIndex),
+        });
+      }
+    }
   };
 
   // Section order helpers
@@ -602,90 +783,29 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                 show.
               </div>
             )}
-            {(data.experience || []).map((exp, i) => (
-              <div key={i} className="editor-card">
-                <div className="card-header">
-                  <span className="card-number">Experience #{i + 1}</span>
-                  <button
-                    className="btn-icon btn-danger"
-                    onClick={() => removeExperience(i)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-                <div className="field-row">
-                  <div className="field-group">
-                    <label>Role / Title</label>
-                    <input
-                      type="text"
-                      value={exp.role}
-                      onChange={(e) =>
-                        updateExperience(i, "role", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="field-group">
-                    <label>Company</label>
-                    <input
-                      type="text"
-                      value={exp.company}
-                      onChange={(e) =>
-                        updateExperience(i, "company", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="field-row">
-                  <div className="field-group">
-                    <label>Location</label>
-                    <input
-                      type="text"
-                      value={exp.location}
-                      onChange={(e) =>
-                        updateExperience(i, "location", e.target.value)
-                      }
-                      placeholder="City, State"
-                    />
-                  </div>
-                  <div className="field-group">
-                    <label>Date Range</label>
-                    <input
-                      type="text"
-                      value={exp.dateRange}
-                      onChange={(e) =>
-                        updateExperience(i, "dateRange", e.target.value)
-                      }
-                      placeholder="Jan 2023 - Present"
-                    />
-                  </div>
-                </div>
-                <div className="bullets-section">
-                  <label>Bullet Points</label>
-                  {exp.bullets.map((bullet, j) => (
-                    <div key={j} className="bullet-row">
-                      <textarea
-                        rows={2}
-                        value={bullet}
-                        onChange={(e) => updateExpBullet(i, j, e.target.value)}
-                        placeholder={`Bullet point ${j + 1}...`}
-                      />
-                      <button
-                        className="btn-icon btn-danger"
-                        onClick={() => removeExpBullet(i, j)}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    className="btn-add btn-small"
-                    onClick={() => addExpBullet(i)}
-                  >
-                    <Plus size={12} /> Add Bullet
-                  </button>
-                </div>
-              </div>
-            ))}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEndExperience}
+            >
+              <SortableContext
+                items={(data.experience || []).map((exp) => exp.id || "")}
+                strategy={verticalListSortingStrategy}
+              >
+                {(data.experience || []).map((exp, i) => (
+                  <SortableExperienceItem
+                    key={exp.id || i}
+                    exp={exp}
+                    index={i}
+                    updateExperience={updateExperience}
+                    removeExperience={removeExperience}
+                    updateExpBullet={updateExpBullet}
+                    removeExpBullet={removeExpBullet}
+                    addExpBullet={addExpBullet}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
             <button className="btn-add" onClick={addExperience}>
               <Plus size={14} /> Add Experience
             </button>

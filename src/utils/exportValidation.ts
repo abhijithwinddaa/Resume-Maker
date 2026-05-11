@@ -198,10 +198,7 @@ export function autoFixTypos(data: ResumeData): {
   // Fix skills
   clone.skills.forEach((skill, i) => {
     skill.label = fixString(String(skill.label || ""), `skills[${i}].label`);
-    skill.skills = fixString(
-      String(skill.skills || ""),
-      `skills[${i}].skills`,
-    );
+    skill.skills = fixString(String(skill.skills || ""), `skills[${i}].skills`);
   });
 
   // Fix achievements
