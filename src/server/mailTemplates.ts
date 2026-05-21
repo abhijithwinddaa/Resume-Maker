@@ -73,20 +73,17 @@ export function buildReminderEmail(params: {
   audienceMode: "all" | "recent-active";
 }) {
   const greeting = buildGreeting(params.firstName);
-  const subject = "tiny resume check? big win energy";
-  const body =
-    params.audienceMode === "all"
-      ? "quick nudge: hop back in, clean one section, and keep the momentum going."
-      : "you were active recently, so here’s your little keep-going reminder.";
+  const subject = "Ready to take your resume to the next level? 📈";
+  const intro = `${greeting}, just a quick reminder to take 5 minutes today to polish your resume. A small improvement today can lead to big career opportunities tomorrow!`;
 
   return {
     subject,
-    text: `${greeting}, ${body}\n\nJump back into Resume Maker: ${normalizeSiteUrl(params.siteUrl)}`,
+    text: `${intro}\n\nEdit My Resume: ${normalizeSiteUrl(params.siteUrl)}`,
     html: buildBaseHtml({
-      eyebrow: "daily reminder",
-      title: "One small update can move the whole resume.",
-      intro: `${greeting}, ${body}`,
-      ctaLabel: "Jump back in",
+      eyebrow: "daily progress",
+      title: "Your dream job starts with a great resume.",
+      intro,
+      ctaLabel: "Edit My Resume",
       siteUrl: params.siteUrl,
     }),
   };

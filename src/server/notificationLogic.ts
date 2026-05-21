@@ -67,10 +67,5 @@ export function shouldSendReminder(
   if (!row.user_email.trim()) return false;
   if (wasSentToday(row.last_reminder_sent_at, now)) return false;
 
-  const audienceMode = resolveReminderAudienceMode(now, config);
-  if (audienceMode === "all") {
-    return true;
-  }
-
-  return hasRecentActivity(row.last_seen_at, config.recentActivityHours, now);
+  return true;
 }
