@@ -35,7 +35,6 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
     const getInteractiveProps = (sectionKey: string) => {
       if (forExport) return {};
       return {
-        className: "preview-interactive-section",
         onClick: (e: React.MouseEvent) => {
           if (
             (e.target as HTMLElement).tagName === "A" ||
