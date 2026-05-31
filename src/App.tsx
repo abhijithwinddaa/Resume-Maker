@@ -3,19 +3,15 @@ import {
   useEffect,
   useCallback,
   useMemo,
-  memo,
   lazy,
   Suspense,
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useReactToPrint } from "react-to-print";
-import { validateForExport, autoFixTypos } from "./utils/exportValidation";
 import {
   useAuth,
   useUser,
   SignedIn,
-  SignedOut,
   useClerk,
   UserButton,
 } from "@clerk/clerk-react";
@@ -23,7 +19,7 @@ import { useAppStore } from "./store/appStore";
 import type { AppMode } from "./store/appStore";
 import type { ResumeData } from "./types/resume";
 import { createEmptyResume } from "./types/resume";
-import type { TemplateCustomization } from "./types/templates";
+
 import {
   parseResumeFromText,
   analyzeATSScore,
@@ -33,7 +29,6 @@ import {
   setServerAuthTokenGetter,
 } from "./utils/aiService";
 import { setAuthedApiTokenGetter } from "./utils/authedApi";
-import type { ResumeFeedbackSignal } from "./utils/resumeFeedback";
 import { detectTemplateStyle } from "./utils/templateDetector";
 import {
   extractTextAndLinks,
@@ -54,12 +49,10 @@ import {
   validateResumeText,
   validateJDText,
   sanitizeText,
-  LIMITS,
 } from "./utils/inputValidation";
 import {
   saveLocalBackup,
   loadLocalBackup,
-  formatBackupAge,
 } from "./utils/localBackup";
 import {
   getRequestController,
@@ -74,38 +67,16 @@ import {
 import { recordFeatureUsage } from "./services/popularityService";
 import { syncSignedInUser } from "./services/notificationService";
 import { isAdminEmail } from "./utils/adminAccess";
-import { checkUserHasSubmittedFeedback } from "./services/feedbackService";
-import {
-  evaluateFeedbackExportGate,
-  FEEDBACK_GATE_STATUS_ERROR_MESSAGE,
-} from "./utils/feedbackExportGate";
-import { useDebounce } from "./hooks/useDebounce";
-import { validateResumeData } from "./utils/zodSchemas";
-import { exportToDocx } from "./utils/docxExporter";
-import { resolveExportPageMode } from "./utils/exportPageMode";
-import { normalizeResumeDataSpacing } from "./utils/resumeTextCleanup";
-import ErrorBoundary from "./components/ErrorBoundary";
-import { EditorSkeleton, PreviewSkeleton } from "./components/Skeleton";
-import ThemeToggle from "./components/ThemeToggle";
-import StyleDetectedBadge from "./components/StyleDetectedBadge";
 import {
   FileText,
   Upload,
   Search,
   Download,
-  Edit3,
-  Zap,
   RotateCcw,
-  AlertCircle,
   Trophy,
   Target,
   ChevronRight,
   Save,
-  FileUp,
-  X,
-  LogIn,
-  Clock,
-  HardDrive,
   Undo2,
   Redo2,
   MessageSquare,
@@ -117,143 +88,31 @@ import {
   Shield,
   PlusCircle,
   CheckCircle2,
-  AlertTriangle,
   Settings,
 } from "lucide-react";
+import { useDebounce } from "./hooks/useDebounce";
+import { useExport } from "./hooks/useExport";
+import { validateResumeData } from "./utils/zodSchemas";
+import { getExperienceTier } from "./utils/experienceEstimator";
+import ErrorBoundary from "./components/ErrorBoundary";
+import ThemeToggle from "./components/ThemeToggle";
+import { LandingScreen } from "./components/LandingScreen";
+import { InputScreen } from "./components/InputScreen";
+import { ScoreScreen } from "./components/ScoreScreen";
+import { EditorScreen } from "./components/EditorScreen";
+import { ExportControls } from "./components/ExportControls";
 import "./App.css";
 
-/* ─── Lazy-loaded heavy components ─────────────────── */
 const ResumeTemplate = lazy(() => import("./components/ResumeTemplate"));
-const ResumeEditor = lazy(() => import("./components/ResumeEditor"));
 const TemplatePicker = lazy(() => import("./components/TemplatePicker"));
 const CoverLetterPanel = lazy(() => import("./components/CoverLetter"));
 const ResumeManagerPanel = lazy(() => import("./components/ResumeManager"));
 const PdfPreviewPanel = lazy(() => import("./components/PdfPreview"));
-const FeedbackPanel = lazy(() => import("./components/FeedbackPanel"));
+
 const CLERK_SUPABASE_TEMPLATE =
   import.meta.env.VITE_CLERK_SUPABASE_TEMPLATE || "supabase";
 const FEEDBACK_PROMPT_COOLDOWN_MS = 1000 * 60 * 60 * 24 * 14;
 const FEEDBACK_PROMPT_LAST_AT_KEY = "feedback-prompt-last-at";
-
-/* ─── Score Visualization Components ─────────────────── */
-
-const ScoreMeter = memo(function ScoreMeter({
-  score,
-  size = 160,
-}: {
-  score: number;
-  size?: number;
-}) {
-  const radius = (size - 16) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-  const color = score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#ef4444";
-
-  return (
-    <div className="score-meter">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="#e5e7eb"
-          strokeWidth="10"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth="10"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: "stroke-dashoffset 0.8s ease" }}
-        />
-      </svg>
-      <div className="score-meter-text">
-        <span className="score-number" style={{ color }}>
-          {score}
-        </span>
-        <span className="score-label">/ 100</span>
-      </div>
-    </div>
-  );
-});
-
-const BreakdownBar = memo(function BreakdownBar({
-  label,
-  score,
-  weight,
-}: {
-  label: string;
-  score: number;
-  weight: number;
-}) {
-  const color = score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#ef4444";
-  return (
-    <div className="breakdown-bar">
-      <div className="breakdown-info">
-        <span className="breakdown-label">{label}</span>
-        <span className="breakdown-score">
-          {score}/100 <small>({weight}%)</small>
-        </span>
-      </div>
-      <div className="breakdown-track">
-        <div
-          className="breakdown-fill"
-          style={{ width: `${score}%`, background: color }}
-        />
-      </div>
-    </div>
-  );
-});
-
-const FeedbackSignalCard = memo(function FeedbackSignalCard({
-  signal,
-}: {
-  signal: ResumeFeedbackSignal;
-}) {
-  const Icon =
-    signal.status === "good"
-      ? CheckCircle2
-      : signal.status === "warning"
-        ? AlertTriangle
-        : AlertCircle;
-
-  const statusLabel =
-    signal.status === "good"
-      ? "Strong"
-      : signal.status === "warning"
-        ? "Needs work"
-        : "High priority";
-
-  return (
-    <article className={`feedback-card feedback-card-${signal.status}`}>
-      <div className="feedback-card-header">
-        <div className="feedback-card-title">
-          <Icon size={16} />
-          <h5>{signal.title}</h5>
-        </div>
-        <span className={`feedback-badge feedback-badge-${signal.status}`}>
-          {statusLabel}
-        </span>
-      </div>
-      <p>{signal.summary}</p>
-      {signal.details.length > 0 && (
-        <ul>
-          {signal.details.map((detail) => (
-            <li key={`${signal.id}-${detail}`}>{detail}</li>
-          ))}
-        </ul>
-      )}
-    </article>
-  );
-});
-
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -274,165 +133,6 @@ function getAnalyzeProgressPercent(message: string): number {
   if (lowered.includes("running self ats")) return 76;
   if (lowered.includes("running ocr")) return 55;
   return 35;
-}
-
-function uniqueStrings(items: string[] = []): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const item of items) {
-    const trimmed = item.trim();
-    const key = trimmed.toLowerCase();
-    if (!trimmed || seen.has(key)) continue;
-    seen.add(key);
-    result.push(trimmed);
-  }
-
-  return result;
-}
-
-function getOptimizeProgressPercent(
-  progress: {
-    currentIteration: number;
-    maxIterations: number;
-    phase: string;
-  } | null,
-): number {
-  if (!progress) return 0;
-  const { currentIteration, maxIterations, phase } = progress;
-  const completedIterations = Math.max(0, currentIteration - 1);
-  const base =
-    maxIterations > 0 ? (completedIterations / maxIterations) * 100 : 0;
-
-  if (phase === "target-reached" || phase === "done") return 100;
-  if (phase === "error") return clampPercent(base);
-  if (phase === "scanning") return clampPercent(base + 15);
-  if (phase === "rewriting") return clampPercent(base + 65);
-  return clampPercent(base + 10);
-}
-
-type ExperienceTier = "fresher" | "experienced";
-type CompressionStage = "none" | "tight-spacing" | "compact" | "small-compact";
-
-const MONTH_INDEX: Record<string, number> = {
-  jan: 0,
-  january: 0,
-  feb: 1,
-  february: 1,
-  mar: 2,
-  march: 2,
-  apr: 3,
-  april: 3,
-  may: 4,
-  jun: 5,
-  june: 5,
-  jul: 6,
-  july: 6,
-  aug: 7,
-  august: 7,
-  sep: 8,
-  sept: 8,
-  september: 8,
-  oct: 9,
-  october: 9,
-  nov: 10,
-  november: 10,
-  dec: 11,
-  december: 11,
-};
-
-function parseDateToken(rawToken: string): Date | null {
-  const token = rawToken.trim().toLowerCase();
-  if (!token) return null;
-  if (/present|current|now/.test(token)) {
-    return new Date();
-  }
-
-  const monthMatch = token.match(
-    /(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)/,
-  );
-  const yearMatch = token.match(/(19|20)\d{2}/);
-
-  if (yearMatch) {
-    const year = Number(yearMatch[0]);
-    const month = monthMatch ? (MONTH_INDEX[monthMatch[0]] ?? 0) : 6;
-    return new Date(year, month, 1);
-  }
-
-  const parsed = new Date(rawToken);
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed;
-  }
-
-  return null;
-}
-
-function estimateExperienceMonths(resumeData: ResumeData | null): number {
-  if (!resumeData) return 0;
-
-  let totalMonths = 0;
-  const meaningfulEntries = resumeData.experience.filter(
-    (entry) =>
-      entry.company.trim() ||
-      entry.role.trim() ||
-      entry.dateRange.trim() ||
-      entry.bullets.some((bullet) => bullet.trim()),
-  );
-
-  for (const entry of meaningfulEntries) {
-    const dateRange = entry.dateRange.trim();
-    if (!dateRange) continue;
-
-    const [startRaw, endRaw] = dateRange
-      .split(/\s*(?:-|–|to)\s*/i)
-      .filter(Boolean);
-    const start = parseDateToken(startRaw || "");
-    const end = parseDateToken(endRaw || "present");
-
-    if (!start || !end) continue;
-
-    const startIndex = start.getFullYear() * 12 + start.getMonth();
-    const endIndex = end.getFullYear() * 12 + end.getMonth();
-    if (endIndex >= startIndex) {
-      totalMonths += endIndex - startIndex + 1;
-    }
-  }
-
-  if (totalMonths > 0) return totalMonths;
-
-  // Conservative fallback when date parsing fails but experience exists.
-  return meaningfulEntries.length >= 2
-    ? 24
-    : meaningfulEntries.length === 1
-      ? 12
-      : 0;
-}
-
-function getExperienceTier(resumeData: ResumeData | null): ExperienceTier {
-  const months = estimateExperienceMonths(resumeData);
-  return months < 18 ? "fresher" : "experienced";
-}
-
-function waitForNextPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => resolve());
-    });
-  });
-}
-
-function estimateRenderedPages(element: HTMLElement): number {
-  const widthPx = element.getBoundingClientRect().width || element.offsetWidth;
-  if (!widthPx) return 1;
-
-  const onePagePx = (297 * widthPx) / 210;
-  const contentHeightPx = Math.max(
-    element.scrollHeight,
-    element.getBoundingClientRect().height,
-  );
-  const tolerancePx = Math.max(2, Math.round(onePagePx * 0.004));
-
-  return Math.max(1, Math.ceil((contentHeightPx - tolerancePx) / onePagePx));
 }
 
 /* ─── Main App ─────────────────────────────────────────── */
@@ -457,22 +157,18 @@ function App() {
   const resumeText = useAppStore((s) => s.resumeText);
   const setResumeText = useAppStore((s) => s.setResumeText);
   const jdText = useAppStore((s) => s.jdText);
-  const setJdText = useAppStore((s) => s.setJdText);
   const resumeData = useAppStore((s) => s.resumeData);
   const setResumeData = useAppStore((s) => s.setResumeData);
   const atsResult = useAppStore((s) => s.atsResult);
   const setATSResult = useAppStore((s) => s.setATSResult);
   const isOptimizing = useAppStore((s) => s.isOptimizing);
   const setIsOptimizing = useAppStore((s) => s.setIsOptimizing);
-  const optimizeProgress = useAppStore((s) => s.optimizeProgress);
   const setOptimizeProgress = useAppStore((s) => s.setOptimizeProgress);
-  const previousScore = useAppStore((s) => s.previousScore);
   const setPreviousScore = useAppStore((s) => s.setPreviousScore);
   const loadingMessage = useAppStore((s) => s.loadingMessage);
   const setLoadingMessage = useAppStore((s) => s.setLoadingMessage);
   const error = useAppStore((s) => s.error);
   const setError = useAppStore((s) => s.setError);
-  const optimizeDone = useAppStore((s) => s.optimizeDone);
   const setOptimizeDone = useAppStore((s) => s.setOptimizeDone);
   const uploadedFileName = useAppStore((s) => s.uploadedFileName);
   const setUploadedFileName = useAppStore((s) => s.setUploadedFileName);
@@ -484,7 +180,6 @@ function App() {
   const setIsDbLoading = useAppStore((s) => s.setIsDbLoading);
   const cooldownRemaining = useAppStore((s) => s.cooldownRemaining);
   const setCooldownRemaining = useAppStore((s) => s.setCooldownRemaining);
-  const hasBackup = useAppStore((s) => s.hasBackup);
   const setHasBackup = useAppStore((s) => s.setHasBackup);
   const aiSettings = useAppStore((s) => s.aiSettings);
   const privacySettings = useAppStore((s) => s.privacySettings);
@@ -510,13 +205,6 @@ function App() {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCoverLetter, setShowCoverLetter] = useState(false);
   const [showResumeManager, setShowResumeManager] = useState(false);
-  const [showFeedbackPanel, setShowFeedbackPanel] = useState(false);
-  const [feedbackInitialTab, setFeedbackInitialTab] = useState<
-    "my" | "community" | "admin"
-  >("community");
-  const [pendingExportFormat, setPendingExportFormat] = useState<
-    "pdf" | "docx" | null
-  >(null);
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [settingsMenuPosition, setSettingsMenuPosition] = useState({
     top: 0,
@@ -542,16 +230,7 @@ function App() {
   const [atsResumeSource, setAtsResumeSource] = useState<"existing" | "new">(
     "existing",
   );
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportToastMessage, setExportToastMessage] = useState<string | null>(
-    null,
-  );
-  const [exportCustomizationOverride, setExportCustomizationOverride] =
-    useState<Partial<TemplateCustomization> | null>(null);
-  const [lastExportPageEstimate, setLastExportPageEstimate] = useState<
-    number | null
-  >(null);
-  const [preferredExportFormat, setPreferredExportFormat] = useState<
+  const [preferredExportFormat] = useState<
     "pdf" | "docx"
   >(() => {
     try {
@@ -573,25 +252,22 @@ function App() {
   const settingsMenuButtonRef = useRef<HTMLButtonElement>(null);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
 
-  const reactToPrintFn = useReactToPrint({
-    contentRef: resumeRef,
-    documentTitle: resumeData
-      ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
-      : "Resume",
-    onAfterPrint: () => {
-      setExportCustomizationOverride(null);
-      setIsExporting(false);
-      setExportToastMessage(null);
-    },
-    onPrintError: (error) => {
-      console.error("PDF export failed:", error);
-      trackEvent("resume_export_failed", { format: "pdf" });
-      setError("PDF export failed. Please try again.");
-      setExportCustomizationOverride(null);
-      setIsExporting(false);
-      setExportToastMessage(null);
-    },
-  });
+  // Custom hook for printing and exporting resumes
+  const {
+    isExporting,
+    exportToastMessage,
+    lastExportPageEstimate,
+    exportCustomizationOverride,
+    exportPDF,
+    exportDocx,
+    showFeedbackPanel,
+    setShowFeedbackPanel,
+    pendingExportFormat,
+    setPendingExportFormat,
+    feedbackInitialTab,
+    setFeedbackInitialTab,
+    handleFeedbackCompleted,
+  } = useExport(resumeRef);
   const abortRef = useRef<AbortController | null>(null);
   const authStartTimeoutRef = useRef<number | null>(null);
   const activeResumeIdRef = useRef<string | null>(activeResumeId);
@@ -602,7 +278,7 @@ function App() {
   const pendingResumeCreationRef = useRef<Promise<
     Awaited<ReturnType<typeof saveResume>>
   > | null>(null);
-  const feedbackGateCheckInFlightRef = useRef(false);
+
   const initialViewportHeightRef = useRef<number>(
     typeof window !== "undefined" ? window.innerHeight : 0,
   );
@@ -1044,10 +720,7 @@ function App() {
       ? "Auto: single-page target"
       : "Auto: multi-page allowed";
   const adaptiveModeLabel = "Adaptive: fit content density";
-  const optimizePercent = useMemo(
-    () => getOptimizeProgressPercent(optimizeProgress),
-    [optimizeProgress],
-  );
+
   const useStickyMobileActions =
     isCompactScreen && !isMobileKeyboardOpen && !isTextEntryFocused;
 
@@ -1235,267 +908,7 @@ function App() {
     ],
   );
 
-  const evaluatePdfFit = useCallback(
-    async (
-      requireSinglePage: boolean,
-    ): Promise<{
-      estimatedPages: number;
-      stage: CompressionStage;
-      override: Partial<TemplateCustomization> | null;
-    }> => {
-      const fitAttempts: Array<{
-        stage: CompressionStage;
-        override: Partial<TemplateCustomization> | null;
-      }> = requireSinglePage
-        ? [
-            { stage: "none", override: null },
-            { stage: "tight-spacing", override: { sectionSpacing: "tight" } },
-            {
-              stage: "compact",
-              override: { sectionSpacing: "tight", lineHeight: "compact" },
-            },
-            {
-              stage: "small-compact",
-              override: {
-                fontSize: "small",
-                lineHeight: "compact",
-                sectionSpacing: "tight",
-              },
-            },
-          ]
-        : [{ stage: "none", override: null }];
 
-      let bestPages = Number.POSITIVE_INFINITY;
-      let bestStage: CompressionStage = "none";
-      let bestOverride: Partial<TemplateCustomization> | null = null;
-
-      for (const attempt of fitAttempts) {
-        setExportCustomizationOverride(attempt.override);
-        await waitForNextPaint();
-
-        const node = resumeRef.current;
-        if (!node) {
-          continue;
-        }
-
-        const estimatedPages = estimateRenderedPages(node);
-        if (estimatedPages < bestPages) {
-          bestPages = estimatedPages;
-          bestStage = attempt.stage;
-          bestOverride = attempt.override;
-        }
-
-        if (requireSinglePage && estimatedPages <= 1) {
-          break;
-        }
-      }
-
-      setExportCustomizationOverride(bestOverride);
-      await waitForNextPaint();
-
-      return {
-        estimatedPages: Number.isFinite(bestPages) ? bestPages : 1,
-        stage: bestStage,
-        override: bestOverride,
-      };
-    },
-    [],
-  );
-
-  const runExportPDF = useCallback(async () => {
-    let el = resumeRef.current;
-    if (!el) {
-      setError("Resume preview not available for export. Please try again.");
-      return;
-    }
-    if (resumeData) {
-      let exportData = resumeData;
-
-      const spacingFix = normalizeResumeDataSpacing(exportData);
-      if (spacingFix.changedFields > 0) {
-        exportData = spacingFix.normalized;
-        setResumeData(exportData);
-
-        // Wait for hidden export template to reflect normalized text.
-        await new Promise((r) => setTimeout(r, 200));
-        el = resumeRef.current;
-        if (!el) {
-          setError("Resume preview not available for export. Please try again.");
-          return;
-        }
-      }
-
-      const validation = validateForExport(exportData);
-      if (!validation.valid) {
-        setError(validation.errors.join("\n"));
-        return;
-      }
-      // Auto-fix typos before export
-      if (validation.typoWarnings.length > 0) {
-        const { fixed, corrections } = autoFixTypos(exportData);
-        if (corrections.length > 0) {
-          setResumeData(fixed);
-          setExportToastMessage(
-            `Auto-fixed ${corrections.length} typo${corrections.length > 1 ? "s" : ""}: ${corrections.map((c) => c.split(": ")[1]).join(", ")}`,
-          );
-          // Brief pause so user sees the toast and the hidden template re-renders with fixed data
-          await new Promise((r) => setTimeout(r, 600));
-
-          // Re-acquire the freshly rendered DOM element
-          el = resumeRef.current;
-          if (!el) {
-            setError(
-              "Resume preview not available for export. Please try again.",
-            );
-            return;
-          }
-        }
-      }
-      setError(null);
-    }
-
-    const pageModeDecision = resolveExportPageMode(
-      exportPageMode,
-      experienceTier,
-    );
-    const singlePageRequired = pageModeDecision.singlePageRequired;
-
-    setIsExporting(true);
-    setExportToastMessage("Preparing PDF...");
-
-    let fitResult = await evaluatePdfFit(
-      pageModeDecision.fitRequiresSinglePageAttempts,
-    );
-
-    if (singlePageRequired && fitResult.estimatedPages > 1) {
-      setIsExporting(false);
-      setExportToastMessage(null);
-
-      const shouldContinueAsMultiPage = window.confirm(
-        `This resume is still ${fitResult.estimatedPages} pages after compact formatting.\n\nPress OK to export as multi-page, or Cancel to trim content first.`,
-      );
-
-      if (!shouldContinueAsMultiPage) {
-        setExportCustomizationOverride(null);
-        setError(
-          "Single-page export cancelled. Trim content or set PDF page mode to allow multi-page.",
-        );
-        return;
-      }
-
-      // User explicitly accepted multi-page output, so restore normal
-      // layout and re-estimate using the same export surface that will print.
-      fitResult = await evaluatePdfFit(false);
-      setIsExporting(true);
-    }
-
-    setLastExportPageEstimate(fitResult.estimatedPages);
-
-    const stageLabels: Record<CompressionStage, string> = {
-      none: "standard layout",
-      "tight-spacing": "tight spacing",
-      compact: "compact spacing",
-      "small-compact": "small + compact",
-    };
-
-    setExportToastMessage(
-      `Preparing PDF (${fitResult.estimatedPages} page${fitResult.estimatedPages > 1 ? "s" : ""}, ${stageLabels[fitResult.stage]})...`,
-    );
-
-    trackEvent("resume_exported", {
-      format: "pdf",
-      has_resume_data: Boolean(resumeData),
-      embedded_resume_data: privacySettings.embedResumeDataInPdf,
-      page_mode: exportPageMode,
-      estimated_pages: fitResult.estimatedPages,
-      compression_stage: fitResult.stage,
-    });
-    if (user?.id) {
-      void recordFeatureUsage("resume_download");
-    }
-    setPreferredExportFormat("pdf");
-    try {
-      localStorage.setItem("preferred-export-format", "pdf");
-    } catch {
-      /* ignore */
-    }
-
-    try {
-      reactToPrintFn();
-    } catch (err) {
-      console.error("react-to-print failed:", err);
-      setError("Failed to open print dialog.");
-      setIsExporting(false);
-      setExportToastMessage(null);
-    }
-  }, [
-    evaluatePdfFit,
-    experienceTier,
-    exportPageMode,
-    privacySettings.embedResumeDataInPdf,
-    resumeData,
-    setError,
-    setExportCustomizationOverride,
-    setLastExportPageEstimate,
-    setResumeData,
-    reactToPrintFn,
-    user?.id,
-  ]);
-
-  const requestExportWithFeedbackGate = useCallback(
-    async (format: "pdf" | "docx", exportAction: () => Promise<void>) => {
-      if (isExporting || feedbackGateCheckInFlightRef.current) return;
-
-      if (!user?.id) {
-        openSignIn();
-        return;
-      }
-
-      feedbackGateCheckInFlightRef.current = true;
-
-      try {
-        const submissionState = await checkUserHasSubmittedFeedback(user.id);
-        const gateDecision = evaluateFeedbackExportGate(submissionState);
-
-        if (gateDecision.outcome === "allow-export") {
-          await exportAction();
-          return;
-        }
-
-        if (gateDecision.outcome === "block-export") {
-          setPendingExportFormat(null);
-          setShowFeedbackPanel(false);
-          setError(gateDecision.message);
-          trackEvent("feedback_export_gate_blocked", {
-            format,
-            reason: "status_check_error",
-          });
-          return;
-        }
-
-        setPendingExportFormat(format);
-        setFeedbackInitialTab("my");
-        setShowFeedbackPanel(true);
-        trackEvent("feedback_export_gate_shown", { format });
-      } catch (error) {
-        console.error("Feedback gate status check failed:", error);
-        setPendingExportFormat(null);
-        setShowFeedbackPanel(false);
-        setError(FEEDBACK_GATE_STATUS_ERROR_MESSAGE);
-        trackEvent("feedback_export_gate_blocked", {
-          format,
-          reason: "status_check_exception",
-        });
-      } finally {
-        feedbackGateCheckInFlightRef.current = false;
-      }
-    },
-    [isExporting, openSignIn, setError, user?.id],
-  );
-
-  const handleExportPDF = useCallback(async () => {
-    await requestExportWithFeedbackGate("pdf", runExportPDF);
-  }, [requestExportWithFeedbackGate, runExportPDF]);
 
   /* ── Mode Selection (landing page) ───────────────── */
 
@@ -2196,81 +1609,7 @@ function App() {
     input.click();
   };
 
-  const runExportDocx = useCallback(async () => {
-    if (!resumeData) {
-      setError(
-        "No resume data to export. Please create or load a resume first.",
-      );
-      return;
-    }
-    let exportData = resumeData;
 
-    const spacingFix = normalizeResumeDataSpacing(exportData);
-    if (spacingFix.changedFields > 0) {
-      exportData = spacingFix.normalized;
-      setResumeData(exportData);
-    }
-
-    const validation = validateForExport(exportData);
-    if (!validation.valid) {
-      setError(validation.errors.join("\n"));
-      return;
-    }
-    // Auto-fix typos before export
-    if (validation.typoWarnings.length > 0) {
-      const { fixed, corrections } = autoFixTypos(exportData);
-      if (corrections.length > 0) {
-        exportData = fixed;
-        setResumeData(fixed);
-        setExportToastMessage(
-          `Auto-fixed ${corrections.length} typo${corrections.length > 1 ? "s" : ""}: ${corrections.map((c) => c.split(": ")[1]).join(", ")}`,
-        );
-        await new Promise((r) => setTimeout(r, 600));
-      }
-    }
-    setError(null);
-    setIsExporting(true);
-    setExportToastMessage("Generating DOCX...");
-    try {
-      await exportToDocx(exportData);
-      trackEvent("resume_exported", { format: "docx" });
-      if (user?.id) {
-        void recordFeatureUsage("resume_download");
-      }
-      setPreferredExportFormat("docx");
-      try {
-        localStorage.setItem("preferred-export-format", "docx");
-      } catch {
-        /* ignore */
-      }
-    } catch (err) {
-      trackEvent("resume_export_failed", { format: "docx" });
-      setError(err instanceof Error ? err.message : "DOCX export failed");
-    } finally {
-      setIsExporting(false);
-      setExportToastMessage(null);
-    }
-  }, [resumeData, setError, setResumeData, user?.id]);
-
-  const handleExportDocx = useCallback(async () => {
-    await requestExportWithFeedbackGate("docx", runExportDocx);
-  }, [requestExportWithFeedbackGate, runExportDocx]);
-
-  const handleFeedbackSubmitted = useCallback(() => {
-    if (!pendingExportFormat) return;
-
-    const format = pendingExportFormat;
-    setPendingExportFormat(null);
-    setShowFeedbackPanel(false);
-    trackEvent("feedback_export_gate_completed", { format });
-
-    if (format === "pdf") {
-      void runExportPDF();
-      return;
-    }
-
-    void runExportDocx();
-  }, [pendingExportFormat, runExportDocx, runExportPDF]);
 
   /* ── Step indicator config per mode ─────────────────── */
 
@@ -2303,12 +1642,7 @@ function App() {
     return "";
   };
 
-  const getModeTitle = (selectedMode: AppMode): string => {
-    if (selectedMode === "ats") return "ATS Score & Optimize";
-    if (selectedMode === "edit") return "Edit My Resume";
-    if (selectedMode === "create") return "Create New Resume";
-    return "Choose an option";
-  };
+
 
   /* ─── Render ─────────────────────────────────────────── */
 
@@ -2603,7 +1937,7 @@ function App() {
                       role="menuitem"
                       onClick={() => {
                         setIsSettingsMenuOpen(false);
-                        handleExportDocx();
+                        exportDocx();
                       }}
                       disabled={isExporting}
                       title="Export as DOCX"
@@ -2617,7 +1951,7 @@ function App() {
 
               <button
                 className={`header-btn ${preferredExportFormat === "pdf" ? "btn-primary" : ""}`}
-                onClick={handleExportPDF}
+                onClick={exportPDF}
                 disabled={isExporting}
               >
                 <Download size={14} />
@@ -2761,187 +2095,17 @@ function App() {
         )}
 
       {/* Main Content */}
+      {/* Main Content */}
       <main className="app-main" id="main-content" role="main">
         {/* ═══ LANDING PAGE ═══ */}
         {step === "landing" && !isDbLoading && (
-          <div
-            className="landing-step"
-            role="region"
-            aria-label="Choose an option"
-          >
-            <div className="landing-hero">
-              <FileText size={48} className="landing-hero-icon" />
-              <h2>Welcome to Resume Maker</h2>
-              <p>AI-powered resume building, editing, and ATS optimization</p>
-              {isAuthStarting && (
-                <p
-                  className="landing-auth-pending"
-                  role="status"
-                  aria-live="polite"
-                >
-                  Opening sign-in... Complete login to continue.
-                </p>
-              )}
-            </div>
-
-            <div className="landing-cards">
-              {/* Card 1: ATS Score & Optimize */}
-              <div
-                className={`landing-card ${!user && pendingMode === "ats" ? "landing-card-selected" : ""}`}
-                onClick={() => handleSelectMode("ats")}
-                role="button"
-                tabIndex={0}
-                aria-pressed={!user && pendingMode === "ats"}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleSelectMode("ats");
-                  }
-                }}
-                aria-label="ATS Score and Optimize"
-              >
-                <div className="landing-card-icon landing-card-icon-ats">
-                  <Target size={32} />
-                </div>
-                <h3>ATS Score & Optimize</h3>
-                <p>
-                  Have a resume and a job description? Get your ATS score and
-                  optimize your resume to match the job requirements.
-                </p>
-                <span className="landing-card-hint">
-                  {!user && pendingMode === "ats"
-                    ? "Selected"
-                    : user
-                      ? "Click to continue"
-                      : "Choose this option"}
-                </span>
-              </div>
-
-              {/* Card 2: Edit My Resume */}
-              <div
-                className={`landing-card ${!user && pendingMode === "edit" ? "landing-card-selected" : ""}`}
-                onClick={() => handleSelectMode("edit")}
-                role="button"
-                tabIndex={0}
-                aria-pressed={!user && pendingMode === "edit"}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleSelectMode("edit");
-                  }
-                }}
-                aria-label="Edit My Resume"
-              >
-                <div className="landing-card-icon landing-card-icon-edit">
-                  <Edit3 size={32} />
-                </div>
-                <h3>Edit My Resume</h3>
-                <p>
-                  Already have a resume? Upload or paste it to parse with AI and
-                  edit in our live preview editor.
-                </p>
-                <span className="landing-card-hint">
-                  {!user && pendingMode === "edit"
-                    ? "Selected"
-                    : user
-                      ? "Click to continue"
-                      : "Choose this option"}
-                </span>
-              </div>
-
-              {/* Card 3: Create Resume */}
-              <div
-                className={`landing-card ${!user && pendingMode === "create" ? "landing-card-selected" : ""}`}
-                onClick={() => handleSelectMode("create")}
-                role="button"
-                tabIndex={0}
-                aria-pressed={!user && pendingMode === "create"}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleSelectMode("create");
-                  }
-                }}
-                aria-label="Create New Resume"
-              >
-                <div className="landing-card-icon landing-card-icon-create">
-                  <PlusCircle size={32} />
-                </div>
-                <h3>Create New Resume</h3>
-                <p>
-                  Don't have a resume yet? Start from scratch using our
-                  templates and fill in your details.
-                </p>
-                <span className="landing-card-hint">
-                  {!user && pendingMode === "create"
-                    ? "Selected"
-                    : user
-                      ? "Click to continue"
-                      : "Choose this option"}
-                </span>
-              </div>
-            </div>
-
-            <SignedOut>
-              <div className="landing-shared-action">
-                <p className="landing-selection-copy">
-                  {pendingMode
-                    ? `Selected: ${getModeTitle(pendingMode)}. Sign-in opens automatically when you tap a card.`
-                    : "Choose one option above to sign in and continue."}
-                </p>
-                <button
-                  className="landing-primary-btn"
-                  disabled={!pendingMode || isAuthStarting}
-                  aria-busy={isAuthStarting}
-                  onClick={() => {
-                    if (!pendingMode) return;
-                    startSignInFlow(pendingMode);
-                  }}
-                >
-                  <LogIn size={16} />
-                  {isAuthStarting
-                    ? "Opening Sign In..."
-                    : pendingMode
-                      ? "Continue to Sign In"
-                      : "Select an Option First"}
-                </button>
-              </div>
-            </SignedOut>
-            <SignedIn>
-              <div className="landing-shared-action landing-shared-action-signed-in">
-                <p className="landing-selection-copy">
-                  Choose any option above to continue.
-                </p>
-              </div>
-            </SignedIn>
-
-            {/* Restore backup hint */}
-            {hasBackup && privacySettings.saveLocalBackups && (
-              <div className="landing-backup">
-                <button
-                  className="btn-secondary backup-restore-btn"
-                  onClick={() => {
-                    if (!user) return;
-                    const backup = loadLocalBackup();
-                    if (backup) {
-                      setActiveResumeId(null);
-                      setActiveResumeName(null);
-                      setResumeData(backup.resumeData, false);
-                      if (backup.jdText) setJdText(backup.jdText);
-                      setMode("edit");
-                      setStep("editor");
-                    }
-                  }}
-                >
-                  <HardDrive size={14} />
-                  Restore Local Backup
-                  <small>
-                    ({formatBackupAge(loadLocalBackup()?.timestamp || 0)})
-                  </small>
-                </button>
-              </div>
-            )}
-          </div>
+          <LandingScreen
+            user={user}
+            pendingMode={pendingMode}
+            isAuthStarting={isAuthStarting}
+            handleSelectMode={handleSelectMode}
+            startSignInFlow={startSignInFlow}
+          />
         )}
 
         {/* DB Loading */}
@@ -2959,350 +2123,24 @@ function App() {
           </div>
         )}
 
-        {/* ═══ INPUT STEP — ATS MODE ═══ */}
-        {step === "input" && mode === "ats" && !isDbLoading && (
-          <div
-            className="input-step"
-            role="region"
-            aria-label="Resume and JD input"
-          >
-            <div className="input-hero">
-              <h2>ATS Score & Optimize</h2>
-              <p>
-                {resumeData && atsResumeSource === "existing"
-                  ? "Use your saved resume or switch to upload a new one for this ATS run."
-                  : "Paste your resume and the target job description to get an ATS score."}
-              </p>
-            </div>
-
-            {resumeData && (
-              <div
-                className="ats-source-choice"
-                role="group"
-                aria-label="Resume source"
-              >
-                <button
-                  className={`header-btn header-btn-labeled ${atsResumeSource === "existing" ? "btn-accent" : ""}`}
-                  onClick={() => {
-                    setAtsResumeSource("existing");
-                    setError(null);
-                  }}
-                >
-                  Use Existing Resume
-                </button>
-                <button
-                  className={`header-btn header-btn-labeled ${atsResumeSource === "new" ? "btn-accent" : ""}`}
-                  onClick={() => {
-                    setAtsResumeSource("new");
-                    setError(null);
-                  }}
-                >
-                  Upload New Resume
-                </button>
-              </div>
-            )}
-
-            {resumeData && atsResumeSource === "new" && (
-              <p className="ats-source-note">
-                You are analyzing a new resume. Your saved resume remains
-                unchanged.
-              </p>
-            )}
-
-            <div
-              className={
-                resumeData && atsResumeSource === "existing"
-                  ? "input-grid input-grid-single"
-                  : "input-grid"
-              }
-            >
-              {(!resumeData || atsResumeSource === "new") && (
-                <div className="input-card">
-                  <div className="input-label-row">
-                    <label className="input-label">
-                      <FileText size={16} />
-                      Your Resume
-                    </label>
-                    <div className="upload-actions">
-                      {uploadedFileName && (
-                        <span className="uploaded-file">
-                          <FileUp size={12} />
-                          {uploadedFileName}
-                          <button
-                            className="clear-upload"
-                            onClick={handleClearUpload}
-                            aria-label="Clear upload"
-                          >
-                            <X size={12} />
-                          </button>
-                        </span>
-                      )}
-                      <label
-                        className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
-                        aria-disabled={isPdfLoading}
-                      >
-                        <Upload size={13} />
-                        {isPdfLoading ? "Processing..." : "Upload PDF"}
-                        {!isPdfLoading && (
-                          <input
-                            ref={pdfInputRef}
-                            type="file"
-                            accept=".pdf"
-                            onChange={handlePdfUpload}
-                            hidden
-                            aria-label="Upload PDF"
-                          />
-                        )}
-                      </label>
-                    </div>
-                  </div>
-                  {isPdfLoading ? (
-                    <div className="pdf-loading">
-                      <div className="loading-progress-number">
-                        {pdfLoadPercent}%
-                      </div>
-                      <div
-                        className="loading-progress-track"
-                        aria-hidden="true"
-                      >
-                        <div
-                          className="loading-progress-fill"
-                          style={{ width: `${pdfLoadPercent}%` }}
-                        />
-                      </div>
-                      <span>
-                        {loadingMessage || "Extracting text from PDF..."}
-                      </span>
-                    </div>
-                  ) : (
-                    <>
-                      <textarea
-                        className="input-textarea"
-                        placeholder="Paste your full resume text here or upload a PDF..."
-                        value={resumeText}
-                        maxLength={LIMITS.MAX_RESUME_TEXT_LENGTH}
-                        onChange={(e) => {
-                          setResumeText(e.target.value);
-                          if (uploadedFileName) setUploadedFileName(null);
-                        }}
-                        aria-label="Resume text"
-                      />
-                      <small className="char-count">
-                        {resumeText.length.toLocaleString()} /{" "}
-                        {LIMITS.MAX_RESUME_TEXT_LENGTH.toLocaleString()}
-                      </small>
-                    </>
-                  )}
-                </div>
-              )}
-              <div className="input-card">
-                <label className="input-label">
-                  <Target size={16} />
-                  Job Description
-                </label>
-                <textarea
-                  className="input-textarea"
-                  placeholder="Paste the target job description here..."
-                  value={jdText}
-                  maxLength={LIMITS.MAX_JD_LENGTH}
-                  onChange={(e) => setJdText(e.target.value)}
-                  aria-label="Job description"
-                />
-                <small className="char-count">
-                  {jdText.length.toLocaleString()} /{" "}
-                  {LIMITS.MAX_JD_LENGTH.toLocaleString()}
-                </small>
-              </div>
-            </div>
-
-            {error && (
-              <div className="error-banner" role="alert">
-                <AlertCircle size={16} />
-                {error}
-              </div>
-            )}
-
-            <div
-              className={`input-actions-row ${useStickyMobileActions ? "input-actions-row-sticky" : ""}`}
-            >
-              {resumeData && atsResumeSource === "existing" ? (
-                <button
-                  className="analyze-btn"
-                  onClick={handleAnalyzeExisting}
-                  disabled={!jdText.trim() || isAnalyzeCoolingDown}
-                >
-                  {isAnalyzeCoolingDown ? (
-                    <>
-                      <Clock size={18} />
-                      Wait {formatCooldown(analyzeCooldownRemaining)}
-                    </>
-                  ) : (
-                    <>
-                      <Search size={18} />
-                      Analyze with JD
-                    </>
-                  )}
-                </button>
-              ) : (
-                <button
-                  className="analyze-btn"
-                  onClick={handleAnalyze}
-                  disabled={
-                    (atsResumeSource === "new"
-                      ? !resumeText.trim() && !uploadedFileName && !resumeData
-                      : !resumeText.trim() && !resumeData) ||
-                    !jdText.trim() ||
-                    isPdfLoading ||
-                    isAnalyzeCoolingDown
-                  }
-                >
-                  {isAnalyzeCoolingDown ? (
-                    <>
-                      <Clock size={18} />
-                      Wait {formatCooldown(analyzeCooldownRemaining)}
-                    </>
-                  ) : (
-                    <>
-                      <Search size={18} />
-                      Analyze Resume
-                    </>
-                  )}
-                </button>
-              )}
-              {resumeData && (
-                <button
-                  className="btn-secondary"
-                  onClick={() => setStep("editor")}
-                >
-                  Back to Editor
-                </button>
-              )}
-              <button className="btn-secondary" onClick={handleBackToLanding}>
-                Back
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ═══ INPUT STEP — EDIT MODE ═══ */}
-        {step === "input" && mode === "edit" && !isDbLoading && (
-          <div className="input-step" role="region" aria-label="Resume input">
-            <div className="input-hero">
-              <h2>Edit Your Resume</h2>
-              <p>
-                Paste your resume text or upload a PDF. We'll parse it with AI
-                so you can edit it in our live preview editor.
-              </p>
-            </div>
-            <div className="input-grid input-grid-single">
-              <div className="input-card">
-                <div className="input-label-row">
-                  <label className="input-label">
-                    <FileText size={16} />
-                    Your Resume
-                  </label>
-                  <div className="upload-actions">
-                    {uploadedFileName && (
-                      <span className="uploaded-file">
-                        <FileUp size={12} />
-                        {uploadedFileName}
-                        <button
-                          className="clear-upload"
-                          onClick={handleClearUpload}
-                          aria-label="Clear upload"
-                        >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    )}
-                    <label
-                      className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
-                      aria-disabled={isPdfLoading}
-                    >
-                      <Upload size={13} />
-                      {isPdfLoading ? "Processing..." : "Upload PDF"}
-                      {!isPdfLoading && (
-                        <input
-                          ref={pdfInputRef}
-                          type="file"
-                          accept=".pdf"
-                          onChange={handlePdfUpload}
-                          hidden
-                          aria-label="Upload PDF"
-                        />
-                      )}
-                    </label>
-                  </div>
-                </div>
-                {isPdfLoading ? (
-                  <div className="pdf-loading">
-                    <div className="loading-progress-number">
-                      {pdfLoadPercent}%
-                    </div>
-                    <div className="loading-progress-track" aria-hidden="true">
-                      <div
-                        className="loading-progress-fill"
-                        style={{ width: `${pdfLoadPercent}%` }}
-                      />
-                    </div>
-                    <span>
-                      {loadingMessage || "Extracting text from PDF..."}
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <textarea
-                      className="input-textarea"
-                      placeholder="Paste your full resume text here or upload a PDF..."
-                      value={resumeText}
-                      maxLength={LIMITS.MAX_RESUME_TEXT_LENGTH}
-                      onChange={(e) => {
-                        setResumeText(e.target.value);
-                        if (uploadedFileName) setUploadedFileName(null);
-                      }}
-                      aria-label="Resume text"
-                    />
-                    <small className="char-count">
-                      {resumeText.length.toLocaleString()} /{" "}
-                      {LIMITS.MAX_RESUME_TEXT_LENGTH.toLocaleString()}
-                    </small>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {error && (
-              <div className="error-banner" role="alert">
-                <AlertCircle size={16} />
-                {error}
-              </div>
-            )}
-
-            <div
-              className={`input-actions-row ${useStickyMobileActions ? "input-actions-row-sticky" : ""}`}
-            >
-              <button className="btn-secondary" onClick={handleBackToLanding}>
-                Back
-              </button>
-              <button
-                className="analyze-btn"
-                onClick={handleParseResume}
-                disabled={!resumeText.trim() || isAnalyzeCoolingDown}
-              >
-                {isAnalyzeCoolingDown ? (
-                  <>
-                    <Clock size={18} />
-                    Wait {formatCooldown(analyzeCooldownRemaining)}
-                  </>
-                ) : (
-                  <>
-                    <Edit3 size={18} />
-                    Parse & Edit
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+        {/* ═══ INPUT STEP ═══ */}
+        {step === "input" && !isDbLoading && (
+          <InputScreen
+            pdfInputRef={pdfInputRef}
+            isPdfLoading={isPdfLoading}
+            pdfLoadPercent={pdfLoadPercent}
+            handlePdfUpload={handlePdfUpload}
+            handleClearUpload={handleClearUpload}
+            handleAnalyze={handleAnalyze}
+            handleAnalyzeExisting={handleAnalyzeExisting}
+            handleParseResume={handleParseResume}
+            handleBackToLanding={handleBackToLanding}
+            useStickyMobileActions={useStickyMobileActions}
+            isAnalyzeCoolingDown={isAnalyzeCoolingDown}
+            analyzeCooldownRemaining={analyzeCooldownRemaining}
+            atsResumeSource={atsResumeSource}
+            setAtsResumeSource={setAtsResumeSource}
+          />
         )}
 
         {/* ═══ ANALYZING STEP ═══ */}
@@ -3322,325 +2160,33 @@ function App() {
 
         {/* ═══ SCORE STEP ═══ */}
         {step === "score" && atsResult && resumeData && (
-          <div
-            className="score-step"
-            role="region"
-            aria-label="ATS score results"
-          >
-            <div className="score-left">
-              <div className="score-header">
-                <ScoreMeter score={atsResult.overallScore} />
-                <div className="score-verdict">
-                  <h3>{jdText.trim() ? "ATS Score" : "Self ATS Score"}</h3>
-                  {!jdText.trim() && (
-                    <small className="self-score-tag">
-                      General best practices — no JD
-                    </small>
-                  )}
-                  <p>{atsResult.summaryVerdict}</p>
-                  {optimizeDone && previousScore !== null && (
-                    <div className="improvement-badge">
-                      <Trophy size={16} />
-                      Improved: {previousScore} &rarr; {atsResult.overallScore}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="keywords-section">
-                <h4>
-                  {jdText.trim() ? "Keywords Found" : "Industry Keywords Found"}
-                </h4>
-                <div className="keyword-tags">
-                  {uniqueStrings([
-                    ...(atsResult.breakdown.keywordMatch.matchedKeywords || []),
-                    ...(atsResult.breakdown.skillsAlignment.matchedSkills ||
-                      []),
-                  ]).map((k) => (
-                    <span key={k} className="tag tag-match">
-                      {k}
-                    </span>
-                  ))}
-                </div>
-                <h4>
-                  {jdText.trim()
-                    ? "Missing Keywords"
-                    : "Suggested Keywords to Add"}
-                </h4>
-                <div className="keyword-tags">
-                  {uniqueStrings([
-                    ...(atsResult.breakdown.keywordMatch.missingKeywords || []),
-                    ...(atsResult.breakdown.skillsAlignment.missingSkills ||
-                      []),
-                  ]).map((k) => (
-                    <span key={k} className="tag tag-missing">
-                      {k}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="breakdown-section">
-                <h4>Breakdown</h4>
-                <BreakdownBar
-                  label={jdText.trim() ? "Keyword Match" : "Industry Keywords"}
-                  score={atsResult.breakdown.keywordMatch.score}
-                  weight={atsResult.breakdown.keywordMatch.weight}
-                />
-                <BreakdownBar
-                  label={
-                    jdText.trim() ? "Skills Alignment" : "Skills Presentation"
-                  }
-                  score={atsResult.breakdown.skillsAlignment.score}
-                  weight={atsResult.breakdown.skillsAlignment.weight}
-                />
-                <BreakdownBar
-                  label={
-                    jdText.trim() ? "Experience Relevance" : "Content Quality"
-                  }
-                  score={atsResult.breakdown.experienceRelevance.score}
-                  weight={atsResult.breakdown.experienceRelevance.weight}
-                />
-                <BreakdownBar
-                  label="Formatting"
-                  score={atsResult.breakdown.formatting.score}
-                  weight={atsResult.breakdown.formatting.weight}
-                />
-                <BreakdownBar
-                  label="Impact & Metrics"
-                  score={atsResult.breakdown.impact.score}
-                  weight={atsResult.breakdown.impact.weight}
-                />
-              </div>
-
-              {atsResult.qualityInsights?.signals?.length ? (
-                <div className="feedback-section">
-                  <h4>Resume Signals</h4>
-                  <div className="feedback-grid">
-                    {atsResult.qualityInsights.signals.map((signal) => (
-                      <FeedbackSignalCard key={signal.id} signal={signal} />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {atsResult.topSuggestions.length > 0 && (
-                <div className="suggestions-section">
-                  <h4>Suggestions</h4>
-                  <ul>
-                    {atsResult.topSuggestions.map((s, i) => (
-                      <li key={i}>{s}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {error && (
-                <div className="error-banner" role="alert">
-                  <AlertCircle size={16} />
-                  {error}
-                </div>
-              )}
-
-              {isOptimizing && optimizeProgress && (
-                <div className="optimize-progress">
-                  <div className="optimize-header">
-                    <span>{optimizeProgress.message}</span>
-                    <strong>{optimizePercent}%</strong>
-                  </div>
-                  <div className="loading-progress-track" aria-hidden="true">
-                    <div
-                      className="loading-progress-fill"
-                      style={{ width: `${optimizePercent}%` }}
-                    />
-                  </div>
-                  <div className="optimize-timeline">
-                    {optimizeProgress.history.map((h) => (
-                      <div key={h.iteration} className="timeline-item">
-                        <div className="timeline-dot" />
-                        <span>
-                          Iteration {h.iteration}: Score{" "}
-                          {h.atsResult.overallScore}/100
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    className="btn-secondary"
-                    onClick={handleStopOptimize}
-                  >
-                    Stop
-                  </button>
-                </div>
-              )}
-
-              {!isOptimizing && (
-                <div
-                  className={`score-actions ${useStickyMobileActions ? "score-actions-sticky" : ""}`}
-                >
-                  <button
-                    className="btn-optimize"
-                    onClick={
-                      jdText.trim() ? handleOptimize : handleSelfOptimize
-                    }
-                    disabled={isOptimizeCoolingDown}
-                  >
-                    {isOptimizeCoolingDown ? (
-                      <>
-                        <Clock size={18} />
-                        Wait {formatCooldown(optimizeCooldownRemaining)}
-                      </>
-                    ) : (
-                      <>
-                        <Zap size={18} />
-                        {optimizeDone
-                          ? "Re-Optimize"
-                          : jdText.trim()
-                            ? "Optimize Resume"
-                            : "Self Optimize"}
-                      </>
-                    )}
-                  </button>
-                  <button className="btn-edit" onClick={handleEdit}>
-                    <Edit3 size={18} />
-                    {optimizeDone ? "Edit Resume" : "Edit Manually"}
-                  </button>
-                </div>
-              )}
-
-              {isCompactScreen && (
-                <div className="mobile-resume-trigger-row">
-                  <button
-                    className="btn-secondary mobile-resume-trigger"
-                    onClick={() => setShowMobileResumePreview(true)}
-                  >
-                    <Eye size={16} /> Show Resume
-                  </button>
-                  <div className="mobile-export-row">
-                    <button
-                      className="btn-secondary mobile-export-btn"
-                      onClick={handleExportDocx}
-                      disabled={isExporting}
-                    >
-                      <FileType size={14} /> DOCX
-                    </button>
-                    <button
-                      className="btn-primary-mobile mobile-export-btn"
-                      onClick={handleExportPDF}
-                      disabled={isExporting}
-                    >
-                      <Download size={14} /> Export PDF
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {!isCompactScreen && (
-              <div className="score-right">
-                <div className="preview-container">
-                  <ErrorBoundary>
-                    <Suspense fallback={<PreviewSkeleton />}>
-                      <ResumeTemplate data={resumeData} />
-                    </Suspense>
-                  </ErrorBoundary>
-                </div>
-              </div>
-            )}
-          </div>
+          <ScoreScreen
+            handleOptimize={handleOptimize}
+            handleSelfOptimize={handleSelfOptimize}
+            handleStopOptimize={handleStopOptimize}
+            handleEdit={handleEdit}
+            handleExportDocx={exportDocx}
+            handleExportPDF={exportPDF}
+            isCompactScreen={isCompactScreen}
+            useStickyMobileActions={useStickyMobileActions}
+            isOptimizeCoolingDown={isOptimizeCoolingDown}
+            optimizeCooldownRemaining={optimizeCooldownRemaining}
+            showMobileResumePreview={showMobileResumePreview}
+            setShowMobileResumePreview={setShowMobileResumePreview}
+            isExporting={isExporting}
+          />
         )}
 
         {/* ═══ EDITOR STEP ═══ */}
         {step === "editor" && resumeData && (
-          <div className="editor-step" role="region" aria-label="Resume editor">
-            <div className="editor-left">
-              {isCompactScreen && (
-                <div className="mobile-resume-trigger-row mobile-resume-trigger-row-top">
-                  <button
-                    className="btn-secondary mobile-resume-trigger"
-                    onClick={() => setShowMobileResumePreview(true)}
-                  >
-                    <Eye size={16} /> Show Resume
-                  </button>
-                  <div className="mobile-export-row">
-                    <button
-                      className="btn-secondary mobile-export-btn"
-                      onClick={handleExportDocx}
-                      disabled={isExporting}
-                    >
-                      <FileType size={14} /> DOCX
-                    </button>
-                    <button
-                      className="btn-primary-mobile mobile-export-btn"
-                      onClick={handleExportPDF}
-                      disabled={isExporting}
-                    >
-                      <Download size={14} /> Export PDF
-                    </button>
-                  </div>
-                </div>
-              )}
-              <StyleDetectedBadge />
-              <ErrorBoundary>
-                <Suspense fallback={<EditorSkeleton />}>
-                  <ResumeEditor
-                    data={resumeData}
-                    onChange={handleResumeChange}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            </div>
-            {!isCompactScreen && (
-              <div className="editor-right">
-                <div className="preview-container">
-                  <ErrorBoundary>
-                    <Suspense fallback={<PreviewSkeleton />}>
-                      <ResumeTemplate data={resumeData} />
-                    </Suspense>
-                  </ErrorBoundary>
-                </div>
-              </div>
-            )}
-          </div>
+          <EditorScreen
+            handleResumeChange={handleResumeChange}
+            exportCustomizationOverride={exportCustomizationOverride}
+            isCompactScreen={isCompactScreen}
+            showMobileResumePreview={showMobileResumePreview}
+            setShowMobileResumePreview={setShowMobileResumePreview}
+          />
         )}
-
-        {resumeData &&
-          isCompactScreen &&
-          showMobileResumePreview &&
-          (step === "editor" || (step === "score" && atsResult)) && (
-            <div
-              className="mobile-resume-overlay"
-              onClick={() => setShowMobileResumePreview(false)}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Resume preview"
-            >
-              <div
-                className="mobile-resume-sheet"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="mobile-resume-sheet-header">
-                  <h3>Resume Preview</h3>
-                  <button
-                    className="mobile-resume-close"
-                    onClick={() => setShowMobileResumePreview(false)}
-                    aria-label="Close resume preview"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-                <div className="mobile-resume-sheet-body">
-                  <div className="preview-container">
-                    <ErrorBoundary>
-                      <Suspense fallback={<PreviewSkeleton />}>
-                        <ResumeTemplate data={resumeData} />
-                      </Suspense>
-                    </ErrorBoundary>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
       </main>
 
       {/* Hidden off-screen ResumeTemplate — always mounted for PDF export */}
@@ -3708,27 +2254,17 @@ function App() {
           <ResumeManagerPanel onClose={() => setShowResumeManager(false)} />
         </Suspense>
       )}
-      {showFeedbackPanel && user?.id && userEmail && (
-        <Suspense fallback={null}>
-          <FeedbackPanel
-            onClose={() => {
-              if (pendingExportFormat) {
-                trackEvent("feedback_export_gate_cancelled", {
-                  format: pendingExportFormat,
-                });
-                setPendingExportFormat(null);
-              }
-              setShowFeedbackPanel(false);
-            }}
-            userId={user.id}
-            userEmail={userEmail}
-            isAdmin={isAdminUser}
-            initialTab={feedbackInitialTab}
-            requireFeedbackForDownload={Boolean(pendingExportFormat)}
-            onFeedbackSubmitted={handleFeedbackSubmitted}
-          />
-        </Suspense>
-      )}
+
+      {/* Export progress and feedback panel overlays */}
+      <ExportControls
+        exportToastMessage={exportToastMessage}
+        showFeedbackPanel={showFeedbackPanel}
+        setShowFeedbackPanel={setShowFeedbackPanel}
+        pendingExportFormat={pendingExportFormat}
+        setPendingExportFormat={setPendingExportFormat}
+        feedbackInitialTab={feedbackInitialTab}
+        handleFeedbackCompleted={handleFeedbackCompleted}
+      />
 
       {/* Side panel: original PDF preview */}
       {showOriginalPdf && originalPdfUrl && (

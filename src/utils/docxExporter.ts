@@ -11,46 +11,116 @@ import {
 } from "docx";
 import { saveAs } from "file-saver";
 import type { ResumeData, SectionKey } from "../types/resume";
+import type { TemplateCustomization } from "../types/templates";
+import { DEFAULT_CUSTOMIZATION } from "../types/templates";
 
-function makeLine(): Paragraph {
-  return new Paragraph({
-    border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "999999" } },
-    spacing: { after: 80 },
-  });
-}
+const cleanColor = (hex?: string) => hex ? hex.replace("#", "") : "2980b9";
 
-function bulletParagraph(text: string): Paragraph {
-  return new Paragraph({
-    bullet: { level: 0 },
-    children: [new TextRun({ text, size: 20 })],
-    spacing: { after: 40 },
-  });
-}
+// Mapping font sizes (Note: docx size uses half-points, e.g. size 24 = 12pt)
+const getFontSizes = (fontSize?: "small" | "medium" | "large") => {
+  switch (fontSize) {
+    case "small":
+      return { title: 28, heading: 20, body: 20, meta: 18 }; // title: 14pt, heading: 10pt, body: 10pt, meta: 9pt
+    case "large":
+      return { title: 36, heading: 26, body: 24, meta: 22 }; // title: 18pt, heading: 13pt, body: 12pt, meta: 11pt
+    case "medium":
+    default:
+      return { title: 32, heading: 22, body: 22, meta: 20 }; // title: 16pt, heading: 11pt, body: 11pt, meta: 10pt
+  }
+};
 
-function sectionHeading(title: string): Paragraph {
-  return new Paragraph({
-    heading: HeadingLevel.HEADING_2,
-    children: [
-      new TextRun({
-        text: title.toUpperCase(),
-        bold: true,
-        size: 22,
-        color: "2980b9",
-      }),
-    ],
-    spacing: { before: 160, after: 40 },
-  });
-}
+// Mapping paragraph and section spacing settings
+const getSpacing = (
+  lineHeight?: "compact" | "normal" | "relaxed",
+  sectionSpacing?: "tight" | "normal" | "spacious"
+) => {
+  let bodyAfter = 40;
+  let headAfter = 40;
+  switch (lineHeight) {
+    case "compact":
+      bodyAfter = 20;
+      headAfter = 20;
+      break;
+    case "relaxed":
+      bodyAfter = 60;
+      headAfter = 60;
+      break;
+    case "normal":
+    default:
+      bodyAfter = 40;
+      headAfter = 40;
+      break;
+  }
 
-export async function exportToDocx(data: ResumeData): Promise<void> {
+  let headBefore = 160;
+  switch (sectionSpacing) {
+    case "tight":
+      headBefore = 100;
+      break;
+    case "spacious":
+      headBefore = 240;
+      break;
+    case "normal":
+    default:
+      headBefore = 160;
+      break;
+  }
+
+  return { bodyAfter, headBefore, headAfter };
+};
+
+export async function exportToDocx(
+  data: ResumeData,
+  customization: TemplateCustomization = DEFAULT_CUSTOMIZATION,
+): Promise<void> {
   const paragraphs: Paragraph[] = [];
+  const font = customization.fontFamily;
+  const primary = cleanColor(customization.primaryColor);
+  const secondary = cleanColor(customization.secondaryColor);
+  const sizes = getFontSizes(customization.fontSize);
+  const spacing = getSpacing(customization.lineHeight, customization.sectionSpacing);
+
+  const makeLine = (): Paragraph => {
+    return new Paragraph({
+      border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: primary } },
+      spacing: { after: spacing.bodyAfter * 2 },
+    });
+  };
+
+  const bulletParagraph = (text: string): Paragraph => {
+    return new Paragraph({
+      bullet: { level: 0 },
+      children: [new TextRun({ text, size: sizes.body, font })],
+      spacing: { after: spacing.bodyAfter },
+    });
+  };
+
+  const sectionHeading = (title: string): Paragraph => {
+    return new Paragraph({
+      heading: HeadingLevel.HEADING_2,
+      children: [
+        new TextRun({
+          text: title.toUpperCase(),
+          bold: true,
+          size: sizes.heading,
+          color: primary,
+          font,
+        }),
+      ],
+      spacing: { before: spacing.headBefore, after: spacing.headAfter },
+    });
+  };
+
+  const getSectionLabel = (key: SectionKey, defaultLabel: string): string => {
+    return data.sectionLabels?.[key] || defaultLabel;
+  };
 
   // Header
   paragraphs.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
       children: [
-        new TextRun({ text: data.contact.name, bold: true, size: 32 }),
+        new TextRun({ text: data.contact.name, bold: true, size: sizes.title, color: primary, font }),
       ],
     }),
   );
@@ -68,11 +138,12 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
       children: [
         new TextRun({
           text: contactParts.join(" | "),
-          size: 18,
-          color: "666666",
+          size: sizes.meta,
+          color: secondary,
+          font,
         }),
       ],
-      spacing: { after: 100 },
+      spacing: { after: spacing.bodyAfter * 2.5 },
     }),
   );
 
@@ -92,11 +163,11 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
     switch (section) {
       case "summary":
         if (data.summary) {
-          paragraphs.push(sectionHeading("Summary"), makeLine());
+          paragraphs.push(sectionHeading(getSectionLabel("summary", "Summary")), makeLine());
           paragraphs.push(
             new Paragraph({
-              children: [new TextRun({ text: data.summary, size: 20 })],
-              spacing: { after: 80 },
+              children: [new TextRun({ text: data.summary, size: sizes.body, font })],
+              spacing: { after: spacing.bodyAfter * 2 },
             }),
           );
         }
@@ -104,7 +175,7 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
 
       case "education":
         if (data.education.length > 0) {
-          paragraphs.push(sectionHeading("Education"), makeLine());
+          paragraphs.push(sectionHeading(getSectionLabel("education", "Education")), makeLine());
           for (const edu of data.education) {
             paragraphs.push(
               new Paragraph({
@@ -112,8 +183,8 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
                   { type: TabStopType.RIGHT, position: TabStopPosition.MAX },
                 ],
                 children: [
-                  new TextRun({ text: edu.university, bold: true, size: 20 }),
-                  new TextRun({ text: `\t${edu.yearRange}`, size: 20 }),
+                  new TextRun({ text: edu.university, bold: true, size: sizes.body, font }),
+                  new TextRun({ text: `\t${edu.yearRange}`, size: sizes.body, font }),
                 ],
               }),
             );
@@ -123,13 +194,14 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
                   { type: TabStopType.RIGHT, position: TabStopPosition.MAX },
                 ],
                 children: [
-                  new TextRun({ text: edu.degree, italics: true, size: 20 }),
+                  new TextRun({ text: edu.degree, italics: true, size: sizes.body, font }),
                   new TextRun({
                     text: edu.cgpa ? `\t${edu.cgpa}` : "",
-                    size: 20,
+                    size: sizes.body,
+                    font,
                   }),
                 ],
-                spacing: { after: 80 },
+                spacing: { after: spacing.bodyAfter * 2 },
               }),
             );
           }
@@ -138,7 +210,7 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
 
       case "experience":
         if (data.showExperience && data.experience?.length > 0) {
-          paragraphs.push(sectionHeading("Experience"), makeLine());
+          paragraphs.push(sectionHeading(getSectionLabel("experience", "Experience")), makeLine());
           for (const exp of data.experience) {
             paragraphs.push(
               new Paragraph({
@@ -149,9 +221,10 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
                   new TextRun({
                     text: `${exp.role} — ${exp.company}`,
                     bold: true,
-                    size: 20,
+                    size: sizes.body,
+                    font,
                   }),
-                  new TextRun({ text: `\t${exp.dateRange}`, size: 20 }),
+                  new TextRun({ text: `\t${exp.dateRange}`, size: sizes.body, font }),
                 ],
               }),
             );
@@ -162,8 +235,9 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
                     new TextRun({
                       text: exp.location,
                       italics: true,
-                      size: 18,
-                      color: "666666",
+                      size: sizes.meta,
+                      color: secondary,
+                      font,
                     }),
                   ],
                 }),
@@ -178,7 +252,7 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
 
       case "projects":
         if (data.projects.length > 0) {
-          paragraphs.push(sectionHeading("Projects"), makeLine());
+          paragraphs.push(sectionHeading(getSectionLabel("projects", "Projects")), makeLine());
           for (const proj of data.projects) {
             const links: string[] = [];
             if (proj.githubLink) links.push(`Github: ${proj.githubLink}`);
@@ -186,13 +260,14 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
             paragraphs.push(
               new Paragraph({
                 children: [
-                  new TextRun({ text: proj.title, bold: true, size: 20 }),
+                  new TextRun({ text: proj.title, bold: true, size: sizes.body, font }),
                   ...(links.length > 0
                     ? [
                         new TextRun({
                           text: ` | ${links.join(" | ")}`,
-                          size: 18,
-                          color: "2980b9",
+                          size: sizes.meta,
+                          color: primary,
+                          font,
                         }),
                       ]
                     : []),
@@ -203,8 +278,8 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
               paragraphs.push(
                 new Paragraph({
                   children: [
-                    new TextRun({ text: "Tech Stack: ", bold: true, size: 18 }),
-                    new TextRun({ text: proj.techStack, size: 18 }),
+                    new TextRun({ text: "Tech Stack: ", bold: true, size: sizes.meta, font }),
+                    new TextRun({ text: proj.techStack, size: sizes.meta, font }),
                   ],
                 }),
               );
@@ -218,7 +293,7 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
 
       case "skills":
         if (data.skills.length > 0) {
-          paragraphs.push(sectionHeading("Skills"), makeLine());
+          paragraphs.push(sectionHeading(getSectionLabel("skills", "Skills")), makeLine());
           for (const skill of data.skills) {
             paragraphs.push(
               new Paragraph({
@@ -226,11 +301,12 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
                   new TextRun({
                     text: `${skill.label}: `,
                     bold: true,
-                    size: 20,
+                    size: sizes.body,
+                    font,
                   }),
-                  new TextRun({ text: skill.skills, size: 20 }),
+                  new TextRun({ text: skill.skills, size: sizes.body, font }),
                 ],
-                spacing: { after: 40 },
+                spacing: { after: spacing.bodyAfter },
               }),
             );
           }
@@ -239,7 +315,7 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
 
       case "achievements":
         if (data.achievements?.length > 0) {
-          paragraphs.push(sectionHeading("Achievements"), makeLine());
+          paragraphs.push(sectionHeading(getSectionLabel("achievements", "Achievements")), makeLine());
           for (const ach of data.achievements) {
             paragraphs.push(bulletParagraph(ach.text));
           }
@@ -248,24 +324,25 @@ export async function exportToDocx(data: ResumeData): Promise<void> {
 
       case "certificates":
         if (data.showCertificates && data.certificates?.length > 0) {
-          paragraphs.push(sectionHeading("Certificates"), makeLine());
+          paragraphs.push(sectionHeading(getSectionLabel("certificates", "Certificates")), makeLine());
           for (const cert of data.certificates) {
             paragraphs.push(
               new Paragraph({
                 children: [
-                  new TextRun({ text: cert.name, bold: true, size: 20 }),
-                  new TextRun({ text: ` — ${cert.description}`, size: 20 }),
+                  new TextRun({ text: cert.name, bold: true, size: sizes.body, font }),
+                  new TextRun({ text: ` — ${cert.description}`, size: sizes.body, font }),
                   ...(cert.link
                     ? [
                         new TextRun({
                           text: ` (${cert.link})`,
-                          size: 18,
-                          color: "2980b9",
+                          size: sizes.meta,
+                          color: primary,
+                          font,
                         }),
                       ]
                     : []),
                 ],
-                spacing: { after: 40 },
+                spacing: { after: spacing.bodyAfter },
               }),
             );
           }
