@@ -755,3 +755,21 @@
     print-color-adjust: exact;
   }
 }
+
+/* ─── Interactive Section Preview (App Screen Only) ───── */
+@media screen {
+  .preview-interactive-section {
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 4px;
+    padding: 2px;
+    margin: -2px;
+  }
+
+  .preview-interactive-section:hover {
+    outline: 2px dashed var(--resume-primary, #2980b9);
+    background-color: color-mix(in srgb, var(--resume-primary, #2980b9) 4%, transparent);
+    box-shadow: 0 0 8px rgba(41, 128, 185, 0.08);
+  }
+}

@@ -93,6 +93,9 @@ interface AppState {
   isGeneratingCoverLetter: boolean;
   privacySettings: PrivacySettings;
 
+  // ─── Active Section for Editor ──────────
+  activeSection: string | null;
+
   // ─── Undo/Redo ────────────────────────
   history: HistoryState;
 
@@ -144,6 +147,9 @@ interface AppState {
   setCoverLetter: (cl: CoverLetterData | null) => void;
   setIsGeneratingCoverLetter: (v: boolean) => void;
   setPrivacySettings: (settings: Partial<PrivacySettings>) => void;
+
+  // Active section actions
+  setActiveSection: (section: string | null) => void;
 
   // Undo/Redo actions
   undo: () => void;
@@ -239,6 +245,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   coverLetter: null,
   isGeneratingCoverLetter: false,
   privacySettings: loadPrivacySettings(),
+  activeSection: "contact",
   history: { past: [], future: [] },
 
   // ─── Simple Setters ─────────────────
@@ -345,6 +352,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ privacySettings: merged });
   },
 
+  // Active Section
+  setActiveSection: (activeSection) => set({ activeSection }),
+
   // Undo/Redo
   undo: () => {
     const { history, resumeData } = get();
@@ -396,6 +406,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeResumeId: null,
       activeResumeName: null,
       coverLetter: null,
+      activeSection: "contact",
       history: { past: [], future: [] },
       detectedStyle: null,
       originalPdfUrl: null,

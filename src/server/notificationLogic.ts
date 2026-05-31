@@ -61,7 +61,7 @@ export function wasSentToday(
 export function shouldSendReminder(
   row: NotificationRecipient,
   now: Date,
-  config: ReminderRolloutConfig,
+  _config: ReminderRolloutConfig,
 ): boolean {
   if (!row.reminder_enabled) return false;
   if (!row.user_email.trim()) return false;

@@ -13,13 +13,14 @@ import { DEFAULT_SECTION_ORDER } from "../types/resume";
 import {
   Plus,
   Trash2,
-  ChevronDown,
-  ChevronUp,
   ToggleLeft,
   ToggleRight,
   Layers,
   GripVertical,
+  AlertTriangle,
 } from "lucide-react";
+import { useAppStore } from "../store/appStore";
+import { postServerAIRequest } from "../utils/aiService";
 import {
   DndContext,
   closestCenter,
@@ -47,45 +48,7 @@ interface ResumeEditorProps {
   onChange: (data: ResumeData) => void;
 }
 
-type SectionName =
-  | "contact"
-  | "summary"
-  | "education"
-  | "experience"
-  | "projects"
-  | "skills"
-  | "achievements"
-  | "certificates"
-  | "sectionOrder";
 
-interface SectionHeaderProps {
-  title: string;
-  section: SectionName;
-  expandedSections: Set<SectionName>;
-  onToggleSection: (section: SectionName) => void;
-}
-
-const SectionHeader: React.FC<SectionHeaderProps> = ({
-  title,
-  section,
-  expandedSections,
-  onToggleSection,
-}) => (
-  <button
-    type="button"
-    className="editor-section-header"
-    onClick={() => onToggleSection(section)}
-    aria-expanded={expandedSections.has(section)}
-    aria-label={`${title} section`}
-  >
-    <h3>{title}</h3>
-    {expandedSections.has(section) ? (
-      <ChevronUp size={18} />
-    ) : (
-      <ChevronDown size={18} />
-    )}
-  </button>
-);
 
 interface SortableExperienceItemProps {
   exp: Experience;
@@ -95,6 +58,8 @@ interface SortableExperienceItemProps {
   updateExpBullet: (expIndex: number, bulletIndex: number, value: string) => void;
   removeExpBullet: (expIndex: number, bulletIndex: number) => void;
   addExpBullet: (expIndex: number) => void;
+  onEnhanceBullet: (bulletIndex: number, currentText: string) => Promise<void>;
+  optimizingBullets: Record<string, boolean>;
 }
 
 const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
@@ -105,6 +70,8 @@ const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
   updateExpBullet,
   removeExpBullet,
   addExpBullet,
+  onEnhanceBullet,
+  optimizingBullets,
 }) => {
   const id = exp.id || `exp-${index}`;
   const {
@@ -184,22 +151,40 @@ const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
       </div>
       <div className="bullets-section">
         <label>Bullet Points</label>
-        {exp.bullets.map((bullet, j) => (
-          <div key={j} className="bullet-row">
-            <textarea
-              rows={2}
-              value={bullet}
-              onChange={(e) => updateExpBullet(index, j, e.target.value)}
-              placeholder={`Bullet point ${j + 1}...`}
-            />
-            <button
-              className="btn-icon btn-danger"
-              onClick={() => removeExpBullet(index, j)}
-            >
-              <Trash2 size={12} />
-            </button>
-          </div>
-        ))}
+        {exp.bullets.map((bullet, j) => {
+          const bulletKey = `exp-${index}-bullet-${j}`;
+          const isOptimizing = optimizingBullets[bulletKey];
+          return (
+            <div key={j} className="bullet-row">
+              <textarea
+                rows={2}
+                value={bullet}
+                onChange={(e) => updateExpBullet(index, j, e.target.value)}
+                placeholder={`Bullet point ${j + 1}...`}
+                disabled={isOptimizing}
+              />
+              <div className="bullet-actions">
+                <button
+                  type="button"
+                  className="btn-icon btn-enhance"
+                  disabled={!bullet.trim() || isOptimizing}
+                  onClick={() => onEnhanceBullet(j, bullet)}
+                  title="Enhance bullet point with AI"
+                >
+                  {isOptimizing ? "⏳" : "✨"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-icon btn-danger"
+                  onClick={() => removeExpBullet(index, j)}
+                  disabled={isOptimizing}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
         <button
           className="btn-add btn-small"
           onClick={() => addExpBullet(index)}
@@ -305,6 +290,8 @@ interface SortableProjectItemProps {
   updateBullet: (projectIndex: number, bulletIndex: number, value: string) => void;
   removeBullet: (projectIndex: number, bulletIndex: number) => void;
   addBullet: (projectIndex: number) => void;
+  onEnhanceBullet: (bulletIndex: number, currentText: string) => Promise<void>;
+  optimizingBullets: Record<string, boolean>;
 }
 
 const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
@@ -315,6 +302,8 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   updateBullet,
   removeBullet,
   addBullet,
+  onEnhanceBullet,
+  optimizingBullets,
 }) => {
   const id = project.id || `proj-${index}`;
   const {
@@ -384,22 +373,40 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
       </div>
       <div className="bullets-section">
         <label>Bullet Points</label>
-        {project.bullets.map((bullet, j) => (
-          <div key={j} className="bullet-row">
-            <textarea
-              rows={2}
-              value={bullet}
-              onChange={(e) => updateBullet(index, j, e.target.value)}
-              placeholder={`Bullet point ${j + 1}...`}
-            />
-            <button
-              className="btn-icon btn-danger"
-              onClick={() => removeBullet(index, j)}
-            >
-              <Trash2 size={12} />
-            </button>
-          </div>
-        ))}
+        {project.bullets.map((bullet, j) => {
+          const bulletKey = `proj-${index}-bullet-${j}`;
+          const isOptimizing = optimizingBullets[bulletKey];
+          return (
+            <div key={j} className="bullet-row">
+              <textarea
+                rows={2}
+                value={bullet}
+                onChange={(e) => updateBullet(index, j, e.target.value)}
+                placeholder={`Bullet point ${j + 1}...`}
+                disabled={isOptimizing}
+              />
+              <div className="bullet-actions">
+                <button
+                  type="button"
+                  className="btn-icon btn-enhance"
+                  disabled={!bullet.trim() || isOptimizing}
+                  onClick={() => onEnhanceBullet(j, bullet)}
+                  title="Enhance bullet point with AI"
+                >
+                  {isOptimizing ? "⏳" : "✨"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-icon btn-danger"
+                  onClick={() => removeBullet(index, j)}
+                  disabled={isOptimizing}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
         <button className="btn-add btn-small" onClick={() => addBullet(index)}>
           <Plus size={12} /> Add Bullet
         </button>
@@ -469,18 +476,41 @@ const SortableSkillItem: React.FC<SortableSkillItemProps> = ({
 };
 
 const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
-  const [expandedSections, setExpandedSections] = useState<Set<SectionName>>(
-    new Set([
-      "contact",
-      "summary",
-      "education",
-      "experience",
-      "projects",
-      "skills",
-      "achievements",
-      "certificates",
-    ]),
-  );
+  const activeSection = useAppStore((s) => s.activeSection) || "contact";
+  const setActiveSection = useAppStore((s) => s.setActiveSection);
+  const templateId = useAppStore((s) => s.templateId);
+
+  const [optimizingBullets, setOptimizingBullets] = useState<Record<string, boolean>>({});
+  const jdText = useAppStore((s) => s.jdText);
+
+  const handleEnhanceBullet = async (
+    key: string,
+    currentText: string,
+    onSuccess: (newText: string) => void
+  ) => {
+    if (!currentText.trim()) return;
+    setOptimizingBullets((prev) => ({ ...prev, [key]: true }));
+    try {
+      const response = await postServerAIRequest<
+        { bulletText: string; jobDescription?: string },
+        { optimizedText: string }
+      >(
+        "/api/optimize/bullet",
+        {
+          bulletText: currentText,
+          jobDescription: jdText || undefined,
+        }
+      );
+      if (response && response.optimizedText) {
+        onSuccess(response.optimizedText);
+      }
+    } catch (error) {
+      console.error("Failed to enhance bullet:", error);
+      alert(error instanceof Error ? error.message : "Failed to optimize bullet point.");
+    } finally {
+      setOptimizingBullets((prev) => ({ ...prev, [key]: false }));
+    }
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -534,14 +564,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
     }
   }, [data.experience, data.education, data.projects, data.skills, onChange]);
 
-  const toggleSection = (section: SectionName) => {
-    setExpandedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(section)) next.delete(section);
-      else next.add(section);
-      return next;
-    });
-  };
+
 
   const updateContact = (field: string, value: string) => {
     onChange({ ...data, contact: { ...data.contact, [field]: value } });
@@ -850,460 +873,459 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
     onChange({ ...data, sectionOrder: newOrder });
   };
 
+  const tabs = [
+    { id: "contact", label: "Contact" },
+    { id: "summary", label: "Summary" },
+    { id: "experience", label: "Experience" },
+    { id: "education", label: "Education" },
+    { id: "projects", label: "Projects" },
+    { id: "skills", label: "Skills" },
+    { id: "achievements", label: "Achievements" },
+    { id: "certificates", label: "Certificates" },
+    { id: "sectionOrder", label: "Layout" },
+  ];
+
   return (
     <div className="resume-editor" role="form" aria-label="Resume editor form">
       <h2 className="editor-title">Resume Editor</h2>
 
       <CompletenessBar data={data} />
 
-      {/* Section Order */}
-      <div className="editor-section">
-        <button
-          type="button"
-          className="editor-section-header"
-          onClick={() => toggleSection("sectionOrder")}
-          aria-expanded={expandedSections.has("sectionOrder")}
-          aria-label="Section Order"
-        >
-          <h3>
-            <Layers
-              size={16}
-              style={{ marginRight: 6, verticalAlign: "middle" }}
-            />
-            Section Order
-          </h3>
-          {expandedSections.has("sectionOrder") ? (
-            <ChevronUp size={18} />
-          ) : (
-            <ChevronDown size={18} />
-          )}
-        </button>
-        {expandedSections.has("sectionOrder") && (
-          <div className="editor-fields">
-            <Suspense fallback={<div style={{ padding: 8 }}>Loading...</div>}>
-              <DnDSectionOrder
-                sectionOrder={sectionOrder}
-                onChange={handleSectionOrderChange}
-                sectionLabels={data.sectionLabels}
-                onLabelChange={handleSectionLabelChange}
-                onDelete={handleSectionDelete}
-              />
-            </Suspense>
-          </div>
-        )}
+      {/* Editor Tabs Navigation */}
+      <div className="editor-tabs-nav">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`editor-tab-btn ${activeSection === tab.id ? "active" : ""}`}
+            onClick={() => setActiveSection(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Contact Information */}
-      <div className="editor-section">
-        <SectionHeader
-          title="Contact Information"
-          section="contact"
-          expandedSections={expandedSections}
-          onToggleSection={toggleSection}
-        />
-        {expandedSections.has("contact") && (
-          <div className="editor-fields">
-            <div className="field-group">
-              <label>Full Name</label>
-              <input
-                type="text"
-                value={data.contact.name}
-                onChange={(e) => updateContact("name", e.target.value)}
-              />
-            </div>
-            <div className="field-row">
-              <div className="field-group">
-                <label>Phone</label>
-                <input
-                  type="text"
-                  value={data.contact.phone}
-                  onChange={(e) => updateContact("phone", e.target.value)}
-                />
-              </div>
-              <div className="field-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  value={data.contact.email}
-                  onChange={(e) => updateContact("email", e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="field-row">
-              <div className="field-group">
-                <label>LinkedIn</label>
-                <input
-                  type="text"
-                  value={data.contact.linkedin}
-                  onChange={(e) => updateContact("linkedin", e.target.value)}
-                />
-              </div>
-              <div className="field-group">
-                <label>GitHub</label>
-                <input
-                  type="text"
-                  value={data.contact.github}
-                  onChange={(e) => updateContact("github", e.target.value)}
-                />
-              </div>
-              <div className="field-group">
-                <label>Portfolio</label>
-                <input
-                  type="text"
-                  value={data.contact.portfolio}
-                  onChange={(e) => updateContact("portfolio", e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Summary */}
-      <div className="editor-section">
-        <SectionHeader
-          title="Summary"
-          section="summary"
-          expandedSections={expandedSections}
-          onToggleSection={toggleSection}
-        />
-        {expandedSections.has("summary") && (
-          <div className="editor-fields">
-            <textarea
-              rows={4}
-              value={data.summary}
-              onChange={(e) => updateSummary(e.target.value)}
-              placeholder="Professional summary..."
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Education */}
-      <div className="editor-section">
-        <SectionHeader
-          title="Education"
-          section="education"
-          expandedSections={expandedSections}
-          onToggleSection={toggleSection}
-        />
-        {expandedSections.has("education") && (
-          <div className="editor-fields">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEndEducation}
-            >
-              <SortableContext
-                items={(data.education || []).map((edu) => edu.id || "")}
-                strategy={verticalListSortingStrategy}
-              >
-                {data.education.map((edu, i) => (
-                  <SortableEducationItem
-                    key={edu.id || i}
-                    edu={edu}
-                    index={i}
-                    updateEducation={updateEducation}
-                    removeEducation={removeEducation}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-            <button className="btn-add" onClick={addEducation}>
-              <Plus size={14} /> Add Education
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Experience */}
-      <div className="editor-section">
-        <div
-          className="editor-section-header"
-          onClick={() => toggleSection("experience")}
-        >
-          <h3>Experience</h3>
-          <div className="section-header-right">
-            <button
-              className={`toggle-cert-btn ${data.showExperience ? "on" : "off"}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleExperience();
-              }}
-              title={
-                data.showExperience
-                  ? "Hide experience on resume"
-                  : "Show experience on resume"
-              }
-            >
-              {data.showExperience ? (
-                <ToggleRight size={20} />
-              ) : (
-                <ToggleLeft size={20} />
-              )}
-              <span className="toggle-label-text">
-                {data.showExperience ? "Visible" : "Hidden"}
-              </span>
-            </button>
-            {expandedSections.has("experience") ? (
-              <ChevronUp size={18} />
-            ) : (
-              <ChevronDown size={18} />
-            )}
-          </div>
+      {/* ATS Formatting Warning */}
+      {templateId === "portfolio" && (
+        <div className="ats-layout-warning">
+          <AlertTriangle size={16} className="warning-icon" />
+          <span>
+            <strong>ATS Formatting Warning:</strong> Two-column layouts (like the Portfolio template) may be parsed incorrectly/out of order by older ATS portals. Consider using the <strong>ATS</strong> template for online portal applications.
+          </span>
         </div>
-        {expandedSections.has("experience") && (
-          <div className="editor-fields">
-            {!data.showExperience && (
-              <div className="toggle-hint">
-                Experience section is hidden on the resume. Toggle it on to
-                show.
+      )}
+
+      {/* Active Tab Content */}
+      <div className="editor-tab-content">
+        {activeSection === "contact" && (
+          <div className="editor-section">
+            <div className="editor-fields">
+              <div className="tab-section-header">
+                <h3>Contact Information</h3>
               </div>
-            )}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEndExperience}
-            >
-              <SortableContext
-                items={(data.experience || []).map((exp) => exp.id || "")}
-                strategy={verticalListSortingStrategy}
-              >
-                {(data.experience || []).map((exp, i) => (
-                  <SortableExperienceItem
-                    key={exp.id || i}
-                    exp={exp}
-                    index={i}
-                    updateExperience={updateExperience}
-                    removeExperience={removeExperience}
-                    updateExpBullet={updateExpBullet}
-                    removeExpBullet={removeExpBullet}
-                    addExpBullet={addExpBullet}
+              <div className="field-group">
+                <label>Full Name</label>
+                <input
+                  type="text"
+                  value={data.contact.name}
+                  onChange={(e) => updateContact("name", e.target.value)}
+                />
+              </div>
+              <div className="field-row">
+                <div className="field-group">
+                  <label>Phone</label>
+                  <input
+                    type="text"
+                    value={data.contact.phone}
+                    onChange={(e) => updateContact("phone", e.target.value)}
                   />
-                ))}
-              </SortableContext>
-            </DndContext>
-            <button className="btn-add" onClick={addExperience}>
-              <Plus size={14} /> Add Experience
-            </button>
+                </div>
+                <div className="field-group">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={data.contact.email}
+                    onChange={(e) => updateContact("email", e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="field-row">
+                <div className="field-group">
+                  <label>LinkedIn</label>
+                  <input
+                    type="text"
+                    value={data.contact.linkedin}
+                    onChange={(e) => updateContact("linkedin", e.target.value)}
+                  />
+                </div>
+                <div className="field-group">
+                  <label>GitHub</label>
+                  <input
+                    type="text"
+                    value={data.contact.github}
+                    onChange={(e) => updateContact("github", e.target.value)}
+                  />
+                </div>
+                <div className="field-group">
+                  <label>Portfolio</label>
+                  <input
+                    type="text"
+                    value={data.contact.portfolio}
+                    onChange={(e) => updateContact("portfolio", e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Projects */}
-      <div className="editor-section">
-        <SectionHeader
-          title="Projects"
-          section="projects"
-          expandedSections={expandedSections}
-          onToggleSection={toggleSection}
-        />
-        {expandedSections.has("projects") && (
-          <div className="editor-fields">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEndProject}
-            >
-              <SortableContext
-                items={(data.projects || []).map((proj) => proj.id || "")}
-                strategy={verticalListSortingStrategy}
-              >
-                {data.projects.map((project, i) => (
-                  <SortableProjectItem
-                    key={project.id || i}
-                    project={project}
-                    index={i}
-                    updateProject={updateProject}
-                    removeProject={removeProject}
-                    updateBullet={updateBullet}
-                    removeBullet={removeBullet}
-                    addBullet={addBullet}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-            <button className="btn-add" onClick={addProject}>
-              <Plus size={14} /> Add Project
-            </button>
+        {activeSection === "summary" && (
+          <div className="editor-section">
+            <div className="editor-fields">
+              <div className="tab-section-header">
+                <h3>Summary</h3>
+              </div>
+              <textarea
+                rows={6}
+                value={data.summary}
+                onChange={(e) => updateSummary(e.target.value)}
+                placeholder="Professional summary..."
+              />
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Skills */}
-      <div className="editor-section">
-        <SectionHeader
-          title="Skills"
-          section="skills"
-          expandedSections={expandedSections}
-          onToggleSection={toggleSection}
-        />
-        {expandedSections.has("skills") && (
-          <div className="editor-fields">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEndSkill}
-            >
-              <SortableContext
-                items={(data.skills || []).map((skill) => skill.id || "")}
-                strategy={verticalListSortingStrategy}
+        {activeSection === "education" && (
+          <div className="editor-section">
+            <div className="editor-fields">
+              <div className="tab-section-header">
+                <h3>Education History</h3>
+              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEndEducation}
               >
-                {data.skills.map((skill, i) => (
-                  <SortableSkillItem
-                    key={skill.id || i}
-                    skill={skill}
-                    index={i}
-                    updateSkill={updateSkill}
-                    removeSkill={removeSkill}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-            <button className="btn-add" onClick={addSkill}>
-              <Plus size={14} /> Add Skill Category
-            </button>
+                <SortableContext
+                  items={(data.education || []).map((edu) => edu.id || "")}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {data.education.map((edu, i) => (
+                    <SortableEducationItem
+                      key={edu.id || i}
+                      edu={edu}
+                      index={i}
+                      updateEducation={updateEducation}
+                      removeEducation={removeEducation}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+              <button className="btn-add" onClick={addEducation}>
+                <Plus size={14} /> Add Education
+              </button>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Achievements */}
-      <div className="editor-section">
-        <SectionHeader
-          title="Achievements"
-          section="achievements"
-          expandedSections={expandedSections}
-          onToggleSection={toggleSection}
-        />
-        {expandedSections.has("achievements") && (
-          <div className="editor-fields">
-            {data.achievements.map((ach, i) => (
-              <div key={i} className="editor-card">
-                <div className="card-header">
-                  <span className="card-number">#{i + 1}</span>
+        {activeSection === "experience" && (
+          <div className="editor-section">
+            <div className="editor-fields">
+              <div className="tab-section-header">
+                <h3>Work Experience</h3>
+                <button
+                  type="button"
+                  className={`toggle-cert-btn ${data.showExperience ? "on" : "off"}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleExperience();
+                  }}
+                  title={
+                    data.showExperience
+                      ? "Hide experience on resume"
+                      : "Show experience on resume"
+                  }
+                >
+                  {data.showExperience ? (
+                    <ToggleRight size={20} />
+                  ) : (
+                    <ToggleLeft size={20} />
+                  )}
+                  <span className="toggle-label-text">
+                    {data.showExperience ? "Visible" : "Hidden"}
+                  </span>
+                </button>
+              </div>
+              {!data.showExperience && (
+                <div className="toggle-hint">
+                  Experience section is hidden on the resume. Toggle it on to
+                  show.
+                </div>
+              )}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEndExperience}
+              >
+                <SortableContext
+                  items={(data.experience || []).map((exp) => exp.id || "")}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {(data.experience || []).map((exp, i) => (
+                    <SortableExperienceItem
+                      key={exp.id || i}
+                      exp={exp}
+                      index={i}
+                      updateExperience={updateExperience}
+                      removeExperience={removeExperience}
+                      updateExpBullet={updateExpBullet}
+                      removeExpBullet={removeExpBullet}
+                      addExpBullet={addExpBullet}
+                      onEnhanceBullet={(bulletIndex, currentText) =>
+                        handleEnhanceBullet(
+                          `exp-${i}-bullet-${bulletIndex}`,
+                          currentText,
+                          (newText) => updateExpBullet(i, bulletIndex, newText)
+                        )
+                      }
+                      optimizingBullets={optimizingBullets}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+              <button className="btn-add" onClick={addExperience}>
+                <Plus size={14} /> Add Experience
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "projects" && (
+          <div className="editor-section">
+            <div className="editor-fields">
+              <div className="tab-section-header">
+                <h3>Projects</h3>
+              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEndProject}
+              >
+                <SortableContext
+                  items={(data.projects || []).map((proj) => proj.id || "")}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {data.projects.map((project, i) => (
+                    <SortableProjectItem
+                      key={project.id || i}
+                      project={project}
+                      index={i}
+                      updateProject={updateProject}
+                      removeProject={removeProject}
+                      updateBullet={updateBullet}
+                      removeBullet={removeBullet}
+                      addBullet={addBullet}
+                      onEnhanceBullet={(bulletIndex, currentText) =>
+                        handleEnhanceBullet(
+                          `proj-${i}-bullet-${bulletIndex}`,
+                          currentText,
+                          (newText) => updateBullet(i, bulletIndex, newText)
+                        )
+                      }
+                      optimizingBullets={optimizingBullets}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+              <button className="btn-add" onClick={addProject}>
+                <Plus size={14} /> Add Project
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "skills" && (
+          <div className="editor-section">
+            <div className="editor-fields">
+              <div className="tab-section-header">
+                <h3>Skills</h3>
+              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEndSkill}
+              >
+                <SortableContext
+                  items={(data.skills || []).map((skill) => skill.id || "")}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {data.skills.map((skill, i) => (
+                    <SortableSkillItem
+                      key={skill.id || i}
+                      skill={skill}
+                      index={i}
+                      updateSkill={updateSkill}
+                      removeSkill={removeSkill}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+              <button className="btn-add" onClick={addSkill}>
+                <Plus size={14} /> Add Skill Category
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "achievements" && (
+          <div className="editor-section">
+            <div className="editor-fields">
+              <div className="tab-section-header">
+                <h3>Achievements</h3>
+              </div>
+              {data.achievements.map((ach, i) => (
+                <div key={i} className="editor-card">
+                  <div className="card-header">
+                    <span className="card-number">#{i + 1}</span>
+                    <button
+                      className="btn-icon btn-danger"
+                      onClick={() => removeAchievement(i)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <div className="field-group">
+                    <label>Description</label>
+                    <textarea
+                      rows={2}
+                      value={ach.text}
+                      onChange={(e) =>
+                        updateAchievement(i, "text", e.target.value)
+                      }
+                      placeholder="Achievement description..."
+                    />
+                  </div>
+                  <div className="field-group">
+                    <label>GitHub Link (optional)</label>
+                    <input
+                      type="text"
+                      value={ach.githubLink || ""}
+                      onChange={(e) =>
+                        updateAchievement(i, "githubLink", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+              ))}
+              <button className="btn-add" onClick={addAchievement}>
+                <Plus size={14} /> Add Achievement
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "certificates" && (
+          <div className="editor-section">
+            <div className="editor-fields">
+              <div className="tab-section-header">
+                <h3>Certificates</h3>
+                <button
+                  type="button"
+                  className={`toggle-cert-btn ${data.showCertificates ? "on" : "off"}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleCertificates();
+                  }}
+                  title={
+                    data.showCertificates
+                      ? "Hide certificates on resume"
+                      : "Show certificates on resume"
+                  }
+                >
+                  {data.showCertificates ? (
+                    <ToggleRight size={20} />
+                  ) : (
+                    <ToggleLeft size={20} />
+                  )}
+                  <span className="toggle-label-text">
+                    {data.showCertificates ? "Visible" : "Hidden"}
+                  </span>
+                </button>
+              </div>
+              {!data.showCertificates && (
+                <div className="toggle-hint">
+                  Certificates section is hidden on the resume. Toggle it on to
+                  show.
+                </div>
+              )}
+              {(data.certificates || []).map((cert, i) => (
+                <div key={i} className="cert-editor-row">
+                  <div className="cert-fields">
+                    <input
+                      type="text"
+                      value={cert.name}
+                      onChange={(e) =>
+                        updateCertificate(i, "name", e.target.value)
+                      }
+                      placeholder="Certificate Name"
+                      className="cert-name-input"
+                    />
+                    <input
+                      type="text"
+                      value={cert.description}
+                      onChange={(e) =>
+                        updateCertificate(i, "description", e.target.value)
+                      }
+                      placeholder="Issuer / Description"
+                      className="cert-desc-input"
+                    />
+                    <input
+                      type="text"
+                      value={cert.link}
+                      onChange={(e) =>
+                        updateCertificate(i, "link", e.target.value)
+                      }
+                      placeholder="https://certificate-link.com"
+                      className="cert-link-input"
+                    />
+                  </div>
                   <button
                     className="btn-icon btn-danger"
-                    onClick={() => removeAchievement(i)}
+                    onClick={() => removeCertificate(i)}
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
-                <div className="field-group">
-                  <label>Description</label>
-                  <textarea
-                    rows={2}
-                    value={ach.text}
-                    onChange={(e) =>
-                      updateAchievement(i, "text", e.target.value)
-                    }
-                    placeholder="Achievement description..."
-                  />
-                </div>
-                <div className="field-group">
-                  <label>GitHub Link (optional)</label>
-                  <input
-                    type="text"
-                    value={ach.githubLink || ""}
-                    onChange={(e) =>
-                      updateAchievement(i, "githubLink", e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-            ))}
-            <button className="btn-add" onClick={addAchievement}>
-              <Plus size={14} /> Add Achievement
-            </button>
+              ))}
+              <button className="btn-add" onClick={addCertificate}>
+                <Plus size={14} /> Add Certificate
+              </button>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Certificates */}
-      <div className="editor-section">
-        <div
-          className="editor-section-header"
-          onClick={() => toggleSection("certificates")}
-        >
-          <h3>Certificates</h3>
-          <div className="section-header-right">
-            <button
-              className={`toggle-cert-btn ${data.showCertificates ? "on" : "off"}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleCertificates();
-              }}
-              title={
-                data.showCertificates
-                  ? "Hide certificates on resume"
-                  : "Show certificates on resume"
-              }
-            >
-              {data.showCertificates ? (
-                <ToggleRight size={20} />
-              ) : (
-                <ToggleLeft size={20} />
-              )}
-              <span className="toggle-label-text">
-                {data.showCertificates ? "Visible" : "Hidden"}
-              </span>
-            </button>
-            {expandedSections.has("certificates") ? (
-              <ChevronUp size={18} />
-            ) : (
-              <ChevronDown size={18} />
-            )}
-          </div>
-        </div>
-        {expandedSections.has("certificates") && (
-          <div className="editor-fields">
-            {!data.showCertificates && (
-              <div className="toggle-hint">
-                Certificates section is hidden on the resume. Toggle it on to
-                show.
+        {activeSection === "sectionOrder" && (
+          <div className="editor-section">
+            <div className="editor-fields">
+              <div className="tab-section-header">
+                <h3>
+                  <Layers
+                    size={16}
+                    style={{ marginRight: 6, verticalAlign: "middle" }}
+                  />
+                  Section Order Layout
+                </h3>
               </div>
-            )}
-            {(data.certificates || []).map((cert, i) => (
-              <div key={i} className="cert-editor-row">
-                <div className="cert-fields">
-                  <input
-                    type="text"
-                    value={cert.name}
-                    onChange={(e) =>
-                      updateCertificate(i, "name", e.target.value)
-                    }
-                    placeholder="Certificate Name"
-                    className="cert-name-input"
-                  />
-                  <input
-                    type="text"
-                    value={cert.description}
-                    onChange={(e) =>
-                      updateCertificate(i, "description", e.target.value)
-                    }
-                    placeholder="Issuer / Description"
-                    className="cert-desc-input"
-                  />
-                  <input
-                    type="text"
-                    value={cert.link}
-                    onChange={(e) =>
-                      updateCertificate(i, "link", e.target.value)
-                    }
-                    placeholder="https://certificate-link.com"
-                    className="cert-link-input"
-                  />
-                </div>
-                <button
-                  className="btn-icon btn-danger"
-                  onClick={() => removeCertificate(i)}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-            <button className="btn-add" onClick={addCertificate}>
-              <Plus size={14} /> Add Certificate
-            </button>
+              <Suspense fallback={<div style={{ padding: 8 }}>Loading...</div>}>
+                <DnDSectionOrder
+                  sectionOrder={sectionOrder}
+                  onChange={handleSectionOrderChange}
+                  sectionLabels={data.sectionLabels}
+                  onLabelChange={handleSectionLabelChange}
+                  onDelete={handleSectionDelete}
+                />
+              </Suspense>
+            </div>
           </div>
         )}
       </div>

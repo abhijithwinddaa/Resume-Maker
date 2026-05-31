@@ -30,6 +30,28 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
   ({ data, highlightKeywords = [], customizationOverride, forExport }, ref) => {
     const templateId = useAppStore((s) => s.templateId);
     const customization = useAppStore((s) => s.customization);
+    const setActiveSection = useAppStore((s) => s.setActiveSection);
+
+    const getInteractiveProps = (sectionKey: string) => {
+      if (forExport) return {};
+      return {
+        className: "preview-interactive-section",
+        onClick: (e: React.MouseEvent) => {
+          if (
+            (e.target as HTMLElement).tagName === "A" ||
+            (e.target as HTMLElement).closest("a")
+          ) {
+            return;
+          }
+          setActiveSection(sectionKey);
+          
+          const editorElement = document.querySelector(".resume-editor");
+          if (editorElement) {
+            editorElement.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        },
+      };
+    };
 
     const resolvedCustomization = useMemo(
       () => ({ ...customization, ...(customizationOverride || {}) }),
@@ -98,7 +120,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
       switch (key) {
         case "summary":
           return (
-            <section key="summary" className="resume-section">
+            <section key="summary" {...getInteractiveProps("summary")} className="resume-section">
               <h2 className="section-title">{getSectionTitle("summary")}</h2>
               <div className="section-divider"></div>
               <p className="summary-text">{highlightText(data.summary)}</p>
@@ -107,7 +129,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
 
         case "education":
           return (
-            <section key="education" className="resume-section">
+            <section key="education" {...getInteractiveProps("education")} className="resume-section">
               <h2 className="section-title">{getSectionTitle("education")}</h2>
               <div className="section-divider"></div>
               {data.education.map((edu, i) => (
@@ -135,7 +157,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
           )
             return null;
           return (
-            <section key="experience" className="resume-section">
+            <section key="experience" {...getInteractiveProps("experience")} className="resume-section">
               <h2 className="section-title">{getSectionTitle("experience")}</h2>
               <div className="section-divider"></div>
               {data.experience.map((exp, i) => (
@@ -163,7 +185,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
 
         case "projects":
           return (
-            <section key="projects" className="resume-section">
+            <section key="projects" {...getInteractiveProps("projects")} className="resume-section">
               <h2 className="section-title">{getSectionTitle("projects")}</h2>
               <div className="section-divider"></div>
               {data.projects.map((project, i) => (
@@ -213,7 +235,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
 
         case "skills":
           return (
-            <section key="skills" className="resume-section">
+            <section key="skills" {...getInteractiveProps("skills")} className="resume-section">
               <h2 className="section-title">{getSectionTitle("skills")}</h2>
               <div className="section-divider"></div>
               <ul className="skills-list">
@@ -230,7 +252,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
         case "achievements":
           if (!data.achievements || data.achievements.length === 0) return null;
           return (
-            <section key="achievements" className="resume-section">
+            <section key="achievements" {...getInteractiveProps("achievements")} className="resume-section">
               <h2 className="section-title">
                 {getSectionTitle("achievements")}
               </h2>
@@ -266,7 +288,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
           )
             return null;
           return (
-            <section key="certificates" className="resume-section">
+            <section key="certificates" {...getInteractiveProps("certificates")} className="resume-section">
               <h2 className="section-title">
                 {getSectionTitle("certificates")}
               </h2>
@@ -349,7 +371,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
           ref={ref}
           style={rootStyle}
         >
-          <div className="resume-header portfolio-header">
+          <div className="resume-header portfolio-header" {...getInteractiveProps("contact")}>
             <h1 className="resume-name">{data.contact.name}</h1>
             {headline && <p className="portfolio-subtitle">{headline}</p>}
 
@@ -415,7 +437,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
           <div className="portfolio-layout">
             <main className="portfolio-main">
               {data.summary.trim() && (
-                <section className="resume-section">
+                <section {...getInteractiveProps("summary")} className="resume-section">
                   <h2 className="section-title">
                     {getSectionTitle("summary")}
                   </h2>
@@ -424,7 +446,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               )}
 
               {projects.length > 0 && (
-                <section className="resume-section">
+                <section {...getInteractiveProps("projects")} className="resume-section">
                   <h2 className="section-title">
                     {getSectionTitle("projects")}
                   </h2>
@@ -489,7 +511,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               )}
 
               {data.showExperience && experienceEntries.length > 0 && (
-                <section className="resume-section">
+                <section {...getInteractiveProps("experience")} className="resume-section">
                   <h2 className="section-title">
                     {getSectionTitle("experience")}
                   </h2>
@@ -524,7 +546,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               )}
 
               {achievements.length > 0 && (
-                <section className="resume-section">
+                <section {...getInteractiveProps("achievements")} className="resume-section">
                   <h2 className="section-title">
                     {getSectionTitle("achievements")}
                   </h2>
@@ -552,7 +574,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               )}
 
               {data.showCertificates && certificates.length > 0 && (
-                <section className="resume-section">
+                <section {...getInteractiveProps("certificates")} className="resume-section">
                   <h2 className="section-title">
                     {getSectionTitle("certificates")}
                   </h2>
@@ -585,7 +607,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
 
             <aside className="portfolio-sidebar">
               {skillEntries.length > 0 && (
-                <section className="resume-section">
+                <section {...getInteractiveProps("skills")} className="resume-section">
                   <h2 className="section-title">{getSectionTitle("skills")}</h2>
                   <div className="portfolio-skills-list">
                     {skillEntries.map((skill, i) => (
@@ -601,7 +623,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               )}
 
               {educationEntries.length > 0 && (
-                <section className="resume-section">
+                <section {...getInteractiveProps("education")} className="resume-section">
                   <h2 className="section-title">
                     {getSectionTitle("education")}
                   </h2>
@@ -641,7 +663,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
         style={rootStyle}
       >
         {/* Header */}
-        <div className="resume-header">
+        <div className="resume-header" {...getInteractiveProps("contact")}>
           <h1 className="resume-name">{data.contact.name}</h1>
           <div className="resume-contact">
             <span>{data.contact.phone}</span>
