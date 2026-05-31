@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { postServerAIRequest } from "../utils/aiService";
+import FormatToolbar from "./FormatToolbar";
 import {
   DndContext,
   closestCenter,
@@ -151,6 +152,7 @@ const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
       </div>
       <div className="bullets-section">
         <label>Bullet Points</label>
+        <FormatToolbar />
         {exp.bullets.map((bullet, j) => {
           const bulletKey = `exp-${index}-bullet-${j}`;
           const isOptimizing = optimizingBullets[bulletKey];
@@ -373,6 +375,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
       </div>
       <div className="bullets-section">
         <label>Bullet Points</label>
+        <FormatToolbar />
         {project.bullets.map((bullet, j) => {
           const bulletKey = `proj-${index}-bullet-${j}`;
           const isOptimizing = optimizingBullets[bulletKey];
@@ -985,6 +988,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
               <div className="tab-section-header">
                 <h3>Summary</h3>
               </div>
+              <FormatToolbar />
               <textarea
                 rows={6}
                 value={data.summary}
@@ -1196,6 +1200,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                   </div>
                   <div className="field-group">
                     <label>Description</label>
+                    <FormatToolbar />
                     <textarea
                       rows={2}
                       value={ach.text}

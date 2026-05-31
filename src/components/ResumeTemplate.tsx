@@ -4,6 +4,7 @@ import type { ResumeData, SectionKey } from "../types/resume";
 import { DEFAULT_SECTION_LABELS } from "../types/resume";
 import type { TemplateCustomization } from "../types/templates";
 import { useAppStore } from "../store/appStore";
+import { formatTextToReact } from "../utils/textFormatter";
 import "./ResumeTemplate.css";
 
 interface ResumeTemplateProps {
@@ -72,29 +73,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
         }) as React.CSSProperties,
       [resolvedCustomization],
     );
-    const highlightText = (text: string): React.ReactNode => {
-      if (highlightKeywords.length === 0) return text;
-
-      // Sort keywords by length (longest first) to match longer phrases first
-      const sorted = [...highlightKeywords].sort((a, b) => b.length - a.length);
-      const escapedKeywords = sorted.map((k) =>
-        k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-      );
-      const pattern = new RegExp(`(${escapedKeywords.join("|")})`, "gi");
-
-      const parts = text.split(pattern);
-      return parts.map((part, i) => {
-        const isHighlighted = escapedKeywords.some((k) =>
-          new RegExp(`^${k}$`, "i").test(part),
-        );
-        return isHighlighted ? (
-          <mark key={i} className="keyword-highlight">
-            {part}
-          </mark>
-        ) : (
-          part
-        );
-      });
+    const formatText = (text: string): React.ReactNode => {
+      if (!text) return text;
+      return formatTextToReact(text, highlightKeywords.length > 0 ? highlightKeywords : undefined);
     };
 
     const sectionOrder: SectionKey[] =
@@ -122,7 +103,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
             <section key="summary" {...getInteractiveProps("summary")} className="resume-section">
               <h2 className="section-title">{getSectionTitle("summary")}</h2>
               <div className="section-divider"></div>
-              <p className="summary-text">{highlightText(data.summary)}</p>
+              <p className="summary-text">{formatText(data.summary)}</p>
             </section>
           );
 
@@ -174,7 +155,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                   )}
                   <ul className="experience-bullets">
                     {exp.bullets.map((bullet, j) => (
-                      <li key={j}>{highlightText(bullet)}</li>
+                      <li key={j}>{formatText(bullet)}</li>
                     ))}
                   </ul>
                 </div>
@@ -220,11 +201,11 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                   </div>
                   <div className="project-tech">
                     <strong>Tech Stack:</strong>{" "}
-                    {highlightText(project.techStack)}
+                    {formatText(project.techStack)}
                   </div>
                   <ul className="project-bullets">
                     {project.bullets.map((bullet, j) => (
-                      <li key={j}>{highlightText(bullet)}</li>
+                      <li key={j}>{formatText(bullet)}</li>
                     ))}
                   </ul>
                 </div>
@@ -241,7 +222,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                 {data.skills.map((skill, i) => (
                   <li key={i}>
                     <strong>{skill.label}:</strong>{" "}
-                    {highlightText(skill.skills)}
+                    {formatText(skill.skills)}
                   </li>
                 ))}
               </ul>
@@ -259,7 +240,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               <ul className="achievements-list">
                 {data.achievements.map((ach, i) => (
                   <li key={i}>
-                    {highlightText(ach.text)}
+                    {formatText(ach.text)}
                     {ach.githubLink && (
                       <>
                         {" "}
@@ -440,7 +421,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                   <h2 className="section-title">
                     {getSectionTitle("summary")}
                   </h2>
-                  <p className="summary-text">{highlightText(data.summary)}</p>
+                  <p className="summary-text">{formatText(data.summary)}</p>
                 </section>
               )}
 
@@ -493,14 +474,14 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                         {project.techStack.trim() && (
                           <div className="project-tech portfolio-project-tech">
                             <strong>Tech Stack:</strong>{" "}
-                            {highlightText(project.techStack)}
+                            {formatText(project.techStack)}
                           </div>
                         )}
                         <ul className="project-bullets portfolio-project-bullets">
                           {project.bullets
                             .filter((bullet) => bullet.trim())
                             .map((bullet, j) => (
-                              <li key={j}>{highlightText(bullet)}</li>
+                              <li key={j}>{formatText(bullet)}</li>
                             ))}
                         </ul>
                       </div>
@@ -536,7 +517,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                         {exp.bullets
                           .filter((bullet) => bullet.trim())
                           .map((bullet, j) => (
-                            <li key={j}>{highlightText(bullet)}</li>
+                            <li key={j}>{formatText(bullet)}</li>
                           ))}
                       </ul>
                     </div>
@@ -552,7 +533,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                   <ul className="achievements-list portfolio-achievements-list">
                     {achievements.map((achievement, i) => (
                       <li key={i}>
-                        {highlightText(achievement.text)}
+                        {formatText(achievement.text)}
                         {achievement.githubLink && (
                           <>
                             {" "}
@@ -613,7 +594,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                       <div key={i} className="portfolio-skills-group">
                         <p className="portfolio-skills-label">{skill.label}</p>
                         <p className="portfolio-skills-text">
-                          {highlightText(skill.skills)}
+                          {formatText(skill.skills)}
                         </p>
                       </div>
                     ))}

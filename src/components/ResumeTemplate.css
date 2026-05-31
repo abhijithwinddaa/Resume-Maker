@@ -243,6 +243,17 @@
   border-radius: 2px;
 }
 
+/* User highlight (==text==) */
+.user-highlight {
+  background: rgba(254, 249, 195, 0.7);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.dark .user-highlight {
+  background: rgba(253, 230, 138, 0.25);
+}
+
 /* Certificates */
 .certificates-list {
   margin: 0;

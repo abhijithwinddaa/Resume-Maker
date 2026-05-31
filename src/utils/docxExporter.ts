@@ -5,6 +5,7 @@ import {
   HeadingLevel,
   AlignmentType,
   BorderStyle,
+  ShadingType,
   TabStopPosition,
   TabStopType,
   Packer,
@@ -13,6 +14,7 @@ import { saveAs } from "file-saver";
 import type { ResumeData, SectionKey } from "../types/resume";
 import type { TemplateCustomization } from "../types/templates";
 import { DEFAULT_CUSTOMIZATION } from "../types/templates";
+import { tokenizeText } from "./textFormatter";
 
 const cleanColor = (hex?: string) => hex ? hex.replace("#", "") : "2980b9";
 
@@ -87,10 +89,27 @@ export async function exportToDocx(
     });
   };
 
+  const textToRuns = (text: string, size: number): TextRun[] => {
+    const tokens = tokenizeText(text);
+    return tokens.map(
+      (t) =>
+        new TextRun({
+          text: t.text,
+          size,
+          font,
+          bold: t.bold || undefined,
+          italics: t.italic || undefined,
+          shading: t.highlight
+            ? { type: ShadingType.CLEAR, fill: "FFF3CD", color: "auto" }
+            : undefined,
+        }),
+    );
+  };
+
   const bulletParagraph = (text: string): Paragraph => {
     return new Paragraph({
       bullet: { level: 0 },
-      children: [new TextRun({ text, size: sizes.body, font })],
+      children: textToRuns(text, sizes.body),
       spacing: { after: spacing.bodyAfter },
     });
   };
@@ -166,7 +185,7 @@ export async function exportToDocx(
           paragraphs.push(sectionHeading(getSectionLabel("summary", "Summary")), makeLine());
           paragraphs.push(
             new Paragraph({
-              children: [new TextRun({ text: data.summary, size: sizes.body, font })],
+              children: textToRuns(data.summary, sizes.body),
               spacing: { after: spacing.bodyAfter * 2 },
             }),
           );
@@ -279,7 +298,7 @@ export async function exportToDocx(
                 new Paragraph({
                   children: [
                     new TextRun({ text: "Tech Stack: ", bold: true, size: sizes.meta, font }),
-                    new TextRun({ text: proj.techStack, size: sizes.meta, font }),
+                    ...textToRuns(proj.techStack, sizes.meta),
                   ],
                 }),
               );
@@ -304,7 +323,7 @@ export async function exportToDocx(
                     size: sizes.body,
                     font,
                   }),
-                  new TextRun({ text: skill.skills, size: sizes.body, font }),
+                  ...textToRuns(skill.skills, sizes.body),
                 ],
                 spacing: { after: spacing.bodyAfter },
               }),
