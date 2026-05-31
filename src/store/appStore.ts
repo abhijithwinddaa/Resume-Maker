@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ResumeData } from "../types/resume";
-import type { ATSResult, OptimizeProgress } from "../utils/aiService";
+import type { ATSResult, KeywordSuggestion, OptimizeProgress } from "../utils/aiService";
 import type { TemplateId, TemplateCustomization } from "../types/templates";
 import { DEFAULT_CUSTOMIZATION } from "../types/templates";
 import type { AISettings } from "../types/aiSettings";
@@ -93,6 +93,11 @@ interface AppState {
   isGeneratingCoverLetter: boolean;
   privacySettings: PrivacySettings;
 
+  // ─── Keyword Gap Analysis ─────────────
+  keywordSuggestions: Record<string, KeywordSuggestion[]> | null;
+  isAnalyzingKeywords: boolean;
+  activeKeyword: string | null;
+
   // ─── Active Section for Editor ──────────
   activeSection: string | null;
 
@@ -147,6 +152,12 @@ interface AppState {
   setCoverLetter: (cl: CoverLetterData | null) => void;
   setIsGeneratingCoverLetter: (v: boolean) => void;
   setPrivacySettings: (settings: Partial<PrivacySettings>) => void;
+
+  // Keyword gap analysis actions
+  setKeywordSuggestions: (suggestions: Record<string, KeywordSuggestion[]> | null) => void;
+  setIsAnalyzingKeywords: (v: boolean) => void;
+  setActiveKeyword: (keyword: string | null) => void;
+  applyKeywordSuggestion: (suggestion: KeywordSuggestion) => void;
 
   // Active section actions
   setActiveSection: (section: string | null) => void;
@@ -245,6 +256,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   coverLetter: null,
   isGeneratingCoverLetter: false,
   privacySettings: loadPrivacySettings(),
+  keywordSuggestions: null,
+  isAnalyzingKeywords: false,
+  activeKeyword: null,
   activeSection: "contact",
   history: { past: [], future: [] },
 
@@ -352,6 +366,36 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ privacySettings: merged });
   },
 
+  // Keyword gap analysis
+  setKeywordSuggestions: (keywordSuggestions) => set({ keywordSuggestions }),
+  setIsAnalyzingKeywords: (isAnalyzingKeywords) => set({ isAnalyzingKeywords }),
+  setActiveKeyword: (activeKeyword) => set({ activeKeyword }),
+  applyKeywordSuggestion: (suggestion) => {
+    const { resumeData } = get();
+    if (!resumeData) return;
+    const updated = structuredClone(resumeData);
+    if (suggestion.section === "experience" && updated.experience?.[suggestion.index]) {
+      const entry = updated.experience[suggestion.index];
+      const bullets = entry.bullets || [];
+      if (suggestion.editType === "rewrite" && typeof suggestion.bulletIndex === "number" && bullets[suggestion.bulletIndex]) {
+        bullets[suggestion.bulletIndex] = suggestion.suggestedText;
+      } else if (suggestion.editType === "new") {
+        bullets.push(suggestion.suggestedText);
+      }
+      entry.bullets = bullets;
+    } else if (suggestion.section === "projects" && updated.projects?.[suggestion.index]) {
+      const entry = updated.projects[suggestion.index];
+      const bullets = entry.bullets || [];
+      if (suggestion.editType === "rewrite" && typeof suggestion.bulletIndex === "number" && bullets[suggestion.bulletIndex]) {
+        bullets[suggestion.bulletIndex] = suggestion.suggestedText;
+      } else if (suggestion.editType === "new") {
+        bullets.push(suggestion.suggestedText);
+      }
+      entry.bullets = bullets;
+    }
+    get().setResumeData(updated, true);
+  },
+
   // Active Section
   setActiveSection: (activeSection) => set({ activeSection }),
 
@@ -408,6 +452,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       coverLetter: null,
       activeSection: "contact",
       history: { past: [], future: [] },
+      keywordSuggestions: null,
+      isAnalyzingKeywords: false,
+      activeKeyword: null,
       detectedStyle: null,
       originalPdfUrl: null,
       showOriginalPdf: false,

@@ -746,6 +746,357 @@
   border: 1px solid #fecaca;
 }
 
+.tag-missing-interactive {
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  line-height: inherit;
+}
+
+.tag-missing-interactive:hover {
+  background: #fee2e2;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+}
+
+.tag-missing-interactive:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.tag-missing-interactive:disabled:hover {
+  box-shadow: none;
+  background: #fef2f2;
+}
+
+.tag-missing-active {
+  background: #fecaca;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.35);
+}
+
+.keyword-chevron {
+  transition: transform 0.2s;
+}
+
+.keyword-chevron-open {
+  transform: rotate(180deg);
+}
+
+.keyword-gap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 16px 0 8px;
+}
+
+.keyword-gap-header h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.keyword-analyze-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid #6366f1;
+  border-radius: 8px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+.keyword-analyze-btn:hover {
+  background: #4f46e5;
+}
+
+.keyword-analyze-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.keyword-gap-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.keyword-gap-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.keyword-gap-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* Keyword Gap Drawer */
+
+.keyword-gap-drawer {
+  margin-top: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.keyword-gap-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.keyword-gap-drawer-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.keyword-gap-drawer-title h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.keyword-gap-drawer-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.keyword-gap-drawer-close:hover {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.keyword-gap-empty {
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.keyword-gap-cards {
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Suggestion Card */
+
+.keyword-gap-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.keyword-gap-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.keyword-gap-card-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eef2ff;
+  color: #6366f1;
+}
+
+.keyword-gap-card-section {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.keyword-gap-card-old,
+.keyword-gap-card-new {
+  margin-bottom: 6px;
+}
+
+.keyword-gap-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.keyword-gap-card-old p,
+.keyword-gap-card-new p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #334155;
+}
+
+.keyword-gap-card-old p {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.keyword-gap-card-reason {
+  margin: 6px 0 10px;
+  font-size: 12px;
+  color: #64748b;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.keyword-gap-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.keyword-gap-card-apply {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.keyword-gap-card-apply:hover {
+  background: #4f46e5;
+}
+
+.keyword-gap-card-reject {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.keyword-gap-card-reject:hover {
+  background: #f8fafc;
+  color: #475569;
+}
+
+/* Dark mode overrides */
+
+.dark .tag-missing-interactive:hover {
+  background: #451a1a;
+}
+
+.dark .tag-missing-active {
+  background: #7f1d1d;
+}
+
+.dark .keyword-gap-loading {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+.dark .keyword-gap-drawer {
+  border-color: #334155;
+  background: #1e293b;
+}
+
+.dark .keyword-gap-drawer-header {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.dark .keyword-gap-drawer-title h4 {
+  color: #f1f5f9;
+}
+
+.dark .keyword-gap-card {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.dark .keyword-gap-card-label {
+  color: #cbd5e1;
+}
+
+.dark .keyword-gap-card-old p,
+.dark .keyword-gap-card-new p {
+  color: #e2e8f0;
+}
+
+.dark .keyword-gap-card-old p {
+  color: #64748b;
+}
+
+.dark .keyword-gap-card-reason {
+  color: #94a3b8;
+}
+
+.dark .keyword-gap-card-reject {
+  border-color: #334155;
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+.dark .keyword-gap-card-reject:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.dark .keyword-gap-summary {
+  color: #94a3b8;
+}
+
+.dark .keyword-gap-hint {
+  color: #64748b;
+}
+
 /* Breakdown */
 
 .breakdown-section {
@@ -1669,6 +2020,10 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+.spin {
+  animation: export-spin 0.7s linear infinite;
 }
 
 /* ─── Floating Feedback CTA ─────────────────────────── */

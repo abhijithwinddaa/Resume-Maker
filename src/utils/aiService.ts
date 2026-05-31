@@ -16,6 +16,17 @@ import type {
   RewriteResumeResponse,
 } from "../types/serverAI";
 
+export interface KeywordSuggestion {
+  section: "experience" | "projects";
+  index: number;
+  editType: "rewrite" | "new";
+  bulletIndex?: number;
+  originalText?: string;
+  suggestedText: string;
+  keyword: string;
+  reason: string;
+}
+
 export interface ATSBreakdownItem {
   score: number;
   weight: number;
@@ -1511,6 +1522,25 @@ export async function selfOptimizeLoop(
   };
   onProgress(progress);
   return progress;
+}
+
+// ─── Keyword Gap Analysis ──────────────────────────────
+
+export async function getKeywordPlacements(
+  resumeData: ResumeData,
+  missingKeywords: string[],
+  jobDescription?: string,
+  signal?: AbortSignal,
+): Promise<Record<string, KeywordSuggestion[]>> {
+  const response = await postServerAIRequest<
+    { resumeData: ResumeData; missingKeywords: string[]; jobDescription?: string },
+    { suggestions: Record<string, KeywordSuggestion[]> }
+  >(
+    "/api/optimize/keyword-placement",
+    { resumeData, missingKeywords, jobDescription },
+    signal,
+  );
+  return response.suggestions;
 }
 
 // ─── Resume Parser ───────────────────────────────────────

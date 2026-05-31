@@ -1,4 +1,4 @@
-import React, { memo, useMemo, Suspense } from "react";
+import React, { memo, useMemo, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   Trophy,
   AlertCircle,
@@ -11,9 +11,14 @@ import {
   CheckCircle2,
   AlertTriangle,
   X,
+  ChevronDown,
+  Lightbulb,
+  Sparkles,
+  Loader2,
+  Check,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore";
-import { type OptimizeProgress } from "../utils/aiService";
+import { getKeywordPlacements, type KeywordSuggestion, type OptimizeProgress } from "../utils/aiService";
 import { type ResumeFeedbackSignal } from "../utils/resumeFeedback";
 import { formatCooldown } from "../utils/rateLimiter";
 import ResumeTemplate from "./ResumeTemplate";
@@ -173,6 +178,125 @@ const FeedbackSignalCard = memo(function FeedbackSignalCard({
   );
 });
 
+/* ─── Suggestion Card ───────────────────────────────── */
+
+const SuggestionCard = memo(function SuggestionCard({
+  suggestion,
+  onApply,
+  onReject,
+}: {
+  suggestion: KeywordSuggestion;
+  onApply: (s: KeywordSuggestion) => void;
+  onReject: (s: KeywordSuggestion) => void;
+}) {
+  const sectionLabel = suggestion.section === "experience" ? "Experience" : "Projects";
+  const editLabel = suggestion.editType === "rewrite" ? "Rewrite" : "New Bullet";
+
+  return (
+    <div className="keyword-gap-card">
+      <div className="keyword-gap-card-header">
+        <span className="keyword-gap-card-badge">{editLabel}</span>
+        <span className="keyword-gap-card-section">{sectionLabel} #{suggestion.index + 1}</span>
+      </div>
+      {suggestion.editType === "rewrite" && suggestion.originalText && (
+        <div className="keyword-gap-card-old">
+          <span className="keyword-gap-card-label">Original:</span>
+          <p>{suggestion.originalText}</p>
+        </div>
+      )}
+      <div className="keyword-gap-card-new">
+        <span className="keyword-gap-card-label">Suggested:</span>
+        <p>{suggestion.suggestedText}</p>
+      </div>
+      <p className="keyword-gap-card-reason">{suggestion.reason}</p>
+      <div className="keyword-gap-card-actions">
+        <button
+          className="keyword-gap-card-apply"
+          onClick={() => onApply(suggestion)}
+        >
+          <Check size={14} /> Apply
+        </button>
+        <button
+          className="keyword-gap-card-reject"
+          onClick={() => onReject(suggestion)}
+        >
+          <X size={14} /> Dismiss
+        </button>
+      </div>
+    </div>
+  );
+});
+
+/* ─── Keyword Gap Drawer ────────────────────────────── */
+
+const KeywordGapDrawer = memo(function KeywordGapDrawer({
+  keyword,
+  suggestions,
+  onClose,
+  onApply,
+  onDismiss,
+}: {
+  keyword: string | null;
+  suggestions: KeywordSuggestion[];
+  onClose: () => void;
+  onApply: (s: KeywordSuggestion) => void;
+  onDismiss: (s: KeywordSuggestion) => void;
+}) {
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+
+  const visibleSuggestions = suggestions.filter((s) => {
+    const id = `${s.section}-${s.index}-${s.editType}-${s.bulletIndex ?? "new"}-${s.keyword}`;
+    return !dismissedIds.has(id);
+  });
+
+  if (!keyword || suggestions.length === 0) return null;
+
+  return (
+    <div className="keyword-gap-drawer">
+      <div className="keyword-gap-drawer-header">
+        <div className="keyword-gap-drawer-title">
+          <Lightbulb size={18} />
+          <h4>Placing: {keyword}</h4>
+        </div>
+        <button
+          className="keyword-gap-drawer-close"
+          onClick={onClose}
+          aria-label="Close suggestions"
+        >
+          <X size={18} />
+        </button>
+      </div>
+      {visibleSuggestions.length === 0 ? (
+        <p className="keyword-gap-empty">
+          All suggestions for <strong>{keyword}</strong> have been dismissed.
+        </p>
+      ) : (
+        <div className="keyword-gap-cards">
+          {visibleSuggestions.map((s) => {
+            const id = `${s.section}-${s.index}-${s.editType}-${s.bulletIndex ?? "new"}-${s.keyword}`;
+            return (
+              <SuggestionCard
+                key={id}
+                suggestion={s}
+                onApply={(su) => {
+                  setDismissedIds((prev) => new Set(prev).add(id));
+                  onApply(su);
+                }}
+                onReject={() => {
+                  setDismissedIds((prev) => new Set(prev).add(id));
+                  onDismiss(s);
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});
+
+/* ─── Main ScoreScreen ──────────────────────────────── */
+
 export const ScoreScreen: React.FC<ScoreScreenProps> = ({
   handleOptimize,
   handleSelfOptimize,
@@ -198,12 +322,87 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
     isOptimizing,
     optimizeProgress,
     error,
+    keywordSuggestions,
+    isAnalyzingKeywords,
+    activeKeyword,
+    setKeywordSuggestions,
+    setIsAnalyzingKeywords,
+    setActiveKeyword,
+    applyKeywordSuggestion,
   } = useAppStore();
 
   const optimizePercent = useMemo(
     () => getOptimizeProgressPercent(optimizeProgress),
     [optimizeProgress],
   );
+
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cleanup abort on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  const missingKeywords = useMemo(() => {
+    if (!atsResult) return [];
+    return uniqueStrings([
+      ...(atsResult.breakdown.keywordMatch.missingKeywords || []),
+      ...(atsResult.breakdown.skillsAlignment.missingSkills || []),
+    ]);
+  }, [atsResult]);
+
+  const handleAnalyzeGaps = useCallback(async () => {
+    if (!resumeData || missingKeywords.length === 0) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setIsAnalyzingKeywords(true);
+    setKeywordSuggestions(null);
+
+    try {
+      const suggestions = await getKeywordPlacements(
+        resumeData,
+        missingKeywords,
+        jdText || undefined,
+        controller.signal,
+      );
+      setKeywordSuggestions(suggestions);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setKeywordSuggestions(null);
+    } finally {
+      setIsAnalyzingKeywords(false);
+    }
+  }, [resumeData, missingKeywords, jdText, setKeywordSuggestions, setIsAnalyzingKeywords]);
+
+  const handleKeywordClick = useCallback(
+    (keyword: string) => {
+      setActiveKeyword(activeKeyword === keyword ? null : keyword);
+    },
+    [activeKeyword, setActiveKeyword],
+  );
+
+  const handleApplySuggestion = useCallback(
+    (suggestion: KeywordSuggestion) => {
+      applyKeywordSuggestion(suggestion);
+    },
+    [applyKeywordSuggestion],
+  );
+
+  const handleCloseDrawer = useCallback(() => {
+    setActiveKeyword(null);
+  }, [setActiveKeyword]);
+
+  const currentSuggestions = useMemo<KeywordSuggestion[]>(() => {
+    if (!keywordSuggestions || !activeKeyword) return [];
+    return keywordSuggestions[activeKeyword] || [];
+  }, [keywordSuggestions, activeKeyword]);
+
+  const hasSuggestions = keywordSuggestions !== null && Object.keys(keywordSuggestions).length > 0;
 
   if (step !== "score" || !atsResult || !resumeData) return null;
 
@@ -247,21 +446,80 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
               </span>
             ))}
           </div>
-          <h4>
-            {jdText.trim()
-              ? "Missing Keywords"
-              : "Suggested Keywords to Add"}
-          </h4>
+          <div className="keyword-gap-header">
+            <h4>
+              {jdText.trim()
+                ? "Missing Keywords"
+                : "Suggested Keywords to Add"}
+            </h4>
+            {missingKeywords.length > 0 && !hasSuggestions && (
+              <button
+                className="keyword-analyze-btn"
+                onClick={handleAnalyzeGaps}
+                disabled={isAnalyzingKeywords}
+              >
+                {isAnalyzingKeywords ? (
+                  <>
+                    <Loader2 size={14} className="spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    Analyze All Gaps
+                  </>
+                )}
+              </button>
+            )}
+          </div>
           <div className="keyword-tags">
-            {uniqueStrings([
-              ...(atsResult.breakdown.keywordMatch.missingKeywords || []),
-              ...(atsResult.breakdown.skillsAlignment.missingSkills || []),
-            ]).map((k) => (
-              <span key={k} className="tag tag-missing">
+            {missingKeywords.map((k) => (
+              <button
+                key={k}
+                className={`tag tag-missing tag-missing-interactive ${activeKeyword === k ? "tag-missing-active" : ""}`}
+                onClick={() => handleKeywordClick(k)}
+                disabled={!hasSuggestions}
+              >
                 {k}
-              </span>
+                {hasSuggestions && (
+                  <ChevronDown
+                    size={12}
+                    className={`keyword-chevron ${activeKeyword === k ? "keyword-chevron-open" : ""}`}
+                  />
+                )}
+              </button>
             ))}
           </div>
+          {missingKeywords.length > 0 && hasSuggestions && (
+            <div className="keyword-gap-summary">
+              <CheckCircle2 size={14} />
+              <span>
+                Suggestions available. Click a keyword to view placement options.
+              </span>
+            </div>
+          )}
+
+          {/* Keyword Gap Drawer */}
+          <KeywordGapDrawer
+            keyword={activeKeyword}
+            suggestions={currentSuggestions}
+            onClose={handleCloseDrawer}
+            onApply={handleApplySuggestion}
+            onDismiss={() => {}}
+          />
+
+          {isAnalyzingKeywords && (
+            <div className="keyword-gap-loading">
+              <Loader2 size={20} className="spin" />
+              <span>Analyzing resume for keyword placement suggestions...</span>
+            </div>
+          )}
+
+          {hasSuggestions && missingKeywords.length > 0 && !activeKeyword && (
+            <div className="keyword-gap-hint">
+              <span>Click any keyword tag above to see placement suggestions</span>
+            </div>
+          )}
         </div>
 
         <div className="breakdown-section">
