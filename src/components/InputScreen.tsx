@@ -9,6 +9,7 @@ import {
   Clock,
   Search,
   Edit3,
+  FolderOpen,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { LIMITS } from "../utils/inputValidation";
@@ -29,6 +30,7 @@ interface InputScreenProps {
   analyzeCooldownRemaining: number;
   atsResumeSource: "existing" | "new";
   setAtsResumeSource: (source: "existing" | "new") => void;
+  onOpenResumeManager?: () => void;
 }
 
 export const InputScreen: React.FC<InputScreenProps> = ({
@@ -46,11 +48,13 @@ export const InputScreen: React.FC<InputScreenProps> = ({
   analyzeCooldownRemaining,
   atsResumeSource,
   setAtsResumeSource,
+  onOpenResumeManager,
 }) => {
   const {
     step,
     mode,
     resumeData,
+    activeResumeId,
     uploadedFileName,
     setUploadedFileName,
     resumeText,
@@ -81,7 +85,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
             </p>
           </div>
 
-          {resumeData && (
+          {resumeData && activeResumeId && (
             <div
               className="ats-source-choice"
               role="group"
@@ -108,7 +112,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
             </div>
           )}
 
-          {resumeData && atsResumeSource === "new" && (
+          {resumeData && activeResumeId && atsResumeSource === "new" && (
             <p className="ats-source-note">
               You are analyzing a new resume. Your saved resume remains
               unchanged.
@@ -117,12 +121,12 @@ export const InputScreen: React.FC<InputScreenProps> = ({
 
           <div
             className={
-              resumeData && atsResumeSource === "existing"
+              resumeData && activeResumeId && atsResumeSource === "existing"
                 ? "input-grid input-grid-single"
                 : "input-grid"
             }
           >
-            {(!resumeData || atsResumeSource === "new") && (
+            {(!resumeData || !activeResumeId || atsResumeSource === "new") && (
               <div className="input-card">
                 <div className="input-label-row">
                   <label className="input-label">
@@ -231,7 +235,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
           <div
             className={`input-actions-row ${useStickyMobileActions ? "input-actions-row-sticky" : ""}`}
           >
-            {resumeData && atsResumeSource === "existing" ? (
+            {resumeData && activeResumeId && atsResumeSource === "existing" ? (
               <button
                 className="analyze-btn"
                 onClick={handleAnalyzeExisting}
@@ -255,8 +259,8 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                 onClick={handleAnalyze}
                 disabled={
                   (atsResumeSource === "new"
-                    ? !resumeText.trim() && !uploadedFileName && !resumeData
-                    : !resumeText.trim() && !resumeData) ||
+                    ? !resumeText.trim() && !uploadedFileName && (!resumeData || !activeResumeId)
+                    : !resumeText.trim() && (!resumeData || !activeResumeId)) ||
                   !jdText.trim() ||
                   isPdfLoading ||
                   isAnalyzeCoolingDown
@@ -275,7 +279,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                 )}
               </button>
             )}
-            {resumeData && (
+            {resumeData && activeResumeId && (
               <button
                 className="btn-secondary"
                 onClick={() => setStep("editor")}
@@ -300,6 +304,19 @@ export const InputScreen: React.FC<InputScreenProps> = ({
               so you can edit it in our live preview editor.
             </p>
           </div>
+
+          <div className="ats-source-choice">
+            <button
+              className="header-btn header-btn-labeled btn-accent"
+              onClick={onOpenResumeManager}
+              title="Open Saved Resumes"
+              aria-label="Open Saved Resumes"
+            >
+              <FolderOpen size={14} style={{ marginRight: "6px" }} />
+              Choose from Saved Resumes (Files)
+            </button>
+          </div>
+
           <div className="input-grid input-grid-single">
             <div className="input-card">
               <div className="input-label-row">
@@ -387,6 +404,14 @@ export const InputScreen: React.FC<InputScreenProps> = ({
           <div
             className={`input-actions-row ${useStickyMobileActions ? "input-actions-row-sticky" : ""}`}
           >
+            {resumeData && activeResumeId && (
+              <button
+                className="btn-secondary"
+                onClick={() => setStep("editor")}
+              >
+                Back to Editor
+              </button>
+            )}
             <button className="btn-secondary" onClick={handleBackToLanding}>
               Back
             </button>

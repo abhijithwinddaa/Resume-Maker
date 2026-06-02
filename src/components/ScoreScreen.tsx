@@ -16,6 +16,7 @@ import {
   Sparkles,
   Loader2,
   Check,
+  ArrowLeft,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { getKeywordPlacements, type KeywordSuggestion, type OptimizeProgress } from "../utils/aiService";
@@ -39,6 +40,7 @@ interface ScoreScreenProps {
   showMobileResumePreview: boolean;
   setShowMobileResumePreview: (show: boolean) => void;
   isExporting: boolean;
+  handleBack?: () => void;
 }
 
 function clampPercent(value: number): number {
@@ -311,6 +313,7 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
   showMobileResumePreview,
   setShowMobileResumePreview,
   isExporting,
+  handleBack,
 }) => {
   const {
     step,
@@ -620,6 +623,11 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
           <div
             className={`score-actions ${useStickyMobileActions ? "score-actions-sticky" : ""}`}
           >
+            {handleBack && (
+              <button className="btn-secondary" onClick={handleBack}>
+                <ArrowLeft size={18} /> Back
+              </button>
+            )}
             <button
               className="btn-optimize"
               onClick={

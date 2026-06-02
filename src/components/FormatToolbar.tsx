@@ -11,11 +11,11 @@ const MARKERS: Record<FormatType, [string, string]> = {
 
 function applyFormatToActive(type: FormatType): void {
   const el = document.activeElement;
-  if (!el || el.tagName !== "TEXTAREA") return;
+  if (!el || (el.tagName !== "TEXTAREA" && el.tagName !== "INPUT")) return;
 
-  const ta = el as HTMLTextAreaElement;
-  const start = ta.selectionStart;
-  const end = ta.selectionEnd;
+  const ta = el as HTMLTextAreaElement | HTMLInputElement;
+  const start = ta.selectionStart ?? 0;
+  const end = ta.selectionEnd ?? 0;
   const [open, close] = MARKERS[type];
   const value = ta.value;
   const selectedText = value.slice(start, end);
@@ -32,7 +32,12 @@ function applyFormatToActive(type: FormatType): void {
   }
 
   // Use setter to trigger React synthetic event
-  const proto = HTMLTextAreaElement.prototype;
+  const tracker = (ta as any)._valueTracker;
+  if (tracker) {
+    tracker.setValue(value);
+  }
+
+  const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
   setter?.call(ta, newValue);
   ta.dispatchEvent(new Event("input", { bubbles: true }));

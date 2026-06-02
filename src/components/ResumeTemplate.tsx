@@ -116,13 +116,13 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                 <div key={i} className="education-item">
                   <div className="education-row">
                     <div>
-                      <strong>{edu.university}</strong>
+                      <strong>{formatText(edu.university)}</strong>
                     </div>
-                    <div className="education-year">{edu.yearRange}</div>
+                    <div className="education-year">{formatText(edu.yearRange)}</div>
                   </div>
                   <div className="education-row">
-                    <div className="education-degree">{edu.degree}</div>
-                    <div className="education-cgpa">{edu.cgpa}</div>
+                    <div className="education-degree">{formatText(edu.degree)}</div>
+                    <div className="education-cgpa">{formatText(edu.cgpa)}</div>
                   </div>
                 </div>
               ))}
@@ -144,14 +144,14 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                 <div key={i} className="experience-item">
                   <div className="experience-header">
                     <div>
-                      <strong>{exp.role}</strong>
+                      <strong>{formatText(exp.role)}</strong>
                       {" — "}
-                      <span className="experience-company">{exp.company}</span>
+                      <span className="experience-company">{formatText(exp.company)}</span>
                     </div>
-                    <div className="experience-date">{exp.dateRange}</div>
+                    <div className="experience-date">{formatText(exp.dateRange)}</div>
                   </div>
                   {exp.location && (
-                    <div className="experience-location">{exp.location}</div>
+                    <div className="experience-location">{formatText(exp.location)}</div>
                   )}
                   <ul className="experience-bullets">
                     {exp.bullets.map((bullet, j) => (
@@ -171,7 +171,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               {data.projects.map((project, i) => (
                 <div key={i} className="project-item">
                   <div className="project-header">
-                    <span className="project-title">{project.title}</span>
+                    <span className="project-title">{formatText(project.title)}</span>
                     <span className="project-links">
                       {project.githubLink && (
                         <>
@@ -221,7 +221,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               <ul className="skills-list">
                 {data.skills.map((skill, i) => (
                   <li key={i}>
-                    <strong>{skill.label}:</strong>{" "}
+                    <strong>{formatText(skill.label)}:</strong>{" "}
                     {formatText(skill.skills)}
                   </li>
                 ))}
@@ -276,9 +276,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               <ul className="certificates-list">
                 {data.certificates.map((cert, i) => (
                   <li key={i} className="certificate-item">
-                    <strong>{cert.name}</strong>
+                    <strong>{formatText(cert.name)}</strong>
                     {" — "}
-                    <span>{cert.description}</span>
+                    <span>{formatText(cert.description)}</span>
                     {cert.link && (
                       <>
                         {" "}
@@ -352,8 +352,8 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
           style={rootStyle}
         >
           <div className="resume-header portfolio-header" {...getInteractiveProps("contact")}>
-            <h1 className="resume-name">{data.contact.name}</h1>
-            {headline && <p className="portfolio-subtitle">{headline}</p>}
+            <h1 className="resume-name">{formatText(data.contact.name)}</h1>
+            {headline && <p className="portfolio-subtitle">{formatText(headline)}</p>}
 
             <div className="resume-contact portfolio-contact">
               {data.contact.portfolio && (
@@ -398,7 +398,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                   className="portfolio-contact-item"
                 >
                   <Mail size={13} strokeWidth={1.8} />
-                  <span>{data.contact.email}</span>
+                  <span>{formatText(data.contact.email)}</span>
                 </a>
               )}
 
@@ -408,7 +408,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                   className="portfolio-contact-item"
                 >
                   <Phone size={13} strokeWidth={1.8} />
-                  <span>{data.contact.phone}</span>
+                  <span>{formatText(data.contact.phone)}</span>
                 </a>
               )}
             </div>
@@ -441,7 +441,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                         className="project-item portfolio-project-item"
                       >
                         <div className="project-header portfolio-project-header">
-                          <span className="project-title">{project.title}</span>
+                          <span className="project-title">{formatText(project.title)}</span>
                           {hasProjectLinks && (
                             <span className="project-links portfolio-project-links">
                               {project.githubLink && (
@@ -501,23 +501,23 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                       className="experience-item portfolio-experience-item"
                     >
                       <div className="experience-header portfolio-experience-header">
-                        <strong>{exp.company}</strong>
+                        <strong>{formatText(exp.company)}</strong>
                         {exp.role && (
                           <span className="portfolio-experience-role">
-                            | {exp.role}
+                            | {formatText(exp.role)}
                           </span>
                         )}
                       </div>
                       {exp.dateRange && (
                         <div className="experience-date portfolio-experience-date">
-                          {exp.dateRange}
+                          {formatText(exp.dateRange)}
                         </div>
                       )}
                       <ul className="experience-bullets portfolio-experience-bullets">
                         {exp.bullets
                           .filter((bullet) => bullet.trim())
                           .map((bullet, j) => (
-                            <li key={j}>{formatText(bullet)}</li>
+                             <li key={j}>{formatText(bullet)}</li>
                           ))}
                       </ul>
                     </div>
@@ -566,7 +566,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                           key={i}
                           className="certificate-item portfolio-certificate-item"
                         >
-                          <span className="portfolio-cert-name">{title}</span>
+                          <span className="portfolio-cert-name">{formatText(title)}</span>
                           {cert.link && (
                             <a
                               href={cert.link}
@@ -592,7 +592,7 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                   <div className="portfolio-skills-list">
                     {skillEntries.map((skill, i) => (
                       <div key={i} className="portfolio-skills-group">
-                        <p className="portfolio-skills-label">{skill.label}</p>
+                        <p className="portfolio-skills-label">{formatText(skill.label)}</p>
                         <p className="portfolio-skills-text">
                           {formatText(skill.skills)}
                         </p>
@@ -613,14 +613,14 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                       className="education-item portfolio-education-item"
                     >
                       <p className="portfolio-education-school">
-                        {edu.university}
+                        {formatText(edu.university)}
                       </p>
-                      <p className="portfolio-education-degree">{edu.degree}</p>
+                      <p className="portfolio-education-degree">{formatText(edu.degree)}</p>
                       <p className="portfolio-education-meta">
-                        {edu.yearRange}
+                        {formatText(edu.yearRange)}
                       </p>
                       {edu.cgpa && (
-                        <p className="portfolio-education-meta">{edu.cgpa}</p>
+                        <p className="portfolio-education-meta">{formatText(edu.cgpa)}</p>
                       )}
                     </div>
                   ))}
@@ -644,11 +644,11 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
       >
         {/* Header */}
         <div className="resume-header" {...getInteractiveProps("contact")}>
-          <h1 className="resume-name">{data.contact.name}</h1>
+          <h1 className="resume-name">{formatText(data.contact.name)}</h1>
           <div className="resume-contact">
-            <span>{data.contact.phone}</span>
+            <span>{formatText(data.contact.phone)}</span>
             <span className="separator">|</span>
-            <a href={`mailto:${data.contact.email}`}>{data.contact.email}</a>
+            <a href={`mailto:${data.contact.email}`}>{formatText(data.contact.email)}</a>
             {data.contact.linkedin && (
               <>
                 <span className="separator">|</span>

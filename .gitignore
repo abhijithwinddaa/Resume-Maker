@@ -31,3 +31,20 @@ dist-ssr
 .vercel
 .env*.local
 graphify-out/
+
+# ECC plugin build artifacts
+.opencode/dist/
+.opencode/node_modules/
+
+# Keep ECC source tracked
+!.opencode/plugins/
+!.opencode/tools/
+!.opencode/commands/
+!.opencode/prompts/
+!.opencode/index.ts
+!.opencode/package.json
+!.opencode/tsconfig.json
+!.opencode/.npmignore
+
+.vercel
+.env*

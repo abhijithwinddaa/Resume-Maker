@@ -89,6 +89,7 @@ import {
   PlusCircle,
   CheckCircle2,
   Settings,
+  ArrowLeft,
 } from "lucide-react";
 import { useDebounce } from "./hooks/useDebounce";
 import { useExport } from "./hooks/useExport";
@@ -945,11 +946,11 @@ function App() {
         setResumeData(createEmptyResume(), false);
         setStep("editor");
       } else if (selectedMode === "ats") {
-        setAtsResumeSource(resumeData ? "existing" : "new");
+        setAtsResumeSource(resumeData && activeResumeId ? "existing" : "new");
         setStep("input");
       } else {
         // edit mode
-        if (resumeData) {
+        if (resumeData && activeResumeId) {
           setStep("editor");
         } else {
           setStep("input");
@@ -967,6 +968,7 @@ function App() {
       setError,
       resumeData,
       setResumeData,
+      activeResumeId,
       setActiveResumeId,
       setActiveResumeName,
       isAuthStarting,
@@ -1290,6 +1292,24 @@ function App() {
     setMode(null);
     setStep("landing");
   }, [setError, setMode, setStep]);
+
+  const handleBackNavigation = useCallback(() => {
+    setError(null);
+    if (step === "input") {
+      handleBackToLanding();
+    } else if (step === "score") {
+      setStep("input");
+    } else if (step === "editor") {
+      if (mode === "ats") {
+        setStep("score");
+      } else if (mode === "edit") {
+        setStep("input");
+      } else {
+        // mode === "create"
+        handleBackToLanding();
+      }
+    }
+  }, [step, mode, handleBackToLanding, setStep, setError]);
 
   const handleSwitchMode = useCallback(
     (selectedMode: Exclude<AppMode, null>) => {
@@ -1745,10 +1765,16 @@ function App() {
           </SignedIn>
 
           {step !== "landing" && step !== "analyzing" && (
-            <button className="header-btn" onClick={handleStartOver}>
-              <RotateCcw size={14} />
-              <span>{t("header.startOver")}</span>
-            </button>
+            <>
+              <button className="header-btn" onClick={handleBackNavigation}>
+                <ArrowLeft size={14} />
+                <span>Back</span>
+              </button>
+              <button className="header-btn" onClick={handleStartOver}>
+                <RotateCcw size={14} />
+                <span>{t("header.startOver")}</span>
+              </button>
+            </>
           )}
 
           {(step === "score" || step === "editor") && (
@@ -2020,7 +2046,7 @@ function App() {
                     aria-label="Undo"
                   >
                     <Undo2 size={14} />
-                    <span>Back</span>
+                    <span>Undo</span>
                   </button>
                   <button
                     className="header-btn flow-btn"
@@ -2030,7 +2056,7 @@ function App() {
                     aria-label="Redo"
                   >
                     <Redo2 size={14} />
-                    <span>Forward</span>
+                    <span>Redo</span>
                   </button>
                 </>
               )}
@@ -2140,6 +2166,7 @@ function App() {
             analyzeCooldownRemaining={analyzeCooldownRemaining}
             atsResumeSource={atsResumeSource}
             setAtsResumeSource={setAtsResumeSource}
+            onOpenResumeManager={() => setShowResumeManager(true)}
           />
         )}
 
@@ -2174,6 +2201,7 @@ function App() {
             showMobileResumePreview={showMobileResumePreview}
             setShowMobileResumePreview={setShowMobileResumePreview}
             isExporting={isExporting}
+            handleBack={handleBackNavigation}
           />
         )}
 

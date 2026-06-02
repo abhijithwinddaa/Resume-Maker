@@ -21,7 +21,7 @@
 }
 
 .resume-page--export {
-  padding: 6mm 8mm;
+  padding: 8mm 10mm;
 
   /* Improve glyph clarity at low PDF zoom levels. */
   font-kerning: normal;
@@ -710,7 +710,7 @@
 @media print {
   @page {
     size: A4;
-    margin: 10mm;
+    margin: 0;
   }
 
   .template-portfolio .portfolio-layout {
@@ -721,7 +721,7 @@
   .resume-page,
   .resume-page--export {
     margin: 0;
-    padding: 6mm 8mm;
+    padding: 8mm 10mm;
     box-shadow: none;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

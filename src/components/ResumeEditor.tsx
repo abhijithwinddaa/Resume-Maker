@@ -243,6 +243,7 @@ const SortableEducationItem: React.FC<SortableEducationItemProps> = ({
           <Trash2 size={14} />
         </button>
       </div>
+      <FormatToolbar />
       <div className="field-row">
         <div className="field-group">
           <label>University</label>
@@ -445,35 +446,45 @@ const SortableSkillItem: React.FC<SortableSkillItemProps> = ({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: "4px",
+    width: "100%",
+    borderBottom: "1px solid var(--border-color)",
+    paddingBottom: "12px",
+    marginBottom: "12px",
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="skill-row">
-      <button type="button" className="dnd-grip" {...attributes} {...listeners} aria-label="Drag skill" style={{ background: 'none', border: 'none', cursor: 'grab', padding: '4px', color: '#666' }}>
-        <GripVertical size={16} />
-      </button>
-      <div className="field-group skill-label-group">
-        <input
-          type="text"
-          value={skill.label}
-          onChange={(e) => updateSkill(index, "label", e.target.value)}
-          placeholder="Category"
-        />
+    <div ref={setNodeRef} style={style} className="skill-row-container">
+      <FormatToolbar />
+      <div className="skill-row" style={{ marginBottom: 0 }}>
+        <button type="button" className="dnd-grip" {...attributes} {...listeners} aria-label="Drag skill" style={{ background: 'none', border: 'none', cursor: 'grab', padding: '4px', color: '#666' }}>
+          <GripVertical size={16} />
+        </button>
+        <div className="field-group skill-label-group">
+          <input
+            type="text"
+            value={skill.label}
+            onChange={(e) => updateSkill(index, "label", e.target.value)}
+            placeholder="Category"
+          />
+        </div>
+        <div className="field-group skill-value-group">
+          <input
+            type="text"
+            value={skill.skills}
+            onChange={(e) => updateSkill(index, "skills", e.target.value)}
+            placeholder="Skill1, Skill2, Skill3"
+          />
+        </div>
+        <button
+          className="btn-icon btn-danger"
+          onClick={() => removeSkill(index)}
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
-      <div className="field-group skill-value-group">
-        <input
-          type="text"
-          value={skill.skills}
-          onChange={(e) => updateSkill(index, "skills", e.target.value)}
-          placeholder="Skill1, Skill2, Skill3"
-        />
-      </div>
-      <button
-        className="btn-icon btn-danger"
-        onClick={() => removeSkill(index)}
-      >
-        <Trash2 size={14} />
-      </button>
     </div>
   );
 };
@@ -926,6 +937,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
               <div className="tab-section-header">
                 <h3>Contact Information</h3>
               </div>
+              <FormatToolbar />
               <div className="field-group">
                 <label>Full Name</label>
                 <input
@@ -1264,42 +1276,45 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                 </div>
               )}
               {(data.certificates || []).map((cert, i) => (
-                <div key={i} className="cert-editor-row">
-                  <div className="cert-fields">
-                    <input
-                      type="text"
-                      value={cert.name}
-                      onChange={(e) =>
-                        updateCertificate(i, "name", e.target.value)
-                      }
-                      placeholder="Certificate Name"
-                      className="cert-name-input"
-                    />
-                    <input
-                      type="text"
-                      value={cert.description}
-                      onChange={(e) =>
-                        updateCertificate(i, "description", e.target.value)
-                      }
-                      placeholder="Issuer / Description"
-                      className="cert-desc-input"
-                    />
-                    <input
-                      type="text"
-                      value={cert.link}
-                      onChange={(e) =>
-                        updateCertificate(i, "link", e.target.value)
-                      }
-                      placeholder="https://certificate-link.com"
-                      className="cert-link-input"
-                    />
+                <div key={i} className="cert-editor-row-container" style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "12px" }}>
+                  <FormatToolbar />
+                  <div className="cert-editor-row" style={{ display: "flex", gap: "6px", width: "100%", alignItems: "flex-start", marginBottom: 0 }}>
+                    <div className="cert-fields">
+                      <input
+                        type="text"
+                        value={cert.name}
+                        onChange={(e) =>
+                          updateCertificate(i, "name", e.target.value)
+                        }
+                        placeholder="Certificate Name"
+                        className="cert-name-input"
+                      />
+                      <input
+                        type="text"
+                        value={cert.description}
+                        onChange={(e) =>
+                          updateCertificate(i, "description", e.target.value)
+                        }
+                        placeholder="Issuer / Description"
+                        className="cert-desc-input"
+                      />
+                      <input
+                        type="text"
+                        value={cert.link}
+                        onChange={(e) =>
+                          updateCertificate(i, "link", e.target.value)
+                        }
+                        placeholder="https://certificate-link.com"
+                        className="cert-link-input"
+                      />
+                    </div>
+                    <button
+                      className="btn-icon btn-danger"
+                      onClick={() => removeCertificate(i)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                  <button
-                    className="btn-icon btn-danger"
-                    onClick={() => removeCertificate(i)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
                 </div>
               ))}
               <button className="btn-add" onClick={addCertificate}>
