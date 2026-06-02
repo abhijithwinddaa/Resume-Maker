@@ -722,6 +722,8 @@
   .resume-page--export {
     margin: 0;
     padding: 8mm 10mm;
+    min-height: auto !important;
+    height: auto !important;
     box-shadow: none;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
