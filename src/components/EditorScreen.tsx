@@ -1,5 +1,5 @@
 import React, { Suspense } from "react";
-import { X } from "lucide-react";
+import { X, Eye, EyeOff } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import type { ResumeData } from "../types/resume";
 import type { TemplateCustomization } from "../types/templates";
@@ -33,6 +33,20 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
         data={resumeData}
         onChange={handleResumeChange}
       />
+      {isCompactScreen && (
+        <div className="mobile-resume-trigger-row">
+          <div className="mobile-export-row">
+            <button
+              className={`btn-secondary mobile-resume-trigger ${showMobileResumePreview ? "mobile-eye-btn-active" : ""}`}
+              onClick={() => setShowMobileResumePreview(!showMobileResumePreview)}
+              aria-expanded={showMobileResumePreview}
+            >
+              {showMobileResumePreview ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showMobileResumePreview ? "Hide Resume" : "Show Resume"}
+            </button>
+          </div>
+        </div>
+      )}
       {!isCompactScreen && (
         <div className="editor-right">
           <div className="preview-container">

@@ -1564,8 +1564,9 @@
 .preview-container {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
   border-radius: 4px;
-  overflow: hidden;
+  overflow: auto;
   height: fit-content;
+  max-height: 100%;
   background: white;
 }
 
@@ -1906,8 +1907,6 @@
   }
 
   .preview-container {
-    width: 100%;
-    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 

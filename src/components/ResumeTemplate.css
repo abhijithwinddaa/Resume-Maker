@@ -9,8 +9,6 @@
   --resume-line-height: 1.3;
   --resume-section-spacing: 3px;
 
-  width: 210mm;
-  min-height: 297mm;
   padding: 8mm 10mm;
   background: white;
   color: #1a1a1a;
@@ -18,6 +16,34 @@
   font-size: var(--resume-font-size);
   line-height: var(--resume-line-height);
   box-sizing: border-box;
+}
+
+/* Screen: responsive width with A4 aspect ratio */
+@media screen {
+  .resume-page {
+    width: 100%;
+    max-width: 210mm;
+  }
+}
+
+@media screen and (max-width: 600px) {
+  .resume-page {
+    padding: 6mm;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .resume-page {
+    padding: 4mm;
+  }
+}
+
+/* Print: exact A4 dimensions */
+@media print {
+  .resume-page {
+    width: 210mm;
+    min-height: 297mm;
+  }
 }
 
 .resume-page--export {
