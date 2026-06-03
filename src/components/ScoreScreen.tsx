@@ -6,6 +6,7 @@ import {
   Zap,
   Edit3,
   Eye,
+  EyeOff,
   FileType,
   Download,
   CheckCircle2,
@@ -653,10 +654,12 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
         {isCompactScreen && (
           <div className="mobile-resume-trigger-row">
             <button
-              className="btn-secondary mobile-resume-trigger"
-              onClick={() => setShowMobileResumePreview(true)}
+              className={`btn-secondary mobile-resume-trigger ${showMobileResumePreview ? "mobile-eye-btn-active" : ""}`}
+              onClick={() => setShowMobileResumePreview(!showMobileResumePreview)}
+              aria-expanded={showMobileResumePreview}
             >
-              <Eye size={16} /> Show Resume
+              {showMobileResumePreview ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showMobileResumePreview ? "Hide Resume" : "Show Resume"}
             </button>
             <div className="mobile-export-row">
               <button

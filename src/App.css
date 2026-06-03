@@ -289,6 +289,16 @@
   flex-shrink: 0;
 }
 
+.flow-btn-eye {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .flow-btn-eye {
+    display: inline-flex;
+  }
+}
+
 /* ─── Main ───────────────────────────────────────────── */
 
 .app-main {
@@ -1357,6 +1367,16 @@
   justify-content: center;
 }
 
+.mobile-eye-btn-active {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
+  color: #fff !important;
+}
+
+.mobile-eye-btn-active:hover {
+  background: #b91c1c !important;
+}
+
 .mobile-resume-overlay {
   position: fixed;
   inset: 0;
@@ -1551,29 +1571,92 @@
 
 /* ─── Responsive ─────────────────────────────────────── */
 
+/* Large screens — constrain max width for readability */
+@media (min-width: 1400px) {
+  .score-left,
+  .editor-left {
+    width: min(36vw, 480px);
+    min-width: 400px;
+  }
+
+  .score-right,
+  .editor-right {
+    padding: 24px 40px;
+  }
+
+  .preview-container {
+    max-width: 820px;
+    width: 100%;
+  }
+
+  .landing-step {
+    max-width: 1100px;
+  }
+
+  .landing-hero h2 {
+    font-size: 38px;
+  }
+
+  .landing-cards {
+    gap: 32px;
+  }
+}
+
+/* Medium-large desktops */
+@media (min-width: 1201px) and (max-width: 1399px) {
+  .score-left,
+  .editor-left {
+    width: min(42vw, 480px);
+    min-width: 380px;
+  }
+
+  .score-right,
+  .editor-right {
+    padding: 20px 32px;
+  }
+
+  .preview-container {
+    max-width: 780px;
+  }
+}
+
+/* Small desktops / large tablets landscape */
+@media (min-width: 1025px) and (max-width: 1200px) {
+  .score-left,
+  .editor-left {
+    width: min(44vw, 460px);
+    min-width: 340px;
+  }
+
+  .score-right,
+  .editor-right {
+    padding: 16px 24px;
+  }
+
+  .preview-container {
+    max-width: 680px;
+  }
+}
+
+/* Tablets landscape / small laptops */
+@media (max-width: 1024px) {
+  .score-left,
+  .editor-left {
+    width: 50vw;
+    min-width: 320px;
+  }
+
+  .input-step {
+    padding: 28px 20px;
+  }
+
+  .input-hero h2 {
+    font-size: 24px;
+  }
+}
+
+/* Max-width 900px — side-by-side → stacked layout */
 @media (max-width: 900px) {
-  .mobile-breadcrumb {
-    display: flex;
-    position: sticky;
-    top: 0;
-    z-index: 9;
-    gap: 6px;
-    align-items: center;
-    overflow-x: auto;
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    border-bottom: 1px solid var(--border-color);
-    scrollbar-width: none;
-  }
-
-  .mobile-breadcrumb::-webkit-scrollbar {
-    display: none;
-  }
-
-  .input-grid {
-    grid-template-columns: 1fr;
-  }
-
   .score-step,
   .editor-step {
     flex-direction: column;
@@ -1595,6 +1678,54 @@
   .score-right,
   .editor-right {
     padding: 10px;
+  }
+
+  .input-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .input-step {
+    padding: 24px 16px;
+  }
+
+  .input-hero h2 {
+    font-size: 22px;
+  }
+
+  .input-hero p {
+    font-size: 13px;
+  }
+
+  .score-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .score-actions {
+    flex-direction: column;
+  }
+
+  .feedback-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-breadcrumb {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 9;
+    gap: 6px;
+    align-items: center;
+    overflow-x: auto;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+    scrollbar-width: none;
+  }
+
+  .mobile-breadcrumb::-webkit-scrollbar {
+    display: none;
   }
 
   .header-actions {
@@ -1624,33 +1755,42 @@
     display: none;
   }
 
-  .input-hero h2 {
-    font-size: 22px;
-  }
-
-  .input-hero p {
-    font-size: 13px;
-  }
-
-  .score-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .score-actions {
-    flex-direction: column;
-  }
-
-  .feedback-grid {
-    grid-template-columns: 1fr;
-  }
-
   .mobile-resume-trigger-row {
     display: block;
   }
+
+  .landing-cards {
+    grid-template-columns: 1fr;
+    max-width: 400px;
+    margin: 0 auto 32px;
+  }
+
+  .landing-hero h2 {
+    font-size: 24px;
+  }
+
+  .landing-step {
+    padding: 32px 16px;
+  }
 }
 
+/* Max-width 768px — tablet portrait refinements */
+@media (max-width: 768px) {
+  .score-meter svg {
+    width: 120px;
+    height: 120px;
+  }
+
+  .score-number {
+    font-size: 28px;
+  }
+
+  .landing-hero h2 {
+    font-size: 22px;
+  }
+}
+
+/* Max-width 600px — large phones */
 @media (max-width: 600px) {
   .mode-switch {
     gap: 4px;
@@ -1798,8 +1938,38 @@
   .app.keyboard-open .step-indicator {
     display: none;
   }
+
+  .landing-card {
+    padding: 24px 16px;
+  }
+
+  .landing-card-icon {
+    width: 56px;
+    height: 56px;
+  }
+
+  .landing-card h3 {
+    font-size: 16px;
+  }
+
+  .landing-hero h2 {
+    font-size: 20px;
+  }
+
+  .landing-hero p {
+    font-size: 13px;
+  }
+
+  .landing-step {
+    padding: 24px 12px;
+  }
+
+  .landing-hero {
+    margin-bottom: 28px;
+  }
 }
 
+/* Max-width 480px — small phones */
 @media (max-width: 480px) {
   .app-header {
     padding: 6px 8px;
@@ -1850,6 +2020,44 @@
   .save-indicator {
     font-size: 10px;
     padding: 2px 4px;
+  }
+}
+
+/* Max-width 360px — very small phones */
+@media (max-width: 360px) {
+  .app-header {
+    padding: 4px 6px;
+  }
+
+  .app-title {
+    font-size: 12px;
+  }
+
+  .header-btn {
+    min-width: 34px;
+    min-height: 34px;
+    font-size: 10px;
+  }
+
+  .input-step {
+    padding: 12px 6px;
+  }
+
+  .input-hero h2 {
+    font-size: 16px;
+  }
+
+  .score-left {
+    padding: 10px;
+  }
+
+  .mobile-resume-sheet {
+    max-height: 94dvh;
+  }
+
+  .mobile-export-btn {
+    font-size: 11px;
+    padding: 8px 10px;
   }
 }
 
@@ -2083,12 +2291,27 @@
   }
 }
 
+@media (max-width: 768px) {
+  .floating-feedback-cta span {
+    display: none;
+  }
+
+  .floating-feedback-cta {
+    padding: 10px;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 480px) {
   .floating-feedback-cta {
     right: 10px;
     bottom: calc(10px + var(--vk-offset));
-    padding: 9px 12px;
-    gap: 6px;
+    padding: 9px;
+    width: 36px;
+    height: 36px;
   }
 }
 
@@ -2509,53 +2732,6 @@
 .landing-backup {
   text-align: center;
   margin-top: 8px;
-}
-
-@media (max-width: 900px) {
-  .landing-cards {
-    grid-template-columns: 1fr;
-    max-width: 400px;
-    margin: 0 auto 32px;
-  }
-
-  .landing-hero h2 {
-    font-size: 24px;
-  }
-
-  .landing-step {
-    padding: 32px 16px;
-  }
-}
-
-@media (max-width: 600px) {
-  .landing-card {
-    padding: 24px 16px;
-  }
-
-  .landing-card-icon {
-    width: 56px;
-    height: 56px;
-  }
-
-  .landing-card h3 {
-    font-size: 16px;
-  }
-
-  .landing-hero h2 {
-    font-size: 20px;
-  }
-
-  .landing-hero p {
-    font-size: 13px;
-  }
-
-  .landing-step {
-    padding: 24px 12px;
-  }
-
-  .landing-hero {
-    margin-bottom: 28px;
-  }
 }
 
 @media (max-width: 480px) {
