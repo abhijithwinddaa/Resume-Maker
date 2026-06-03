@@ -29,24 +29,26 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
 
   return (
     <div className="editor-step" role="region" aria-label="Resume editor">
-      <ResumeEditor
-        data={resumeData}
-        onChange={handleResumeChange}
-      />
-      {isCompactScreen && (
-        <div className="mobile-resume-trigger-row">
-          <div className="mobile-export-row">
-            <button
-              className={`btn-secondary mobile-resume-trigger ${showMobileResumePreview ? "mobile-eye-btn-active" : ""}`}
-              onClick={() => setShowMobileResumePreview(!showMobileResumePreview)}
-              aria-expanded={showMobileResumePreview}
-            >
-              {showMobileResumePreview ? <EyeOff size={16} /> : <Eye size={16} />}
-              {showMobileResumePreview ? "Hide Resume" : "Show Resume"}
-            </button>
+      <div className="editor-left">
+        <ResumeEditor
+          data={resumeData}
+          onChange={handleResumeChange}
+        />
+        {isCompactScreen && (
+          <div className="mobile-resume-trigger-row">
+            <div className="mobile-export-row">
+              <button
+                className={`btn-secondary mobile-resume-trigger ${showMobileResumePreview ? "mobile-eye-btn-active" : ""}`}
+                onClick={() => setShowMobileResumePreview(!showMobileResumePreview)}
+                aria-expanded={showMobileResumePreview}
+              >
+                {showMobileResumePreview ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showMobileResumePreview ? "Hide Resume" : "Show Resume"}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
       {!isCompactScreen && (
         <div className="editor-right">
           <div className="preview-container">
