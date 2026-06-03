@@ -85,6 +85,7 @@ import {
   Mail,
   FolderOpen,
   Eye,
+  EyeOff,
   Shield,
   PlusCircle,
   CheckCircle2,
@@ -2036,6 +2037,18 @@ function App() {
             aria-label="Quick actions"
           >
             <div className="flow-toolbar-group">
+              {(step === "editor" || step === "score") && (
+                <button
+                  className={`header-btn flow-btn flow-btn-eye${showMobileResumePreview ? " btn-accent" : ""}`}
+                  onClick={() => setShowMobileResumePreview(!showMobileResumePreview)}
+                  title={showMobileResumePreview ? "Hide Resume" : "Show Resume"}
+                  aria-label={showMobileResumePreview ? "Hide Resume" : "Show Resume"}
+                  aria-expanded={showMobileResumePreview}
+                >
+                  {showMobileResumePreview ? <EyeOff size={14} /> : <Eye size={14} />}
+                  <span>{showMobileResumePreview ? "Hide" : "Preview"}</span>
+                </button>
+              )}
               {step === "editor" && (
                 <>
                   <button
