@@ -1,3 +1,6 @@
+import { callOpenRouter } from "./openRouterRuntime.js";
+import type { OpenRouterConfig } from "./openRouterRuntime.js";
+
 interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -13,7 +16,7 @@ interface GroqResponse {
 
 type EnvMap = Record<string, string | undefined>;
 
-interface ServerAIConfig {
+interface ServerAIConfig extends OpenRouterConfig {
   githubTokens: string[];
   githubModel: string;
   groqApiKey: string;
@@ -54,8 +57,19 @@ function readGithubTokens(): string[] {
   return [...new Set(multiTokenValues)];
 }
 
+function readOpenRouterModels(): string[] {
+  const raw = readEnv("OPENROUTER_MODELS");
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+}
+
 function getServerAIConfig(): ServerAIConfig {
   return {
+    openRouterApiKey: readEnv("OPENROUTER_API_KEY"),
+    openRouterModels: readOpenRouterModels(),
     githubTokens: readGithubTokens(),
     githubModel: readEnv("GITHUB_MODEL") || "gpt-4o-mini",
     groqApiKey: readEnv("GROQ_API_KEY"),
@@ -187,24 +201,47 @@ export async function callServerAI(
   return withRetry(async () => {
     signal?.throwIfAborted();
 
-    try {
-      return await callGitHub(config, messages, signal);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (
-        message !== "ALL_GITHUB_RATE_LIMITED" &&
-        !message.includes("not configured")
-      ) {
-        throw error;
+    // 1. Try OpenRouter (load-balanced free models)
+    if (config.openRouterApiKey && config.openRouterModels.length > 0) {
+      try {
+        return await callOpenRouter(config, messages, signal);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (
+          message !== "ALL_OPENROUTER_RATE_LIMITED" &&
+          !message.includes("not configured")
+        ) {
+          throw error;
+        }
+        console.warn(
+          "All OpenRouter models exhausted — falling back to GitHub",
+        );
       }
     }
 
+    // 2. Try GitHub Models
+    if (config.githubTokens.length > 0) {
+      try {
+        return await callGitHub(config, messages, signal);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (
+          message !== "ALL_GITHUB_RATE_LIMITED" &&
+          !message.includes("not configured")
+        ) {
+          throw error;
+        }
+        console.warn("All GitHub tokens exhausted — falling back to Groq");
+      }
+    }
+
+    // 3. Try Groq
     if (config.groqApiKey) {
       return callGroq(config, messages, signal);
     }
 
     throw new Error(
-      "No server-side AI provider is configured. Set GITHUB_TOKEN, GITHUB_TOKENS, or GROQ_API_KEY.",
+      "No server-side AI provider is configured. Set OPENROUTER_API_KEY, GITHUB_TOKEN, GITHUB_TOKENS, or GROQ_API_KEY.",
     );
   });
 }
