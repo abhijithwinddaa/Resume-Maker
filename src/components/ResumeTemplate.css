@@ -733,11 +733,12 @@
 }
 
 /* Print styles */
+@page {
+  size: A4;
+  margin: 0;
+}
+
 @media print {
-  @page {
-    size: A4;
-    margin: 0;
-  }
 
   .template-portfolio .portfolio-layout {
     grid-template-columns: 1.7fr 1fr !important;

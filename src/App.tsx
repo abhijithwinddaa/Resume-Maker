@@ -316,6 +316,85 @@ function App() {
     return () => window.removeEventListener("keydown", handler);
   }, [pendingExportFormat, redo, undo]);
 
+  // Ref to track export state to avoid stale closures in print listeners
+  const isExportingRef = useRef(isExporting);
+  useEffect(() => {
+    isExportingRef.current = isExporting;
+  }, [isExporting]);
+
+  /* ── Print & DevTools (Inspect) Prevention (Production Only) ── */
+  useEffect(() => {
+    // Only run protection in production mode
+    if (!import.meta.env.PROD) return;
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Block print keyboard shortcuts (Ctrl+P / Cmd+P)
+      if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) {
+        e.preventDefault();
+        alert(
+          "Please use the download button inside the web application to download or print your resume."
+        );
+        return;
+      }
+
+      // 2. Block Inspect Element shortcuts
+      // F12
+      if (e.key === "F12") {
+        e.preventDefault();
+        return;
+      }
+
+      // Ctrl+Shift+I / Cmd+Option+I (DevTools)
+      // Ctrl+Shift+J / Cmd+Option+J (Console)
+      // Ctrl+Shift+C / Cmd+Option+C (Inspect Element)
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.shiftKey || e.altKey) &&
+        (e.key === "I" ||
+          e.key === "i" ||
+          e.key === "J" ||
+          e.key === "j" ||
+          e.key === "C" ||
+          e.key === "c")
+      ) {
+        e.preventDefault();
+        return;
+      }
+
+      // Ctrl+U / Cmd+Option+U (View Source)
+      if ((e.ctrlKey || e.metaKey) && (e.key === "u" || e.key === "U")) {
+        e.preventDefault();
+        return;
+      }
+    };
+
+    const handleBeforePrint = () => {
+      if (!isExportingRef.current) {
+        document.body.classList.add("unauthorized-print");
+      }
+    };
+
+    const handleAfterPrint = () => {
+      document.body.classList.remove("unauthorized-print");
+    };
+
+    document.addEventListener("contextmenu", handleContextMenu);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("beforeprint", handleBeforePrint);
+    window.addEventListener("afterprint", handleAfterPrint);
+
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("beforeprint", handleBeforePrint);
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, []);
+
   useEffect(() => {
     if (!isSettingsMenuOpen) return;
 
