@@ -97,8 +97,11 @@ body {
 
 /* Print */
 @media print {
+  html,
   body {
-    background: white;
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .app-header,

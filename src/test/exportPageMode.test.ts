@@ -9,10 +9,10 @@ describe("resolveExportPageMode", () => {
     });
   });
 
-  it("allows standard multi-page export for experienced users in auto mode", () => {
+  it("allows multi-page export with fitting attempts for experienced users in auto mode", () => {
     expect(resolveExportPageMode("auto", "experienced")).toEqual({
       singlePageRequired: false,
-      fitRequiresSinglePageAttempts: false,
+      fitRequiresSinglePageAttempts: true,
     });
   });
 

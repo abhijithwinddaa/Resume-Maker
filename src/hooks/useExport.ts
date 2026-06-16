@@ -77,28 +77,28 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
       const fitAttempts: Array<{
         stage: CompressionStage;
         override: Partial<TemplateCustomization> | null;
-      }> = requireSinglePage
-        ? [
-            { stage: "none", override: null },
-            { stage: "tight-spacing", override: { sectionSpacing: "tight" } },
-            {
-              stage: "compact",
-              override: { sectionSpacing: "tight", lineHeight: "compact" },
-            },
-            {
-              stage: "small-compact",
-              override: {
-                fontSize: "small",
-                lineHeight: "compact",
-                sectionSpacing: "tight",
-              },
-            },
-          ]
-        : [{ stage: "none", override: null }];
+      }> = [
+        { stage: "none", override: null },
+        { stage: "tight-spacing", override: { sectionSpacing: "tight" } },
+        {
+          stage: "compact",
+          override: { sectionSpacing: "tight", lineHeight: "compact" },
+        },
+        {
+          stage: "small-compact",
+          override: {
+            fontSize: "small",
+            lineHeight: "compact",
+            sectionSpacing: "tight",
+          },
+        },
+      ];
 
-      let bestPages = Number.POSITIVE_INFINITY;
-      let bestStage: CompressionStage = "none";
-      let bestOverride: Partial<TemplateCustomization> | null = null;
+      const results: Array<{
+        stage: CompressionStage;
+        override: Partial<TemplateCustomization> | null;
+        pages: number;
+      }> = [];
 
       for (const attempt of fitAttempts) {
         setExportCustomizationOverride(attempt.override);
@@ -109,25 +109,58 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
           continue;
         }
 
-        const estimatedPages = estimateRenderedPages(node);
-        if (estimatedPages < bestPages) {
-          bestPages = estimatedPages;
-          bestStage = attempt.stage;
-          bestOverride = attempt.override;
-        }
+        const pages = estimateRenderedPages(node);
+        results.push({
+          stage: attempt.stage,
+          override: attempt.override,
+          pages,
+        });
 
-        if (requireSinglePage && estimatedPages <= 1) {
+        if (requireSinglePage && pages <= 1) {
           break;
         }
       }
 
-      setExportCustomizationOverride(bestOverride);
+      if (results.length === 0) {
+        return { estimatedPages: 1, stage: "none", override: null };
+      }
+
+      const standardResult = results.find((r) => r.stage === "none") || results[0];
+      const standardPages = standardResult.pages;
+
+      let minPages = standardPages;
+      let bestResult = standardResult;
+
+      for (const res of results) {
+        if (res.pages < minPages) {
+          minPages = res.pages;
+          bestResult = res;
+        }
+      }
+
+      if (requireSinglePage) {
+        const singlePageRes = results.find((r) => r.pages === 1);
+        if (singlePageRes) {
+          bestResult = singlePageRes;
+        }
+      } else {
+        if (minPages < standardPages) {
+          const match = results.find((r) => r.pages === minPages);
+          if (match) {
+            bestResult = match;
+          }
+        } else {
+          bestResult = standardResult;
+        }
+      }
+
+      setExportCustomizationOverride(bestResult.override);
       await waitForNextPaint();
 
       return {
-        estimatedPages: Number.isFinite(bestPages) ? bestPages : 1,
-        stage: bestStage,
-        override: bestOverride,
+        estimatedPages: bestResult.pages,
+        stage: bestResult.stage,
+        override: bestResult.override,
       };
     },
     [resumeRef],

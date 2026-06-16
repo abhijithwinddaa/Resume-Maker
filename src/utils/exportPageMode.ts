@@ -25,9 +25,9 @@ export function resolveExportPageMode(
     };
   }
 
-  if (mode === "auto" && experienceTier === "fresher") {
+  if (mode === "auto") {
     return {
-      singlePageRequired: true,
+      singlePageRequired: experienceTier === "fresher",
       fitRequiresSinglePageAttempts: true,
     };
   }
