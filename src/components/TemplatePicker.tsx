@@ -9,6 +9,41 @@ interface TemplatePickerProps {
   onClose: () => void;
 }
 
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+function estimateRenderedPages(element: HTMLElement): number {
+  const widthPx = element.getBoundingClientRect().width || element.offsetWidth;
+  if (!widthPx) return 1;
+
+  const onePagePx = (297 * widthPx) / 210;
+  const contentHeightPx = Math.max(
+    element.scrollHeight,
+    element.getBoundingClientRect().height,
+  );
+  const tolerancePx = Math.max(2, Math.round(onePagePx * 0.004));
+
+  return Math.max(1, Math.ceil((contentHeightPx - tolerancePx) / onePagePx));
+}
+
+const AUTO_FIT_CONFIGS = [
+  { fontSize: "xsmall", lineHeight: "compact", sectionSpacing: "tight" },
+  { fontSize: "small", lineHeight: "compact", sectionSpacing: "tight" },
+  { fontSize: "small", lineHeight: "normal", sectionSpacing: "tight" },
+  { fontSize: "small", lineHeight: "normal", sectionSpacing: "normal" },
+  { fontSize: "medium", lineHeight: "normal", sectionSpacing: "normal" },
+  { fontSize: "medium", lineHeight: "relaxed", sectionSpacing: "normal" },
+  { fontSize: "medium", lineHeight: "relaxed", sectionSpacing: "spacious" },
+  { fontSize: "large", lineHeight: "relaxed", sectionSpacing: "spacious" },
+  { fontSize: "large", lineHeight: "relaxed", sectionSpacing: "extra-spacious" },
+  { fontSize: "xlarge", lineHeight: "loose", sectionSpacing: "extra-spacious" },
+] as const;
+
 const TemplatePicker: React.FC<TemplatePickerProps> = ({ onClose }) => {
   const templateId = useAppStore((s) => s.templateId);
   const customization = useAppStore((s) => s.customization);
@@ -16,6 +51,42 @@ const TemplatePicker: React.FC<TemplatePickerProps> = ({ onClose }) => {
   const setCustomization = useAppStore((s) => s.setCustomization);
   const detectedStyle = useAppStore((s) => s.detectedStyle);
   const applyDetectedStyle = useAppStore((s) => s.applyDetectedStyle);
+
+  const [isFitting, setIsFitting] = React.useState(false);
+
+  const handleAutoFit = async () => {
+    const element = document.querySelector(".resume-page") as HTMLElement;
+    if (!element) return;
+
+    setIsFitting(true);
+    
+    let bestConfig = AUTO_FIT_CONFIGS[0];
+    let foundSpill = false;
+
+    for (let i = 0; i < AUTO_FIT_CONFIGS.length; i++) {
+      const config = AUTO_FIT_CONFIGS[i];
+      setCustomization(config);
+      await waitForNextPaint();
+
+      const pages = estimateRenderedPages(element);
+      if (pages > 1) {
+        if (i > 0) {
+          bestConfig = AUTO_FIT_CONFIGS[i - 1];
+        } else {
+          bestConfig = AUTO_FIT_CONFIGS[0];
+        }
+        foundSpill = true;
+        break;
+      }
+    }
+
+    if (!foundSpill) {
+      bestConfig = AUTO_FIT_CONFIGS[AUTO_FIT_CONFIGS.length - 1];
+    }
+
+    setCustomization(bestConfig);
+    setIsFitting(false);
+  };
 
   return (
     <div
@@ -192,6 +263,17 @@ const TemplatePicker: React.FC<TemplatePickerProps> = ({ onClose }) => {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Auto-Fit Button */}
+        <div className="picker-section" style={{ marginTop: "25px" }}>
+          <button
+            className="btn-autofit"
+            onClick={handleAutoFit}
+            disabled={isFitting}
+          >
+            {isFitting ? "Balancing Spacing..." : "✨ Auto-Fit to Page"}
+          </button>
         </div>
       </div>
     </div>
