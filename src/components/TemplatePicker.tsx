@@ -60,7 +60,7 @@ const TemplatePicker: React.FC<TemplatePickerProps> = ({ onClose }) => {
 
     setIsFitting(true);
     
-    let bestConfig = AUTO_FIT_CONFIGS[0];
+    let bestConfig: typeof AUTO_FIT_CONFIGS[number] = AUTO_FIT_CONFIGS[0];
     let foundSpill = false;
 
     for (let i = 0; i < AUTO_FIT_CONFIGS.length; i++) {
