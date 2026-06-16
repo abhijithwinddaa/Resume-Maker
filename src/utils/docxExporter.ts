@@ -19,12 +19,16 @@ import { tokenizeText } from "./textFormatter";
 const cleanColor = (hex?: string) => hex ? hex.replace("#", "") : "2980b9";
 
 // Mapping font sizes (Note: docx size uses half-points, e.g. size 24 = 12pt)
-const getFontSizes = (fontSize?: "small" | "medium" | "large") => {
+const getFontSizes = (fontSize?: "xsmall" | "small" | "medium" | "large" | "xlarge") => {
   switch (fontSize) {
+    case "xsmall":
+      return { title: 26, heading: 18, body: 18, meta: 16 }; // title: 13pt, heading: 9pt, body: 9pt, meta: 8pt
     case "small":
       return { title: 28, heading: 20, body: 20, meta: 18 }; // title: 14pt, heading: 10pt, body: 10pt, meta: 9pt
     case "large":
       return { title: 36, heading: 26, body: 24, meta: 22 }; // title: 18pt, heading: 13pt, body: 12pt, meta: 11pt
+    case "xlarge":
+      return { title: 40, heading: 30, body: 26, meta: 24 }; // title: 20pt, heading: 15pt, body: 13pt, meta: 12pt
     case "medium":
     default:
       return { title: 32, heading: 22, body: 22, meta: 20 }; // title: 16pt, heading: 11pt, body: 11pt, meta: 10pt
@@ -33,8 +37,8 @@ const getFontSizes = (fontSize?: "small" | "medium" | "large") => {
 
 // Mapping paragraph and section spacing settings
 const getSpacing = (
-  lineHeight?: "compact" | "normal" | "relaxed",
-  sectionSpacing?: "tight" | "normal" | "spacious"
+  lineHeight?: "compact" | "normal" | "relaxed" | "loose",
+  sectionSpacing?: "tight" | "normal" | "spacious" | "extra-spacious"
 ) => {
   let bodyAfter = 40;
   let headAfter = 40;
@@ -46,6 +50,10 @@ const getSpacing = (
     case "relaxed":
       bodyAfter = 60;
       headAfter = 60;
+      break;
+    case "loose":
+      bodyAfter = 80;
+      headAfter = 80;
       break;
     case "normal":
     default:
@@ -61,6 +69,9 @@ const getSpacing = (
       break;
     case "spacious":
       headBefore = 240;
+      break;
+    case "extra-spacious":
+      headBefore = 360;
       break;
     case "normal":
     default:

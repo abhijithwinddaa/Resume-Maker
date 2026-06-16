@@ -15,17 +15,31 @@ interface ResumeTemplateProps {
 }
 
 const FONT_SIZE_MAP = {
+  xsmall: "8pt",
   small: "8.5pt",
   medium: "9pt",
   large: "9.5pt",
+  xlarge: "10.2pt",
 } as const;
 const FONT_SCALE_MAP = {
+  xsmall: 0.88,
   small: 0.94,
   medium: 1,
   large: 1.08,
+  xlarge: 1.16,
 } as const;
-const LINE_HEIGHT_MAP = { compact: 1.2, normal: 1.3, relaxed: 1.5 } as const;
-const SPACING_MAP = { tight: "2px", normal: "4px", spacious: "8px" } as const;
+const LINE_HEIGHT_MAP = {
+  compact: 1.15,
+  normal: 1.3,
+  relaxed: 1.5,
+  loose: 1.7,
+} as const;
+const SPACING_MAP = {
+  tight: "2px",
+  normal: "4px",
+  spacious: "8px",
+  "extra-spacious": "14px",
+} as const;
 
 const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
   ({ data, highlightKeywords = [], customizationOverride, forExport }, ref) => {

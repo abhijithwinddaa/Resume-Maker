@@ -10,9 +10,9 @@ export interface TemplateCustomization {
   primaryColor: string;
   secondaryColor: string;
   fontFamily: string;
-  fontSize: "small" | "medium" | "large";
-  lineHeight: "compact" | "normal" | "relaxed";
-  sectionSpacing: "tight" | "normal" | "spacious";
+  fontSize: "xsmall" | "small" | "medium" | "large" | "xlarge";
+  lineHeight: "compact" | "normal" | "relaxed" | "loose";
+  sectionSpacing: "tight" | "normal" | "spacious" | "extra-spacious";
 }
 
 export interface TemplateInfo {
@@ -71,12 +71,17 @@ export const DEFAULT_CUSTOMIZATION: TemplateCustomization = {
 };
 
 export const FONT_OPTIONS = [
-  { id: "Inter", name: "Inter" },
-  { id: "Georgia", name: "Georgia (Serif)" },
-  { id: "Merriweather", name: "Merriweather" },
-  { id: "Roboto", name: "Roboto" },
-  { id: "Lato", name: "Lato" },
-  { id: "Playfair Display", name: "Playfair Display" },
+  { id: "Inter", name: "Inter (Modern Sans)" },
+  { id: "Roboto", name: "Roboto (Clean Sans)" },
+  { id: "Lato", name: "Lato (Warm Sans)" },
+  { id: "Open Sans", name: "Open Sans (Standard Sans)" },
+  { id: "Montserrat", name: "Montserrat (Geometric Sans)" },
+  { id: "Source Sans 3", name: "Source Sans Pro (Legible Sans)" },
+  { id: "Georgia", name: "Georgia (Classic Serif)" },
+  { id: "Merriweather", name: "Merriweather (Readability Serif)" },
+  { id: "Lora", name: "Lora (Elegant Serif)" },
+  { id: "EB Garamond", name: "EB Garamond (Traditional Serif)" },
+  { id: "Playfair Display", name: "Playfair Display (Editorial Serif)" },
 ];
 
 export const COLOR_PRESETS = [

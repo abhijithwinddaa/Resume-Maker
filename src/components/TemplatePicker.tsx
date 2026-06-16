@@ -134,29 +134,61 @@ const TemplatePicker: React.FC<TemplatePickerProps> = ({ onClose }) => {
         <div className="picker-section">
           <h4>Font Size</h4>
           <div className="picker-toggle-group">
-            {(["small", "medium", "large"] as const).map((s) => (
+            {[
+              { id: "xsmall", label: "XS" },
+              { id: "small", label: "S" },
+              { id: "medium", label: "M" },
+              { id: "large", label: "L" },
+              { id: "xlarge", label: "XL" },
+            ].map((s) => (
               <button
-                key={s}
-                className={`picker-toggle ${customization.fontSize === s ? "active" : ""}`}
-                onClick={() => setCustomization({ fontSize: s })}
+                key={s.id}
+                className={`picker-toggle ${customization.fontSize === s.id ? "active" : ""}`}
+                onClick={() => setCustomization({ fontSize: s.id as any })}
               >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {s.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Spacing */}
+        {/* Line Spacing */}
         <div className="picker-section">
-          <h4>Spacing</h4>
+          <h4>Line Spacing</h4>
           <div className="picker-toggle-group">
-            {(["compact", "normal", "relaxed"] as const).map((s) => (
+            {[
+              { id: "compact", label: "Compact" },
+              { id: "normal", label: "Normal" },
+              { id: "relaxed", label: "Relaxed" },
+              { id: "loose", label: "Loose" },
+            ].map((s) => (
               <button
-                key={s}
-                className={`picker-toggle ${customization.lineHeight === s ? "active" : ""}`}
-                onClick={() => setCustomization({ lineHeight: s })}
+                key={s.id}
+                className={`picker-toggle ${customization.lineHeight === s.id ? "active" : ""}`}
+                onClick={() => setCustomization({ lineHeight: s.id as any })}
               >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Section Spacing */}
+        <div className="picker-section">
+          <h4>Section Spacing</h4>
+          <div className="picker-toggle-group">
+            {[
+              { id: "tight", label: "Tight" },
+              { id: "normal", label: "Normal" },
+              { id: "spacious", label: "Spacious" },
+              { id: "extra-spacious", label: "Extra" },
+            ].map((s) => (
+              <button
+                key={s.id}
+                className={`picker-toggle ${customization.sectionSpacing === s.id ? "active" : ""}`}
+                onClick={() => setCustomization({ sectionSpacing: s.id as any })}
+              >
+                {s.label}
               </button>
             ))}
           </div>
