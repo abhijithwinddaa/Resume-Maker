@@ -28,6 +28,25 @@ interface ProviderFailure {
   message: string;
 }
 
+export interface CallOptions {
+  /**
+   * Completion budget for this operation.
+   *
+   * Providers bill this against their rate limit *before* generating: Groq's
+   * free tier counts `input + max_tokens` toward its 12k tokens-per-minute
+   * cap, so an oversized budget gets a request rejected (413) on size alone,
+   * no matter how short the reply actually is. Size it to the response you
+   * expect, not to the context window.
+   */
+  maxTokens?: number;
+}
+
+/** Enough for a mid-sized JSON reply; individual routes override it. */
+const DEFAULT_MAX_TOKENS = 3000;
+
+/** Groq rejects a request whose reserved budget alone breaks the cap. */
+const MIN_MAX_TOKENS = 800;
+
 /**
  * GitHub Models retired the Azure inference host — it now answers every request
  * with an empty-bodied 404. The current host is models.github.ai and it expects
@@ -127,6 +146,7 @@ function getServerAIConfig(): ServerAIConfig {
 async function callGitHub(
   config: ServerAIConfig,
   messages: ChatMessage[],
+  maxTokens: number,
   signal?: AbortSignal,
 ): Promise<string> {
   if (config.githubTokens.length === 0) {
@@ -150,7 +170,7 @@ async function callGitHub(
         model: config.githubModel,
         messages,
         temperature: 0.3,
-        max_tokens: 16000,
+        max_tokens: maxTokens,
       }),
       signal,
     });
@@ -182,41 +202,58 @@ async function callGitHub(
 async function callGroq(
   config: ServerAIConfig,
   messages: ChatMessage[],
+  maxTokens: number,
   signal?: AbortSignal,
 ): Promise<string> {
   if (!config.groqApiKey) {
     throw new Error("Groq API key is not configured on the server.");
   }
 
-  const response = await fetch(
-    "https://api.groq.com/openai/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.groqApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: config.groqModel,
-        messages,
-        temperature: 0.3,
-        max_tokens: 16000,
-      }),
-      signal,
-    },
-  );
+  let budget = maxTokens;
 
-  if (!response.ok) {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.groqApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: config.groqModel,
+          messages,
+          temperature: 0.3,
+          max_tokens: budget,
+        }),
+        signal,
+      },
+    );
+
+    if (response.ok) {
+      const data = (await response.json()) as GroqResponse;
+      const text = data.choices?.[0]?.message?.content;
+      if (!text) {
+        throw new Error("Groq returned no content.");
+      }
+      return text;
+    }
+
     const errBody = (await response.text()).slice(0, 300);
+
+    // 413 means input + reserved budget broke the per-minute cap. Retrying
+    // unchanged can only fail again, so trade completion headroom for a reply
+    // that fits — but only while the budget is the part worth shrinking.
+    if (response.status === 413 && budget > MIN_MAX_TOKENS && attempt < 2) {
+      budget = Math.max(MIN_MAX_TOKENS, Math.floor(budget / 2));
+      console.warn(
+        `[Groq] request too large — retrying with max_tokens=${budget}`,
+      );
+      continue;
+    }
+
     throw new Error(`Groq API error (${response.status}): ${errBody}`);
   }
-
-  const data = (await response.json()) as GroqResponse;
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) {
-    throw new Error("Groq returned no content.");
-  }
-  return text;
 }
 
 async function withRetry<T>(
@@ -267,8 +304,13 @@ function describeFailures(failures: ProviderFailure[]): string {
 export async function callServerAI(
   messages: ChatMessage[],
   signal?: AbortSignal,
+  options: CallOptions = {},
 ): Promise<string> {
   const config = getServerAIConfig();
+  const maxTokens = Math.max(
+    MIN_MAX_TOKENS,
+    options.maxTokens ?? DEFAULT_MAX_TOKENS,
+  );
 
   return withRetry(async () => {
     signal?.throwIfAborted();
@@ -283,17 +325,17 @@ export async function callServerAI(
         enabled: Boolean(
           config.openRouterApiKey && config.openRouterModels.length > 0,
         ),
-        call: () => callOpenRouter(config, messages, signal),
+        call: () => callOpenRouter(config, messages, maxTokens, signal),
       },
       {
         name: "GitHub Models",
         enabled: config.githubTokens.length > 0,
-        call: () => callGitHub(config, messages, signal),
+        call: () => callGitHub(config, messages, maxTokens, signal),
       },
       {
         name: "Groq",
         enabled: Boolean(config.groqApiKey),
-        call: () => callGroq(config, messages, signal),
+        call: () => callGroq(config, messages, maxTokens, signal),
       },
     ];
 

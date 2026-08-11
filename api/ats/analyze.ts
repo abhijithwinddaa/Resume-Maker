@@ -107,6 +107,8 @@ async function handleRequest(request: Request): Promise<Response> {
           },
         ],
         request.signal,
+        // A scored breakdown plus suggestions — a few hundred lines of JSON.
+        { maxTokens: 2500 },
       );
 
       const parsed = parseATSResultResponse(

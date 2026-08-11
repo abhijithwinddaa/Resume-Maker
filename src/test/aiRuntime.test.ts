@@ -145,6 +145,57 @@ describe("callServerAI provider fallback", () => {
     );
   });
 
+  it("sends the caller's token budget rather than a blanket maximum", async () => {
+    setEnv({ GROQ_API_KEY: "groq-key" });
+    fetchMock.mockResolvedValue(chatResponse("ok"));
+
+    await callServerAI(messages, undefined, { maxTokens: 2500 });
+
+    const [, init] = fetchMock.mock.calls[0] as FetchArgs;
+    expect(JSON.parse(String(init?.body)).max_tokens).toBe(2500);
+  });
+
+  it("retries with a smaller budget when Groq rejects the request as too large", async () => {
+    setEnv({ GROQ_API_KEY: "groq-key" });
+
+    // Groq counts input + max_tokens against its per-minute cap.
+    const tooLarge = () =>
+      new Response(
+        JSON.stringify({
+          error: { message: "Request too large ... Limit 12000, Requested 18412" },
+        }),
+        { status: 413 },
+      );
+
+    fetchMock
+      .mockResolvedValueOnce(tooLarge())
+      .mockResolvedValueOnce(chatResponse("fits now"));
+
+    await expect(
+      callServerAI(messages, undefined, { maxTokens: 6000 }),
+    ).resolves.toBe("fits now");
+
+    const budgets = fetchMock.mock.calls.map(
+      (call) => JSON.parse(String((call as FetchArgs)[1]?.body)).max_tokens,
+    );
+    expect(budgets).toEqual([6000, 3000]);
+  });
+
+  it("gives up on 413 rather than shrinking the budget indefinitely", async () => {
+    setEnv({ GROQ_API_KEY: "groq-key" });
+    // A fresh Response per call — a body can only be read once.
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(new Response("too large", { status: 413 })),
+    );
+
+    await expect(
+      callServerAI(messages, undefined, { maxTokens: 6000 }),
+    ).rejects.toThrow(/All AI providers failed.*413/s);
+
+    // One initial attempt plus a bounded number of shrinking retries.
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(9);
+  });
+
   it("does not spend the remaining providers on an aborted request", async () => {
     setEnv({ GITHUB_TOKEN: "gh-token", GROQ_API_KEY: "groq-key" });
 
