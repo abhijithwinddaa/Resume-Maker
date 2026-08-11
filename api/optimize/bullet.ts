@@ -63,6 +63,8 @@ async function handleRequest(request: Request): Promise<Response> {
         { role: "user", content: userContent },
       ],
       request.signal,
+      // One rewritten bullet.
+      { maxTokens: 800 },
     );
 
     // Sanitize output to remove any quotes the LLM might have outputted

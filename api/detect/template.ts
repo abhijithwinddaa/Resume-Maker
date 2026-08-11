@@ -241,6 +241,8 @@ async function handleRequest(request: Request): Promise<Response> {
             },
           ],
           request.signal,
+          // A small style-descriptor object.
+          { maxTokens: 1000 },
         );
 
         const parsed = sanitizeDetectedStyle(

@@ -184,6 +184,8 @@ async function handleRequest(request: Request): Promise<Response> {
             },
           ],
           request.signal,
+          // Emits the full structured resume, links and all.
+          { maxTokens: 6000 },
         );
 
         const parsed = normalizeParsedResume(

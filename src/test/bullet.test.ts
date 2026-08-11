@@ -120,7 +120,10 @@ describe("api/optimize/bullet", () => {
           content: expect.stringContaining('Original Bullet Point: "helped with coding"'),
         }),
       ]),
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      // A single bullet needs a small budget; an oversized one gets the whole
+      // request rejected on size by providers that meter reserved tokens.
+      { maxTokens: 800 }
     );
   });
 
@@ -148,7 +151,8 @@ describe("api/optimize/bullet", () => {
           content: expect.stringContaining("Target Job Description:\n\"Must know TypeScript\""),
         }),
       ]),
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      { maxTokens: 800 }
     );
   });
 

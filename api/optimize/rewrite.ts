@@ -143,6 +143,8 @@ async function handleRequest(request: Request): Promise<Response> {
             },
           ],
           request.signal,
+          // Returns the whole rewritten resume, so it needs real headroom.
+          { maxTokens: 6000 },
         );
 
         const parsed = parseOptimizedResumeResponse(

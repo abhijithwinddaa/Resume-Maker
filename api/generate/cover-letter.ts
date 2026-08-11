@@ -166,6 +166,8 @@ async function handleRequest(request: Request): Promise<Response> {
           },
         ],
         request.signal,
+        // A few paragraphs of prose.
+        { maxTokens: 1600 },
       );
 
       const trimmed = generated.trim();

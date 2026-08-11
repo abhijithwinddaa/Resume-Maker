@@ -89,6 +89,7 @@ function stripThinkingTokens(text: string): string {
 export async function callOpenRouter(
   config: OpenRouterConfig,
   messages: ChatMessage[],
+  maxTokens: number,
   signal?: AbortSignal,
 ): Promise<string> {
   const { openRouterApiKey, openRouterModels } = config;
@@ -127,7 +128,7 @@ export async function callOpenRouter(
           model,
           messages,
           temperature: 0.3,
-          max_tokens: 16000,
+          max_tokens: maxTokens,
         }),
         signal,
       });

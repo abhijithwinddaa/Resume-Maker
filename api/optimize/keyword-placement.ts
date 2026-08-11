@@ -94,6 +94,8 @@ async function handleRequest(request: Request): Promise<Response> {
         { role: "user", content: userContent },
       ],
       request.signal,
+      // A list of suggested edits with their rationale.
+      { maxTokens: 2500 },
     );
 
     // Parse JSON from response (strip any potential markdown fences)
