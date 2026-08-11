@@ -336,6 +336,39 @@ function repairTruncatedJSON(json: string): string {
 // Track which token index to start with (rotates on rate limit)
 let currentTokenIndex = 0;
 
+/**
+ * GitHub Models retired the Azure inference host — it answers every request
+ * with an empty-bodied 404. models.github.ai is the current host and it expects
+ * fully-qualified `publisher/model` ids.
+ */
+const GITHUB_MODELS_ENDPOINT =
+  "https://models.github.ai/inference/chat/completions";
+
+const GITHUB_MODEL_PUBLISHER_PREFIXES: [RegExp, string][] = [
+  [/^(gpt|o\d)/i, "openai"],
+  [/^(meta-)?llama/i, "meta"],
+  [/^mistral|^ministral|^codestral/i, "mistral-ai"],
+  [/^phi|^mai-/i, "microsoft"],
+  [/^cohere|^command/i, "cohere"],
+  [/^deepseek/i, "deepseek"],
+  [/^(ai21|jamba)/i, "ai21-labs"],
+  [/^grok/i, "xai"],
+];
+
+/** Qualify a bare model id (`gpt-4o-mini`) with its publisher (`openai/gpt-4o-mini`). */
+export function normalizeGithubModel(model: string): string {
+  const trimmed = model.trim();
+  if (!trimmed || trimmed.includes("/")) return trimmed;
+
+  for (const [pattern, publisher] of GITHUB_MODEL_PUBLISHER_PREFIXES) {
+    if (pattern.test(trimmed)) {
+      return `${publisher}/${trimmed}`;
+    }
+  }
+
+  return `openai/${trimmed}`;
+}
+
 async function callGitHub(
   settings: AISettings,
   messages: ChatMessage[],
@@ -359,51 +392,42 @@ async function callGitHub(
     const idx = (currentTokenIndex + attempt) % tokens.length;
     const token = tokens[idx];
 
-    const response = await fetch(
-      "https://models.inference.ai.azure.com/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: settings.githubModel,
-          messages,
-          temperature: 0.3,
-          max_tokens: 16000,
-        }),
-        signal,
+    const response = await fetch(GITHUB_MODELS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        model: normalizeGithubModel(settings.githubModel),
+        messages,
+        temperature: 0.3,
+        max_tokens: 16000,
+      }),
+      signal,
+    });
 
     if (response.ok) {
       // Remember this working token for next call
       currentTokenIndex = idx;
       const data = (await response.json()) as ChatAPIResponse;
       const content = data.choices?.[0]?.message?.content;
-      if (!content) {
-        throw new Error("GitHub Models API returned an empty response.");
+      if (content) {
+        return content;
       }
-      return content;
-    }
-
-    if (response.status === 429) {
       console.warn(
-        `Token ${idx + 1}/${tokens.length} rate limited, trying next...`,
+        `Token ${idx + 1}/${tokens.length} returned an empty response, trying next...`,
       );
-      // Try next token
       continue;
     }
 
-    if (response.status === 401) {
-      console.warn(`Token ${idx + 1}/${tokens.length} invalid, trying next...`);
-      continue;
-    }
-
-    // Other errors — don't retry
-    const errBody = await response.text();
-    throw new Error(`GitHub Models API error (${response.status}): ${errBody}`);
+    // 401/429 are per-token; anything else (404/410 while GitHub Models is
+    // being retired, 5xx, …) is provider-wide. Trying the next token is cheap,
+    // and either way the caller falls back to Groq rather than hard-failing.
+    const errBody = (await response.text()).slice(0, 300);
+    console.warn(
+      `Token ${idx + 1}/${tokens.length} failed — HTTP ${response.status}${errBody ? `: ${errBody}` : ""}`,
+    );
   }
 
   // All GitHub tokens exhausted
@@ -513,10 +537,16 @@ export async function callAI(
     try {
       return await callGitHub(settings, messages, signal);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
-      // If all GitHub tokens are rate limited, fall back to Groq
-      if (msg === "ALL_GITHUB_RATE_LIMITED" && settings.groqApiKey) {
-        console.warn("All GitHub tokens rate limited — falling back to Groq");
+      // The caller giving up is not a provider fault — don't retry on Groq.
+      if (err instanceof Error && err.name === "AbortError") {
+        throw err;
+      }
+      // Any GitHub failure (rate limit, missing token, retired endpoint) falls
+      // back to Groq when it is configured.
+      if (settings.groqApiKey) {
+        console.warn(
+          `GitHub Models unavailable — falling back to Groq: ${err instanceof Error ? err.message : err}`,
+        );
         return callGroq(settings, messages, signal);
       }
       throw err;
@@ -551,23 +581,20 @@ export async function callAIStreaming(
 
   const token = tokens[currentTokenIndex % tokens.length];
 
-  const response = await fetch(
-    "https://models.inference.ai.azure.com/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: settings.githubModel,
-        messages,
-        temperature: 0.3,
-        max_tokens: 16000,
-        stream: true,
-      }),
+  const response = await fetch(GITHUB_MODELS_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      model: normalizeGithubModel(settings.githubModel),
+      messages,
+      temperature: 0.3,
+      max_tokens: 16000,
+      stream: true,
+    }),
+  });
 
   if (!response.ok) {
     // Fall back to non-streaming on error

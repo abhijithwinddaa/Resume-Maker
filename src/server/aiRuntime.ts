@@ -23,6 +23,37 @@ interface ServerAIConfig extends OpenRouterConfig {
   groqModel: string;
 }
 
+interface ProviderFailure {
+  provider: string;
+  message: string;
+}
+
+/**
+ * GitHub Models retired the Azure inference host — it now answers every request
+ * with an empty-bodied 404. The current host is models.github.ai and it expects
+ * fully-qualified `publisher/model` ids.
+ */
+const GITHUB_MODELS_ENDPOINT =
+  "https://models.github.ai/inference/chat/completions";
+
+const ALL_PROVIDERS_FAILED_PREFIX = "All AI providers failed";
+
+/** Sentinel messages thrown by provider clients, rewritten for the end user. */
+const FAILURE_ALIASES: Record<string, string> = {
+  ALL_OPENROUTER_RATE_LIMITED: "every configured model was rate limited",
+};
+
+const GITHUB_MODEL_PUBLISHER_PREFIXES: [RegExp, string][] = [
+  [/^(gpt|o\d|text-embedding)/i, "openai"],
+  [/^(meta-)?llama/i, "meta"],
+  [/^mistral|^ministral|^codestral/i, "mistral-ai"],
+  [/^phi|^mai-/i, "microsoft"],
+  [/^cohere|^command/i, "cohere"],
+  [/^deepseek/i, "deepseek"],
+  [/^(ai21|jamba)/i, "ai21-labs"],
+  [/^grok/i, "xai"],
+];
+
 let currentTokenIndex = 0;
 
 function getEnvMap(): EnvMap {
@@ -66,12 +97,28 @@ function readOpenRouterModels(): string[] {
     .filter(Boolean);
 }
 
+/** Qualify a bare model id (`gpt-4o-mini`) with its publisher (`openai/gpt-4o-mini`). */
+export function normalizeGithubModel(model: string): string {
+  const trimmed = model.trim();
+  if (!trimmed || trimmed.includes("/")) return trimmed;
+
+  for (const [pattern, publisher] of GITHUB_MODEL_PUBLISHER_PREFIXES) {
+    if (pattern.test(trimmed)) {
+      return `${publisher}/${trimmed}`;
+    }
+  }
+
+  return `openai/${trimmed}`;
+}
+
 function getServerAIConfig(): ServerAIConfig {
   return {
     openRouterApiKey: readEnv("OPENROUTER_API_KEY"),
     openRouterModels: readOpenRouterModels(),
     githubTokens: readGithubTokens(),
-    githubModel: readEnv("GITHUB_MODEL") || "gpt-4o-mini",
+    githubModel: normalizeGithubModel(
+      readEnv("GITHUB_MODEL") || "gpt-4o-mini",
+    ),
     groqApiKey: readEnv("GROQ_API_KEY"),
     groqModel: readEnv("GROQ_MODEL") || "llama-3.3-70b-versatile",
   };
@@ -86,46 +133,50 @@ async function callGitHub(
     throw new Error("GitHub token is not configured on the server.");
   }
 
+  let lastFailure = "no tokens attempted";
+
   for (let attempt = 0; attempt < config.githubTokens.length; attempt++) {
+    signal?.throwIfAborted();
+
     const idx = (currentTokenIndex + attempt) % config.githubTokens.length;
     const token = config.githubTokens[idx];
-    const response = await fetch(
-      "https://models.inference.ai.azure.com/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: config.githubModel,
-          messages,
-          temperature: 0.3,
-          max_tokens: 16000,
-        }),
-        signal,
+    const response = await fetch(GITHUB_MODELS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        model: config.githubModel,
+        messages,
+        temperature: 0.3,
+        max_tokens: 16000,
+      }),
+      signal,
+    });
 
     if (response.ok) {
       currentTokenIndex = idx;
       const data = (await response.json()) as ChatAPIResponse;
       const content = data.choices?.[0]?.message?.content;
       if (!content) {
-        throw new Error("GitHub Models API returned an empty response.");
+        lastFailure = "returned an empty response";
+        continue;
       }
       return content;
     }
 
-    if (response.status === 401 || response.status === 429) {
-      continue;
-    }
-
-    const errBody = await response.text();
-    throw new Error(`GitHub Models API error (${response.status}): ${errBody}`);
+    // 401/429 are per-token; every other status (404/410 during the GitHub
+    // Models retirement, 5xx, …) is provider-wide. Either way another token
+    // is cheap to try, and the chain falls through to the next provider.
+    const errBody = (await response.text()).slice(0, 300);
+    lastFailure = `HTTP ${response.status}${errBody ? `: ${errBody}` : ""}`;
+    console.warn(
+      `[GitHub Models] token ${idx + 1}/${config.githubTokens.length} failed — ${lastFailure}`,
+    );
   }
 
-  throw new Error("ALL_GITHUB_RATE_LIMITED");
+  throw new Error(`All GitHub tokens failed (${lastFailure}).`);
 }
 
 async function callGroq(
@@ -156,7 +207,7 @@ async function callGroq(
   );
 
   if (!response.ok) {
-    const errBody = await response.text();
+    const errBody = (await response.text()).slice(0, 300);
     throw new Error(`Groq API error (${response.status}): ${errBody}`);
   }
 
@@ -180,7 +231,7 @@ async function withRetry<T>(
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      if (attempt === maxRetries) {
+      if (attempt === maxRetries || !isRetryable(lastError)) {
         throw lastError;
       }
 
@@ -192,6 +243,27 @@ async function withRetry<T>(
   throw lastError || new Error("Unknown AI runtime failure.");
 }
 
+function isRetryable(error: Error): boolean {
+  // An aborted request and a fully-exhausted provider chain will both fail the
+  // same way on every retry — only pay the backoff for transient failures.
+  if (error.name === "AbortError") return false;
+  return !error.message.startsWith(ALL_PROVIDERS_FAILED_PREFIX);
+}
+
+function describeFailures(failures: ProviderFailure[]): string {
+  if (failures.length === 0) {
+    return "No server-side AI provider is configured. Set OPENROUTER_API_KEY, GITHUB_TOKEN, GITHUB_TOKENS, or GROQ_API_KEY.";
+  }
+
+  const detail = failures
+    .map(
+      ({ provider, message }) =>
+        `${provider} — ${FAILURE_ALIASES[message] || message}`,
+    )
+    .join("; ");
+  return `${ALL_PROVIDERS_FAILED_PREFIX}. ${detail}`;
+}
+
 export async function callServerAI(
   messages: ChatMessage[],
   signal?: AbortSignal,
@@ -201,47 +273,53 @@ export async function callServerAI(
   return withRetry(async () => {
     signal?.throwIfAborted();
 
-    // 1. Try OpenRouter (load-balanced free models)
-    if (config.openRouterApiKey && config.openRouterModels.length > 0) {
+    const providers: {
+      name: string;
+      enabled: boolean;
+      call: () => Promise<string>;
+    }[] = [
+      {
+        name: "OpenRouter",
+        enabled: Boolean(
+          config.openRouterApiKey && config.openRouterModels.length > 0,
+        ),
+        call: () => callOpenRouter(config, messages, signal),
+      },
+      {
+        name: "GitHub Models",
+        enabled: config.githubTokens.length > 0,
+        call: () => callGitHub(config, messages, signal),
+      },
+      {
+        name: "Groq",
+        enabled: Boolean(config.groqApiKey),
+        call: () => callGroq(config, messages, signal),
+      },
+    ];
+
+    const failures: ProviderFailure[] = [];
+
+    for (const provider of providers) {
+      if (!provider.enabled) continue;
+
       try {
-        return await callOpenRouter(config, messages, signal);
+        return await provider.call();
       } catch (error) {
-        const message = error instanceof Error ? error.message : "";
-        if (
-          message !== "ALL_OPENROUTER_RATE_LIMITED" &&
-          !message.includes("not configured")
-        ) {
+        // An aborted request is the caller giving up, not a provider fault —
+        // never burn the remaining providers on it.
+        if (error instanceof Error && error.name === "AbortError") {
           throw error;
         }
+
+        const message =
+          error instanceof Error ? error.message : String(error);
+        failures.push({ provider: provider.name, message });
         console.warn(
-          "All OpenRouter models exhausted — falling back to GitHub",
+          `[AI] ${provider.name} failed — falling through to the next provider: ${message}`,
         );
       }
     }
 
-    // 2. Try GitHub Models
-    if (config.githubTokens.length > 0) {
-      try {
-        return await callGitHub(config, messages, signal);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "";
-        if (
-          message !== "ALL_GITHUB_RATE_LIMITED" &&
-          !message.includes("not configured")
-        ) {
-          throw error;
-        }
-        console.warn("All GitHub tokens exhausted — falling back to Groq");
-      }
-    }
-
-    // 3. Try Groq
-    if (config.groqApiKey) {
-      return callGroq(config, messages, signal);
-    }
-
-    throw new Error(
-      "No server-side AI provider is configured. Set OPENROUTER_API_KEY, GITHUB_TOKEN, GITHUB_TOKENS, or GROQ_API_KEY.",
-    );
+    throw new Error(describeFailures(failures));
   });
 }
