@@ -132,6 +132,10 @@ export async function callOpenRouter(
         signal,
       });
     } catch (err) {
+      // The caller giving up is not a model fault — don't burn the remaining models on it.
+      if (err instanceof Error && err.name === "AbortError") {
+        throw err;
+      }
       // Network error — try next model
       console.warn(
         `[OpenRouter] Network error for ${model}:`,
