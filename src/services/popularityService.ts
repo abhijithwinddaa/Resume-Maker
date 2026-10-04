@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { LOCAL_DEV_AUTH } from "../auth/devAuth";
 import type {
   PopularityCounterRow,
   PopularityMetricKey,
@@ -16,6 +17,9 @@ const COUNTER_COLUMNS = "feature_key, total_count, unique_users, updated_at";
 export async function recordFeatureUsage(
   featureKey: PopularityMetricKey,
 ): Promise<void> {
+  // Local test sessions must not inflate the public usage counters.
+  if (LOCAL_DEV_AUTH) return;
+
   const { error } = await supabase.rpc("record_popularity_usage", {
     p_feature_key: featureKey,
   });

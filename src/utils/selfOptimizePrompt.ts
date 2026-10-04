@@ -32,7 +32,8 @@ There is NO specific job description — you are optimizing for GENERAL best pra
 
 ## CONTEXT
 The resume was self-scored and got **${atsReport.overallScore}/100**.
-The target is **90+/100**. You MUST aggressively improve ALL weak areas.
+The target is **90+/100** — but only through truthful edits. A lower score on an
+honest resume beats a higher score on one the candidate cannot defend in an interview.
 
 ## SELF-ATS SCAN REPORT
 - **Overall Score**: ${atsReport.overallScore}/100
@@ -42,10 +43,10 @@ The target is **90+/100**. You MUST aggressively improve ALL weak areas.
 - **ATS Formatting**: ${atsReport.breakdown.formatting.score}/100 — ${atsReport.breakdown.formatting.feedback}
 - **Impact & Metrics**: ${atsReport.breakdown.impact.score}/100 — ${atsReport.breakdown.impact.feedback}
 
-## MISSING INDUSTRY KEYWORDS (SHOULD ADD)
+## MISSING INDUSTRY KEYWORDS (ADD ONLY WITH EVIDENCE)
 ${missingKeywords}
 
-## MISSING SKILLS (SHOULD ADD)
+## MISSING SKILLS (ADD ONLY WITH EVIDENCE)
 ${missingSkills}
 
 ## SUGGESTIONS TO IMPLEMENT
@@ -58,17 +59,17 @@ ${qualitySignals}
 ${writingContract}
 
 ## CRITICAL INSTRUCTIONS
-1. **Add missing industry keywords** — Incorporate them naturally into summary, project bullets, experience bullets, or skills.
-2. **Add missing skills** — Add them to appropriate skill categories. Only add skills reasonable for the candidate's background.
-3. **Implement ALL suggestions** — Follow every suggestion from the report.
+1. **Missing keywords: use one only where the existing resume already shows evidence for it** — the same tool under another name, a direct synonym, or work that plainly is that thing. Surface it in the bullet that holds the evidence.
+2. **No evidence? Leave it out** — out of bullets, summary AND skills. Never add a tool, platform, or skill the resume gives no sign the candidate has used.
+3. **Implement the suggestions** — when they can be done truthfully.
 4. **Use strong action verbs** — Built, Designed, Implemented, Optimized, Deployed, Architected, Led, Scaled, Reduced, Automated, etc.
-5. **Quantify impact** — Add numbers, percentages, metrics wherever the resume provides enough evidence to do so truthfully.
+5. **Never introduce a number** — reuse the metrics, counts, and years already in the resume. Do not estimate, round up, or add new percentages, user counts, or years of experience.
 6. **Summary must be strong** — Front-load with the candidate's top strengths and domain expertise.
 7. **Keep it truthful** — Rephrase and enhance, but don't fabricate experience.
 8. **Education & Contact** — Keep as-is. NEVER remove or change any URLs/links.
 9. **The resume MUST fit on a single page** — Be concise. Each bullet point should be 1-2 lines max.
-10. **Every missing keyword from the report MUST appear somewhere in the output** — This is the #1 priority, but add terms naturally.
-11. **Experience section** — If present, optimize bullets with stronger action verbs and metrics using the writing contract.
+10. **Truthfulness outranks keyword coverage** — when the two conflict, keep the resume honest.
+11. **Experience section** — If present, optimize bullets with stronger action verbs and the resume's existing metrics, using the writing contract.
 12. **sectionOrder** — Keep the same section order.
 13. **PRESERVE ALL LINKS** — Keep ALL githubLink, liveLink, linkedin, github, portfolio, and certificate link values EXACTLY as they are. Never empty or modify URLs.
 14. **Output ONLY valid JSON** — No markdown, no code fences, no explanation.

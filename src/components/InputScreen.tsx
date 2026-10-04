@@ -12,6 +12,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore";
+import { useShallow } from "zustand/react/shallow";
 import { LIMITS } from "../utils/inputValidation";
 import { formatCooldown } from "../utils/rateLimiter";
 
@@ -65,7 +66,24 @@ export const InputScreen: React.FC<InputScreenProps> = ({
     error,
     setError,
     setStep,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((s) => ({
+      step: s.step,
+      mode: s.mode,
+      resumeData: s.resumeData,
+      activeResumeId: s.activeResumeId,
+      uploadedFileName: s.uploadedFileName,
+      setUploadedFileName: s.setUploadedFileName,
+      resumeText: s.resumeText,
+      setResumeText: s.setResumeText,
+      jdText: s.jdText,
+      setJdText: s.setJdText,
+      loadingMessage: s.loadingMessage,
+      error: s.error,
+      setError: s.setError,
+      setStep: s.setStep,
+    })),
+  );
 
   return (
     <>
@@ -148,6 +166,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                       </span>
                     )}
                     <label
+                      data-tour="upload-pdf"
                       className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
                       aria-disabled={isPdfLoading}
                     >
@@ -189,6 +208,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                     <textarea
                       className="input-textarea"
                       placeholder="Paste your full resume text here or upload a PDF..."
+                      data-tour="resume-text"
                       value={resumeText}
                       maxLength={LIMITS.MAX_RESUME_TEXT_LENGTH}
                       onChange={(e) => {
@@ -217,6 +237,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                 maxLength={LIMITS.MAX_JD_LENGTH}
                 onChange={(e) => setJdText(e.target.value)}
                 aria-label="Job description"
+                data-tour="job-description"
               />
               <small className="char-count">
                 {jdText.length.toLocaleString()} /{" "}
@@ -238,6 +259,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
             {resumeData && activeResumeId && atsResumeSource === "existing" ? (
               <button
                 className="analyze-btn"
+                data-tour="primary-action"
                 onClick={handleAnalyzeExisting}
                 disabled={!jdText.trim() || isAnalyzeCoolingDown}
               >
@@ -256,6 +278,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
             ) : (
               <button
                 className="analyze-btn"
+                data-tour="primary-action"
                 onClick={handleAnalyze}
                 disabled={
                   (atsResumeSource === "new"
@@ -339,7 +362,8 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                     </span>
                   )}
                   <label
-                    className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
+                    data-tour="upload-pdf"
+                      className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
                     aria-disabled={isPdfLoading}
                   >
                     <Upload size={13} />
@@ -377,6 +401,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                   <textarea
                     className="input-textarea"
                     placeholder="Paste your full resume text here or upload a PDF..."
+                      data-tour="resume-text"
                     value={resumeText}
                     maxLength={LIMITS.MAX_RESUME_TEXT_LENGTH}
                     onChange={(e) => {
@@ -417,6 +442,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
             </button>
             <button
               className="analyze-btn"
+                data-tour="primary-action"
               onClick={handleParseResume}
               disabled={!resumeText.trim() || isAnalyzeCoolingDown}
             >

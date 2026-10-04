@@ -36,50 +36,23 @@ const getFontSizes = (fontSize?: "xsmall" | "small" | "medium" | "large" | "xlar
 };
 
 // Mapping paragraph and section spacing settings
+const PARAGRAPH_AFTER = { compact: 20, normal: 40, relaxed: 60, loose: 80 };
+const SECTION_HEAD_BEFORE = {
+  tight: 100,
+  normal: 160,
+  spacious: 240,
+  "extra-spacious": 360,
+};
+
 const getSpacing = (
   lineHeight?: "compact" | "normal" | "relaxed" | "loose",
   sectionSpacing?: "tight" | "normal" | "spacious" | "extra-spacious"
 ) => {
-  let bodyAfter = 40;
-  let headAfter = 40;
-  switch (lineHeight) {
-    case "compact":
-      bodyAfter = 20;
-      headAfter = 20;
-      break;
-    case "relaxed":
-      bodyAfter = 60;
-      headAfter = 60;
-      break;
-    case "loose":
-      bodyAfter = 80;
-      headAfter = 80;
-      break;
-    case "normal":
-    default:
-      bodyAfter = 40;
-      headAfter = 40;
-      break;
-  }
+  const after = PARAGRAPH_AFTER[lineHeight ?? "normal"] ?? PARAGRAPH_AFTER.normal;
+  const headBefore =
+    SECTION_HEAD_BEFORE[sectionSpacing ?? "normal"] ?? SECTION_HEAD_BEFORE.normal;
 
-  let headBefore = 160;
-  switch (sectionSpacing) {
-    case "tight":
-      headBefore = 100;
-      break;
-    case "spacious":
-      headBefore = 240;
-      break;
-    case "extra-spacious":
-      headBefore = 360;
-      break;
-    case "normal":
-    default:
-      headBefore = 160;
-      break;
-  }
-
-  return { bodyAfter, headBefore, headAfter };
+  return { bodyAfter: after, headBefore, headAfter: after };
 };
 
 export async function exportToDocx(

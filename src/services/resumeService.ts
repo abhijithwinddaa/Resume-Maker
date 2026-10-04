@@ -1,4 +1,11 @@
 import { supabase } from "../lib/supabase";
+import { LOCAL_DEV_AUTH } from "../auth/devAuth";
+import {
+  deleteLocalResume,
+  loadAllLocalResumes,
+  renameLocalResume,
+  saveLocalResume,
+} from "./localResumeStore";
 import type { ResumeData } from "../types/resume";
 import { DEFAULT_SECTION_ORDER } from "../types/resume";
 
@@ -53,6 +60,11 @@ function deriveResumeName(
  * Load all resumes for a user.
  */
 export async function loadAllResumes(userId: string): Promise<ResumeRow[]> {
+  // No Clerk session locally, so Supabase's row-level security would refuse.
+  if (LOCAL_DEV_AUTH) {
+    return (await loadAllLocalResumes(userId)).map(normalizeRow);
+  }
+
   const { data, error } = await supabase
     .from("resumes")
     .select("id, user_id, name, data, updated_at")
@@ -100,6 +112,8 @@ export async function saveResume(
   resumeData: ResumeData,
   options: SaveResumeOptions = {},
 ): Promise<ResumeRow | null> {
+  if (LOCAL_DEV_AUTH) return saveLocalResume(userId, resumeData, options);
+
   const { resumeId, name } = options;
   const row: Record<string, unknown> = {
     user_id: userId,
@@ -145,6 +159,8 @@ export async function saveResume(
  * Delete a resume by ID.
  */
 export async function deleteResume(resumeId: string): Promise<boolean> {
+  if (LOCAL_DEV_AUTH) return deleteLocalResume(resumeId);
+
   const { error } = await supabase.from("resumes").delete().eq("id", resumeId);
 
   if (error) {
@@ -161,6 +177,8 @@ export async function renameResume(
   resumeId: string,
   name: string,
 ): Promise<boolean> {
+  if (LOCAL_DEV_AUTH) return renameLocalResume(resumeId, name);
+
   const { error } = await supabase
     .from("resumes")
     .update({ name })

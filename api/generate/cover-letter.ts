@@ -6,6 +6,10 @@ import {
 } from "../../src/server/aiCacheStore.js";
 import { callServerAI } from "../../src/server/aiRuntime.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import {
+  checkAIRateLimit,
+  rateLimitedResponse,
+} from "../../src/server/rateLimit.js";
 import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
@@ -112,6 +116,11 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
+  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit.retryAfterSeconds);
+  }
+
   let body: GenerateCoverLetterRequest;
   try {
     body = (await request.json()) as GenerateCoverLetterRequest;
@@ -166,6 +175,8 @@ async function handleRequest(request: Request): Promise<Response> {
           },
         ],
         request.signal,
+        // A few paragraphs of prose.
+        { maxTokens: 1600 },
       );
 
       const trimmed = generated.trim();

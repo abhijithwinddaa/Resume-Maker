@@ -13,7 +13,9 @@ vi.mock("react-to-print", () => ({
   useReactToPrint: () => printSpy,
 }));
 
-vi.mock("@clerk/clerk-react", () => ({
+vi.mock("../auth", () => ({
+  // Exercise the real feedback gate, not the local-dev shortcut past it.
+  LOCAL_DEV_AUTH: false,
   useClerk: () => ({ openSignIn: openSignInSpy }),
   useUser: () => ({
     user: mockUserId

@@ -35,13 +35,31 @@ const OPENROUTER_ENDPOINT =
 const APP_REFERER = "https://resume.batturaj.in";
 const APP_TITLE = "Resume Maker";
 
-/** Default model weights — higher weight = higher selection probability. */
+/**
+ * Free-tier models used when OPENROUTER_MODELS is unset, with their selection
+ * weights — higher weight = higher selection probability.
+ *
+ * OpenRouter's free pool churns: a `:free` id can lose its free variant or
+ * leave the catalog entirely, and a request naming a dead id fails on the id
+ * alone. Every entry here was checked against
+ * https://openrouter.ai/api/v1/models on 2026-08-14 for `pricing.prompt === 0`
+ * and `response_format` support, since every caller wants JSON back.
+ *
+ * Re-verify with:
+ *   curl -s https://openrouter.ai/api/v1/models \
+ *     | jq -r '.data[] | select(.id | endswith(":free"))
+ *              | select(.supported_parameters | index("response_format")) | .id'
+ */
 const DEFAULT_MODEL_WEIGHTS: Record<string, number> = {
-  "openai/gpt-oss-120b:free": 4,
-  "google/gemini-2.5-flash-preview-05-20:free": 3,
-  "qwen/qwq-32b:free": 2,
-  "meta-llama/llama-4-maverick:free": 1,
+  "openai/gpt-oss-20b:free": 4,
+  "nvidia/nemotron-3-super-120b-a12b:free": 3,
+  "google/gemma-4-31b-it:free": 2,
+  "google/gemma-4-26b-a4b-it:free": 2,
+  "nvidia/nemotron-nano-9b-v2:free": 1,
 };
+
+/** The default free pool, ordered by weight for readability. */
+export const DEFAULT_FREE_MODELS: string[] = Object.keys(DEFAULT_MODEL_WEIGHTS);
 
 /**
  * Pick a model using weighted random selection from the available pool.
@@ -89,6 +107,7 @@ function stripThinkingTokens(text: string): string {
 export async function callOpenRouter(
   config: OpenRouterConfig,
   messages: ChatMessage[],
+  maxTokens: number,
   signal?: AbortSignal,
 ): Promise<string> {
   const { openRouterApiKey, openRouterModels } = config;
@@ -127,7 +146,12 @@ export async function callOpenRouter(
           model,
           messages,
           temperature: 0.3,
-          max_tokens: 16000,
+          max_tokens: maxTokens,
+          // Every model in the free pool is a reasoning model. Left on, the
+          // chain of thought arrives inside `content` and the caller's JSON
+          // parse fails on the prose in front of it. `stripThinkingTokens`
+          // below only catches the models that fence it in <think> tags.
+          reasoning: { exclude: true },
         }),
         signal,
       });

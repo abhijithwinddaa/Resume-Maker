@@ -1,5 +1,4 @@
 export interface PrivacySettings {
-  embedResumeDataInPdf: boolean;
   saveLocalBackups: boolean;
   cacheAIResponses: boolean;
 }
@@ -7,7 +6,6 @@ export interface PrivacySettings {
 const PRIVACY_SETTINGS_KEY = "privacy-settings";
 
 export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
-  embedResumeDataInPdf: true,
   saveLocalBackups: true,
   cacheAIResponses: true,
 };

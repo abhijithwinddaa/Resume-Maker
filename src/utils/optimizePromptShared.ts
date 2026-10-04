@@ -1,7 +1,7 @@
 import type { ATSResult } from "../server/aiParsing.js";
 import type { ResumeFeedbackSignal } from "./resumeFeedback.js";
 
-export const OPTIMIZE_PROMPT_VERSION = "v2-structured-safe";
+export const OPTIMIZE_PROMPT_VERSION = "v3-evidence-only";
 
 const WEAK_OPENINGS = [
   "worked on",

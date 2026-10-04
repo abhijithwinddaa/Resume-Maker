@@ -1,5 +1,9 @@
 import { callServerAI } from "../../src/server/aiRuntime.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import {
+  checkAIRateLimit,
+  rateLimitedResponse,
+} from "../../src/server/rateLimit.js";
 import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
@@ -35,6 +39,11 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
+  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit.retryAfterSeconds);
+  }
+
   let body: { bulletText?: string; jobDescription?: string };
   try {
     body = await request.json();
@@ -51,7 +60,7 @@ async function handleRequest(request: Request): Promise<Response> {
 
   try {
     const systemPrompt = 
-      "You are an expert resume writer. You optimize individual bullet points on resumes using the STAR method (Situation, Task, Action, Result) to make them action-oriented, professional, metrics-driven, and ATS-friendly. Output ONLY the single optimized bullet point text. Do NOT wrap the response in quotes, code fences, markdown, or prefix it with labels. Keep the output to a single concise sentence.";
+      "You are an expert resume writer. You optimize individual bullet points on resumes using the STAR method (Situation, Task, Action, Result) to make them action-oriented, professional, and ATS-friendly. Keep every metric the original states, and never introduce a number, tool, or outcome it does not — the candidate must be able to defend the line in an interview. Output ONLY the single optimized bullet point text. Do NOT wrap the response in quotes, code fences, markdown, or prefix it with labels. Keep the output to a single concise sentence.";
 
     const userContent = jobDescription
       ? `Original Bullet Point: "${bulletText}"\nTarget Job Description:\n"${jobDescription}"\nOptimize this bullet point to match the JD, emphasizing relevant skills and professional impact.`
@@ -63,6 +72,8 @@ async function handleRequest(request: Request): Promise<Response> {
         { role: "user", content: userContent },
       ],
       request.signal,
+      // One rewritten bullet.
+      { maxTokens: 800 },
     );
 
     // Sanitize output to remove any quotes the LLM might have outputted

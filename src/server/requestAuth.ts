@@ -52,11 +52,32 @@ function normalizeUrl(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
+/**
+ * A Clerk publishable key is `pk_(test|live)_` + base64 of the instance's
+ * Frontend API host followed by `$`, and that host is the token issuer. Reading
+ * it from the key the frontend already needs means CLERK_JWT_ISSUER is only an
+ * override, not one more setting to keep in sync.
+ */
+function issuerFromPublishableKey(): string {
+  const key = readEnv("CLERK_PUBLISHABLE_KEY", "VITE_CLERK_PUBLISHABLE_KEY");
+  const encoded = /^pk_(?:test|live)_(.+)$/.exec(key)?.[1];
+  if (!encoded) return "";
+
+  try {
+    const host = atob(encoded).replace(/\$$/, "");
+    return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host) ? `https://${host}` : "";
+  } catch {
+    return "";
+  }
+}
+
 function getAuthConfig():
   | { issuer: string; jwksUrl: string }
   | { issuer: ""; jwksUrl: string }
   | null {
-  const issuer = normalizeUrl(readEnv("CLERK_JWT_ISSUER", "CLERK_ISSUER"));
+  const issuer = normalizeUrl(
+    readEnv("CLERK_JWT_ISSUER", "CLERK_ISSUER") || issuerFromPublishableKey(),
+  );
   const explicitJwksUrl = readEnv("CLERK_JWKS_URL");
 
   if (explicitJwksUrl) {
@@ -95,6 +116,21 @@ function getRemoteJwks(jwksUrl: string) {
   return remote;
 }
 
+/** Must match LOCAL_DEV_TOKEN in src/auth/devAuth.ts. */
+const LOCAL_DEV_TOKEN = "local-dev-token";
+const LOCAL_DEV_USER_ID = "local_dev_user";
+
+/**
+ * True only inside `npm run dev`: the Vite dev server's API plugin sets
+ * RESUME_MAKER_LOCAL_API, and Vercel sets VERCEL on every deployment — so even
+ * a mistakenly copied env var cannot open this door in production.
+ */
+function isLocalDevServer(): boolean {
+  return (
+    readEnv("RESUME_MAKER_LOCAL_API") === "1" && !readEnv("VERCEL")
+  );
+}
+
 export async function authenticateClerkRequest(
   request: Request,
 ): Promise<RequestAuthResult> {
@@ -104,6 +140,17 @@ export async function authenticateClerkRequest(
       ok: false,
       status: 401,
       message: "Unauthorized: Missing authentication token.",
+    };
+  }
+
+  if (token === LOCAL_DEV_TOKEN && isLocalDevServer()) {
+    return {
+      ok: true,
+      user: {
+        userId: LOCAL_DEV_USER_ID,
+        token,
+        payload: { sub: LOCAL_DEV_USER_ID },
+      },
     };
   }
 
