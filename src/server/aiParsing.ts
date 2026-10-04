@@ -3,6 +3,7 @@ import {
   type ResumeFeedbackInsights,
 } from "../utils/resumeFeedback.js";
 import type { ResumeData } from "../types/resume.js";
+import { revertInventedMetrics } from "./truthGuard.js";
 
 export interface ATSBreakdownItem {
   score: number;
@@ -236,7 +237,7 @@ export function finalizeOptimizedResume(
   }
   parsed.showExperience = originalResume.showExperience;
   restoreLinks(parsed, originalResume);
-  return parsed;
+  return revertInventedMetrics(parsed, originalResume);
 }
 
 export function parseOptimizedResumeResponse(

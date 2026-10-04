@@ -11,7 +11,6 @@ AI-powered resume builder, ATS scorer, optimizer, and editor built with React, C
 - Edit with live preview, section ordering, template customization, and export to PDF or DOCX.
 - Manage multiple saved resumes instead of a single profile.
 - Generate cover letters from the current resume + JD context.
-- Control local privacy settings for PDF metadata export, local backups, and AI response caching.
 - Send first-login welcome emails, daily reminder emails, and admin feedback replies through Resend.
 
 ## Stack
@@ -21,7 +20,7 @@ AI-powered resume builder, ATS scorer, optimizer, and editor built with React, C
 - Vite 7
 - Clerk for auth
 - Supabase for persistence
-- GitHub Models with Groq fallback
+- Free-tier AI chain: Groq, NVIDIA NIM, OpenRouter, GitHub Models, Z.ai
 - `pdfjs-dist`, `tesseract.js`, `html2canvas-pro`, `pdf-lib`, `docx`
 
 ## Environment
@@ -31,9 +30,14 @@ Create a `.env` file in the project root:
 ```env
 # Clerk
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_key
-CLERK_JWT_ISSUER=https://your-clerk-issuer
-# Optional override if your issuer does not expose /.well-known/jwks.json
-CLERK_JWKS_URL=https://your-clerk-issuer/.well-known/jwks.json
+# Optional: the server derives the issuer from the publishable key.
+# CLERK_JWT_ISSUER=https://your-clerk-issuer
+# CLERK_JWKS_URL=https://your-clerk-issuer/.well-known/jwks.json
+
+# `npm run dev` signs you in as a local test user (no Clerk; resumes saved in
+# browser storage). Set to "clerk" to test the real sign-in flow locally.
+# Has no effect on production builds.
+# VITE_DEV_AUTH=clerk
 
 # Supabase
 VITE_SUPABASE_URL=https://your-project.supabase.co
@@ -43,10 +47,38 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 # The template should include an email claim for admin remove permissions.
 VITE_CLERK_SUPABASE_TEMPLATE=supabase
 
-# Server-side AI for ATS analyze + optimize
+# Server-side AI for ATS analyze + optimize. All free tiers.
+# Providers are tried in order: Groq -> NVIDIA -> OpenRouter -> GitHub Models -> Z.ai.
+# Any one of them is enough; set several for fallback.
+#
+# Groq, NVIDIA and Z.ai each rotate across a pool of models (free tiers meter
+# each model separately) and bench a model for its Retry-After window after a
+# 429. Each pool has a vetted default; *_MODELS overrides it with a comma list.
+
+# Groq (fastest, ~2-4s). Free limits are per model.
+GROQ_API_KEY=gsk_your_groq_key
+# GROQ_MODELS=openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b
+
+# NVIDIA NIM (build.nvidia.com) — 40 requests/min, no daily cap, ~10s.
+NVIDIA_API_KEY=nvapi-your_nvidia_key
+# NVIDIA_MODELS=openai/gpt-oss-20b
+
+# Z.ai (z.ai, email signup) — free GLM Flash; slow and least accurate, so last.
+ZAI_API_KEY=your_zai_key
+# ZAI_MODELS=glm-4.5-flash
+
+# OpenRouter — free models are capped at 50 requests/day per account.
+# The key on its own is enough. Traffic is spread across a vetted set of
+# `:free` models by weighted random, retrying the next one on 429/401/402.
+OPENROUTER_API_KEY=sk-or-v1-your_openrouter_key
+# Optional: override the default free pool with a comma-separated list.
+# OpenRouter's free tier churns — re-check ids before pinning them:
+#   curl -s https://openrouter.ai/api/v1/models \
+#     | jq -r '.data[] | select(.id | endswith(":free")) | .id'
+# OPENROUTER_MODELS=openai/gpt-oss-20b:free,google/gemma-4-31b-it:free
+
 GITHUB_TOKEN=github_pat_server_token_1
 GITHUB_TOKENS=github_pat_server_token_1,github_pat_server_token_2
-GROQ_API_KEY=your_server_groq_key_optional
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # Site URL / analytics
@@ -75,6 +107,22 @@ REMINDER_DAILY_LIMIT=200
 npm install
 npm run dev
 ```
+
+`npm run dev` runs the whole app, API routes included, at http://localhost:5173.
+
+### Local development mode
+
+In `npm run dev` you are signed in automatically as a local test user, so no
+Clerk login is needed:
+
+- The header shows a **Local dev** badge instead of the account menu.
+- Resumes are saved in browser storage instead of Supabase.
+- The export feedback prompt, usage counters, and welcome emails are skipped.
+- AI routes still call the real providers with the keys in `.env`.
+
+Set `VITE_DEV_AUTH=clerk` in `.env` to test real sign-in locally. Production
+builds never include local mode, and the API accepts the local sign-in only
+from the Vite dev server (never on Vercel).
 
 ## Supabase Setup
 
@@ -127,6 +175,6 @@ npm run test
 
 ## Notes
 
-- PDF exports can optionally embed structured resume metadata for lossless re-import. This is configurable in the in-app Settings panel.
-- Local backups and AI response caching are also configurable in Settings.
+- PDF export goes through the browser's print dialog, so exported PDFs carry no embedded resume data. Uploading an older export that does embed it still imports losslessly.
+- Local backups and AI response caching default to on (`src/types/privacySettings.ts`); there is no in-app toggle for them yet.
 - Resume autosave now targets the active resume instead of treating the account like a single document slot.

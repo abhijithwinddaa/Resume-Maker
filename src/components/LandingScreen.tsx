@@ -1,5 +1,5 @@
 import React from "react";
-import { SignedOut, SignedIn } from "@clerk/clerk-react";
+import { ClerkFailed, SignedOut, SignedIn } from "../auth";
 import {
   FileText,
   Target,
@@ -7,8 +7,10 @@ import {
   PlusCircle,
   LogIn,
   HardDrive,
+  AlertCircle,
 } from "lucide-react";
 import { useAppStore, type AppMode } from "../store/appStore";
+import { useShallow } from "zustand/react/shallow";
 import { loadLocalBackup, formatBackupAge } from "../utils/localBackup";
 
 interface LandingScreenProps {
@@ -42,13 +44,26 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   const {
     hasBackup,
     privacySettings,
+    error,
     setActiveResumeId,
     setActiveResumeName,
     setResumeData,
     setJdText,
     setMode,
     setStep,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((s) => ({
+      hasBackup: s.hasBackup,
+      privacySettings: s.privacySettings,
+      error: s.error,
+      setActiveResumeId: s.setActiveResumeId,
+      setActiveResumeName: s.setActiveResumeName,
+      setResumeData: s.setResumeData,
+      setJdText: s.setJdText,
+      setMode: s.setMode,
+      setStep: s.setStep,
+    })),
+  );
 
   return (
     <div
@@ -71,11 +86,31 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
         )}
       </div>
 
+      <ClerkFailed>
+        <div className="error-banner landing-error" role="alert">
+          <AlertCircle size={16} aria-hidden="true" />
+          <span>
+            Sign-in couldn't load, so nothing can be opened yet. Reload the
+            page. If it keeps happening, clear this site's data (DevTools →
+            Application → Clear site data) or turn off browser extensions for
+            this site.
+          </span>
+        </div>
+      </ClerkFailed>
+
+      {error && (
+        <div className="error-banner landing-error" role="alert">
+          <AlertCircle size={16} aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      )}
+
       <div className="landing-cards">
         {/* Card 1: ATS Score & Optimize */}
         <div
           className={`landing-card ${!user && pendingMode === "ats" ? "landing-card-selected" : ""}`}
           onClick={() => handleSelectMode("ats")}
+          data-tour="mode-ats"
           role="button"
           tabIndex={0}
           aria-pressed={!user && pendingMode === "ats"}
@@ -108,6 +143,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
         <div
           className={`landing-card ${!user && pendingMode === "edit" ? "landing-card-selected" : ""}`}
           onClick={() => handleSelectMode("edit")}
+          data-tour="mode-edit"
           role="button"
           tabIndex={0}
           aria-pressed={!user && pendingMode === "edit"}
@@ -140,6 +176,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
         <div
           className={`landing-card ${!user && pendingMode === "create" ? "landing-card-selected" : ""}`}
           onClick={() => handleSelectMode("create")}
+          data-tour="mode-create"
           role="button"
           tabIndex={0}
           aria-pressed={!user && pendingMode === "create"}

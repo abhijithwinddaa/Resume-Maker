@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { useClerk, useUser } from "@clerk/clerk-react";
+import { LOCAL_DEV_AUTH, useClerk, useUser } from "../auth";
 import { useReactToPrint } from "react-to-print";
 import { useAppStore } from "../store/appStore";
 import type { TemplateCustomization } from "../types/templates";
@@ -44,14 +44,11 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
   const { openSignIn } = useClerk();
   const { user } = useUser();
 
-  const {
-    resumeData,
-    setResumeData,
-    exportPageMode,
-    privacySettings,
-    customization,
-    setError,
-  } = useAppStore();
+  const resumeData = useAppStore((s) => s.resumeData);
+  const setResumeData = useAppStore((s) => s.setResumeData);
+  const exportPageMode = useAppStore((s) => s.exportPageMode);
+  const customization = useAppStore((s) => s.customization);
+  const setError = useAppStore((s) => s.setError);
 
   const [isExporting, setIsExporting] = useState(false);
   const [exportToastMessage, setExportToastMessage] = useState<string | null>(null);
@@ -265,7 +262,6 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
     trackEvent("resume_exported", {
       format: "pdf",
       has_resume_data: Boolean(resumeData),
-      embedded_resume_data: privacySettings.embedResumeDataInPdf,
       page_mode: exportPageMode,
       estimated_pages: fitResult.estimatedPages,
       compression_stage: fitResult.stage,
@@ -286,7 +282,6 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
   }, [
     evaluatePdfFit,
     exportPageMode,
-    privacySettings.embedResumeDataInPdf,
     resumeData,
     setError,
     setResumeData,
@@ -368,6 +363,13 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
 
       if (!user?.id) {
         openSignIn();
+        return;
+      }
+
+      // The gate checks the user's feedback in Supabase, which the local
+      // test user can't reach — and it fails closed, blocking every export.
+      if (LOCAL_DEV_AUTH) {
+        await exportAction();
         return;
       }
 

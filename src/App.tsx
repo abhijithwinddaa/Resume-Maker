@@ -14,7 +14,8 @@ import {
   SignedIn,
   useClerk,
   UserButton,
-} from "@clerk/clerk-react";
+  LOCAL_DEV_AUTH,
+} from "./auth";
 import { useAppStore } from "./store/appStore";
 import type { AppMode } from "./store/appStore";
 import type { ResumeData } from "./types/resume";
@@ -91,6 +92,7 @@ import {
   CheckCircle2,
   Settings,
   ArrowLeft,
+  HelpCircle,
 } from "lucide-react";
 import { useDebounce } from "./hooks/useDebounce";
 import { useExport } from "./hooks/useExport";
@@ -103,6 +105,7 @@ import { InputScreen } from "./components/InputScreen";
 import { ScoreScreen } from "./components/ScoreScreen";
 import { EditorScreen } from "./components/EditorScreen";
 import { ExportControls } from "./components/ExportControls";
+import { hasSeenTour, type TourId } from "./components/tour/tourSteps";
 import "./App.css";
 
 const ResumeTemplate = lazy(() => import("./components/ResumeTemplate"));
@@ -110,6 +113,7 @@ const TemplatePicker = lazy(() => import("./components/TemplatePicker"));
 const CoverLetterPanel = lazy(() => import("./components/CoverLetter"));
 const ResumeManagerPanel = lazy(() => import("./components/ResumeManager"));
 const PdfPreviewPanel = lazy(() => import("./components/PdfPreview"));
+const GuidedTour = lazy(() => import("./components/tour/GuidedTour"));
 
 const CLERK_SUPABASE_TEMPLATE =
   import.meta.env.VITE_CLERK_SUPABASE_TEMPLATE || "supabase";
@@ -142,7 +146,8 @@ function getAnalyzeProgressPercent(message: string): number {
 function App() {
   const { getToken } = useAuth();
   const { user } = useUser();
-  const { openSignIn } = useClerk();
+  const clerk = useClerk();
+  const { openSignIn } = clerk;
   const { t } = useTranslation();
   const userEmail =
     user?.primaryEmailAddress?.emailAddress ||
@@ -207,6 +212,7 @@ function App() {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCoverLetter, setShowCoverLetter] = useState(false);
   const [showResumeManager, setShowResumeManager] = useState(false);
+  const [activeTour, setActiveTour] = useState<TourId | null>(null);
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [settingsMenuPosition, setSettingsMenuPosition] = useState({
     top: 0,
@@ -322,53 +328,19 @@ function App() {
     isExportingRef.current = isExporting;
   }, [isExporting]);
 
-  /* ── Print & DevTools (Inspect) Prevention (Production Only) ── */
+  /* ── Route printing through the Download button (Production Only) ── */
+  // Ctrl+P / browser Print would print the raw page; the Download button runs
+  // page fitting and the export flow instead. Right-click and devtools stay
+  // available — blocking them protected nothing and got in users' way.
   useEffect(() => {
-    // Only run protection in production mode
     if (!import.meta.env.PROD) return;
 
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-    };
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 1. Block print keyboard shortcuts (Ctrl+P / Cmd+P)
       if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) {
         e.preventDefault();
         alert(
           "Please use the download button inside the web application to download or print your resume."
         );
-        return;
-      }
-
-      // 2. Block Inspect Element shortcuts
-      // F12
-      if (e.key === "F12") {
-        e.preventDefault();
-        return;
-      }
-
-      // Ctrl+Shift+I / Cmd+Option+I (DevTools)
-      // Ctrl+Shift+J / Cmd+Option+J (Console)
-      // Ctrl+Shift+C / Cmd+Option+C (Inspect Element)
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        (e.shiftKey || e.altKey) &&
-        (e.key === "I" ||
-          e.key === "i" ||
-          e.key === "J" ||
-          e.key === "j" ||
-          e.key === "C" ||
-          e.key === "c")
-      ) {
-        e.preventDefault();
-        return;
-      }
-
-      // Ctrl+U / Cmd+Option+U (View Source)
-      if ((e.ctrlKey || e.metaKey) && (e.key === "u" || e.key === "U")) {
-        e.preventDefault();
-        return;
       }
     };
 
@@ -382,13 +354,11 @@ function App() {
       document.body.classList.remove("unauthorized-print");
     };
 
-    document.addEventListener("contextmenu", handleContextMenu);
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("beforeprint", handleBeforePrint);
     window.addEventListener("afterprint", handleAfterPrint);
 
     return () => {
-      document.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("beforeprint", handleBeforePrint);
       window.removeEventListener("afterprint", handleAfterPrint);
@@ -523,7 +493,9 @@ function App() {
       }
     };
 
-    setSupabaseAccessTokenGetter(getAuthToken);
+    // The local dev token is not a Supabase JWT: sending it would make
+    // Supabase reject even public reads, so stay anonymous instead.
+    setSupabaseAccessTokenGetter(LOCAL_DEV_AUTH ? null : getAuthToken);
     setServerAuthTokenGetter(getAuthToken);
     setAuthedApiTokenGetter(getAuthToken);
 
@@ -736,6 +708,9 @@ function App() {
 
   useEffect(() => {
     if (!user?.id || step !== "score" || !atsResult) return;
+    // A first-time user gets the score guide on this visit, not a request to
+    // rate an app they haven't understood yet; the prompt waits for a later one.
+    if (!hasSeenTour("score")) return;
 
     let lastPromptAt = 0;
     try {
@@ -804,6 +779,49 @@ function App() {
 
   const useStickyMobileActions =
     isCompactScreen && !isMobileKeyboardOpen && !isTextEntryFocused;
+
+  /* ── First-run guide: one tour per screen ───────────── */
+  const currentTourId: TourId | null =
+    step === "landing" || step === "input" || step === "editor" || step === "score"
+      ? step
+      : null;
+  const isAnotherOverlayOpen =
+    showTemplatePicker ||
+    showCoverLetter ||
+    showResumeManager ||
+    showFeedbackPanel ||
+    isSettingsMenuOpen ||
+    showMobileResumePreview;
+
+  // A guide left open for a screen the user has since moved off is stale.
+  useEffect(() => {
+    if (activeTour && activeTour !== currentTourId) setActiveTour(null);
+  }, [activeTour, currentTourId]);
+
+  // Show each screen's guide once, after the screen settles, and never on top
+  // of a panel, a menu, or work in progress.
+  useEffect(() => {
+    if (
+      !currentTourId ||
+      activeTour ||
+      hasSeenTour(currentTourId) ||
+      isAnotherOverlayOpen ||
+      isDbLoading ||
+      isAuthStarting ||
+      isOptimizing
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => setActiveTour(currentTourId), 800);
+    return () => window.clearTimeout(timer);
+  }, [
+    activeTour,
+    currentTourId,
+    isAnotherOverlayOpen,
+    isAuthStarting,
+    isDbLoading,
+    isOptimizing,
+  ]);
 
   useEffect(() => {
     activeResumeIdRef.current = activeResumeId;
@@ -1002,6 +1020,9 @@ function App() {
       });
       if (!user) {
         if (isAuthStarting) return;
+        // Clerk failed to load: openSignIn would silently do nothing. The
+        // landing screen's <ClerkFailed> banner explains what to do instead.
+        if (clerk.status === "error") return;
         setPendingMode(selectedMode);
         setModeToastMessage(
           `Selected: ${selectedMode === "ats" ? "ATS" : selectedMode === "edit" ? "Edit" : "Create"}`,
@@ -1052,6 +1073,7 @@ function App() {
       setActiveResumeId,
       setActiveResumeName,
       isAuthStarting,
+      clerk,
       openSignIn,
     ],
   );
@@ -1059,6 +1081,7 @@ function App() {
   const startSignInFlow = useCallback(
     (selectedMode: AppMode) => {
       if (isAuthStarting) return;
+      if (clerk.status === "error") return;
       setPendingMode(selectedMode);
       setIsAuthStarting(true);
       trackEvent("sign_in_initiated", { mode: selectedMode });
@@ -1071,7 +1094,7 @@ function App() {
       }, 10000);
       openSignIn();
     },
-    [isAuthStarting, openSignIn],
+    [isAuthStarting, clerk, openSignIn],
   );
 
   /* ── PDF Upload ──────────────────────────────────────── */
@@ -1614,6 +1637,15 @@ function App() {
 
   const handleReAnalyze = async () => {
     if (!resumeData) return;
+
+    if (isRateLimited("analyze", 30000)) {
+      const remaining = getRateLimitRemaining("analyze", 30000);
+      setError(
+        `Please wait ${formatCooldown(remaining)} before analyzing again.`,
+      );
+      return;
+    }
+
     setStep("analyzing");
     setError(null);
     setLoadingMessage(
@@ -1623,16 +1655,29 @@ function App() {
     );
     setOptimizeDone(false);
     setPreviousScore(null);
+    recordAction("analyze");
+
+    const controller = getRequestController("re-analyze");
 
     try {
       const ats = jdText.trim()
-        ? await analyzeATSScore(aiSettings, resumeData, jdText)
-        : await selfATSScore(aiSettings, resumeData);
+        ? await analyzeATSScore(
+            aiSettings,
+            resumeData,
+            sanitizeText(jdText),
+            controller.signal,
+          )
+        : await selfATSScore(aiSettings, resumeData, controller.signal);
+      if (controller.signal.aborted) return;
       setATSResult(ats);
       setStep("score");
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      resetCooldown("analyze");
       setError(err instanceof Error ? err.message : "Re-analysis failed");
       setStep("editor");
+    } finally {
+      clearRequestController("re-analyze");
     }
   };
 
@@ -1656,6 +1701,7 @@ function App() {
       "optimize",
       "self-optimize",
       "self-score",
+      "re-analyze",
       "cover-letter",
     ]) {
       abortRequestController(key);
@@ -1766,10 +1812,25 @@ function App() {
             <span className="save-indicator">Saving...</span>
           )}
           {saveStatus === "saved" && (
-            <span className="save-indicator saved">Saved ✓</span>
+            <span className="save-indicator saved" data-tour="save-status">
+              Saved ✓
+            </span>
           )}
           {saveStatus === "idle" && step === "editor" && resumeData && user && (
             <span className="save-indicator unsaved">Unsaved changes •</span>
+          )}
+
+          {currentTourId && (
+            <button
+              type="button"
+              className="header-btn header-help-btn"
+              onClick={() => setActiveTour(currentTourId)}
+              aria-label="Show guide for this screen"
+              title="Show guide"
+              data-tour="help"
+            >
+              <HelpCircle size={16} />
+            </button>
           )}
 
           <ThemeToggle />
@@ -1778,6 +1839,7 @@ function App() {
             {step !== "landing" && step !== "analyzing" && (
               <div
                 className="mode-switch"
+                data-tour="mode-switch"
                 role="group"
                 aria-label="Switch mode"
               >
@@ -2059,6 +2121,7 @@ function App() {
                 className={`header-btn ${preferredExportFormat === "pdf" ? "btn-primary" : ""}`}
                 onClick={exportPDF}
                 disabled={isExporting}
+                data-tour="export"
               >
                 <Download size={14} />
                 <span>{t("header.exportPDF")}</span>
@@ -2159,6 +2222,7 @@ function App() {
                 className="header-btn header-btn-labeled flow-btn"
                 onClick={() => setShowTemplatePicker(true)}
                 title="Templates & Style"
+                data-tour="templates"
                 aria-label="Templates & Style"
               >
                 <Palette size={14} />
@@ -2168,17 +2232,28 @@ function App() {
               <button
                 className="header-btn header-btn-labeled flow-btn"
                 onClick={handleSelfScore}
-                title="Self ATS Score"
+                disabled={isAnalyzeCoolingDown}
+                title={
+                  isAnalyzeCoolingDown
+                    ? `AI cooldown — available in ${formatCooldown(analyzeCooldownRemaining)}`
+                    : "Self ATS Score"
+                }
                 aria-label="Self ATS Score"
+                data-tour="self-score"
               >
                 <Trophy size={14} />
-                <span>{t("header.selfScore")}</span>
+                <span>
+                  {isAnalyzeCoolingDown
+                    ? `${t("header.selfScore")} (${formatCooldown(analyzeCooldownRemaining)})`
+                    : t("header.selfScore")}
+                </span>
               </button>
 
               <button
                 className="header-btn header-btn-labeled flow-btn"
                 onClick={() => setShowResumeManager(true)}
                 title="Files"
+                data-tour="files"
                 aria-label="Files"
               >
                 <FolderOpen size={14} />
@@ -2385,6 +2460,16 @@ function App() {
         feedbackInitialTab={feedbackInitialTab}
         handleFeedbackCompleted={handleFeedbackCompleted}
       />
+
+      {activeTour && (
+        <Suspense fallback={null}>
+          <GuidedTour
+            key={activeTour}
+            tourId={activeTour}
+            onClose={() => setActiveTour(null)}
+          />
+        </Suspense>
+      )}
 
       {/* Side panel: original PDF preview */}
       {showOriginalPdf && originalPdfUrl && (

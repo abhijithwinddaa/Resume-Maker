@@ -11,7 +11,7 @@ export function tokenizeText(text: string): FormatToken[] {
   if (!text) return [{ text: "", bold: false, italic: false, highlight: false }];
 
   const tokens: FormatToken[] = [];
-  let remaining = text;
+  const remaining = text;
 
   const regex = /(\*\*(.+?)\*\*)|((?<!\w)\*(?=\S)(.+?)(?<=\S)\*(?!\w))|(==(.+?)==)/g;
   let lastIndex = 0;

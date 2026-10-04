@@ -28,7 +28,7 @@ export interface CoverLetterData {
 }
 
 // ─── Multi-resume ────────────────────────────────────
-export interface ResumeMeta {
+export interface SavedResumeSummary {
   id: string;
   name: string;
   updatedAt: number;
@@ -84,7 +84,7 @@ interface AppState {
   aiSettings: AISettings;
 
   // ─── Multi-resume ──────────────────────
-  resumes: ResumeMeta[];
+  resumes: SavedResumeSummary[];
   activeResumeId: string | null;
   activeResumeName: string | null;
 
@@ -144,7 +144,7 @@ interface AppState {
   setAISettings: (settings: Partial<AISettings>) => void;
 
   // Multi-resume actions
-  setResumes: (resumes: ResumeMeta[]) => void;
+  setResumes: (resumes: SavedResumeSummary[]) => void;
   setActiveResumeId: (id: string | null) => void;
   setActiveResumeName: (name: string | null) => void;
 

@@ -20,6 +20,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore";
+import { useShallow } from "zustand/react/shallow";
 import { getKeywordPlacements, type KeywordSuggestion, type OptimizeProgress } from "../utils/aiService";
 import { type ResumeFeedbackSignal } from "../utils/resumeFeedback";
 import { formatCooldown } from "../utils/rateLimiter";
@@ -333,7 +334,26 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
     setIsAnalyzingKeywords,
     setActiveKeyword,
     applyKeywordSuggestion,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((s) => ({
+      step: s.step,
+      atsResult: s.atsResult,
+      resumeData: s.resumeData,
+      jdText: s.jdText,
+      optimizeDone: s.optimizeDone,
+      previousScore: s.previousScore,
+      isOptimizing: s.isOptimizing,
+      optimizeProgress: s.optimizeProgress,
+      error: s.error,
+      keywordSuggestions: s.keywordSuggestions,
+      isAnalyzingKeywords: s.isAnalyzingKeywords,
+      activeKeyword: s.activeKeyword,
+      setKeywordSuggestions: s.setKeywordSuggestions,
+      setIsAnalyzingKeywords: s.setIsAnalyzingKeywords,
+      setActiveKeyword: s.setActiveKeyword,
+      applyKeywordSuggestion: s.applyKeywordSuggestion,
+    })),
+  );
 
   const optimizePercent = useMemo(
     () => getOptimizeProgressPercent(optimizeProgress),
@@ -417,7 +437,7 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
       aria-label="ATS score results"
     >
       <div className="score-left">
-        <div className="score-header">
+        <div className="score-header" data-tour="score-meter">
           <ScoreMeter score={atsResult.overallScore} />
           <div className="score-verdict">
             <h3>{jdText.trim() ? "ATS Score" : "Self ATS Score"}</h3>
@@ -476,7 +496,7 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
               </button>
             )}
           </div>
-          <div className="keyword-tags">
+          <div className="keyword-tags" data-tour="missing-keywords">
             {missingKeywords.map((k) => (
               <button
                 key={k}
@@ -631,6 +651,7 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
             )}
             <button
               className="btn-optimize"
+              data-tour="optimize"
               onClick={
                 jdText.trim() ? handleOptimize : handleSelfOptimize
               }
@@ -652,7 +673,11 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
                 </>
               )}
             </button>
-            <button className="btn-edit" onClick={handleEdit}>
+            <button
+              className="btn-edit"
+              onClick={handleEdit}
+              data-tour="go-editor"
+            >
               <Edit3 size={18} />
               {optimizeDone ? "Edit Resume" : "Edit Manually"}
             </button>

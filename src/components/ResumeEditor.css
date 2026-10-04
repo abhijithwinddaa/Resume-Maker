@@ -643,3 +643,14 @@
   color: #fbbf24;
 }
 
+
+/* A required field left empty, e.g. a name the PDF parse couldn't read. */
+.field-group input[aria-invalid="true"] {
+  border-color: var(--warning-text, #d97706);
+}
+
+.field-hint-required {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--warning-text, #d97706);
+}

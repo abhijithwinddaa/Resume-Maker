@@ -906,7 +906,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       <CompletenessBar data={data} />
 
       {/* Editor Tabs Navigation */}
-      <div className="editor-tabs-nav">
+      <div className="editor-tabs-nav" data-tour="editor-tabs">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -939,12 +939,24 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
               </div>
               <FormatToolbar />
               <div className="field-group">
-                <label>Full Name</label>
+                <label htmlFor="contact-name">Full Name</label>
                 <input
+                  id="contact-name"
                   type="text"
                   value={data.contact.name}
                   onChange={(e) => updateContact("name", e.target.value)}
+                  aria-invalid={!data.contact.name.trim()}
+                  aria-describedby={
+                    data.contact.name.trim() ? undefined : "contact-name-hint"
+                  }
                 />
+                {!data.contact.name.trim() && (
+                  // Parsing leaves this empty when the PDF's name was an image
+                  // or styled heading that text extraction couldn't read.
+                  <p id="contact-name-hint" className="field-hint-required">
+                    Add your name — it's needed before you can download.
+                  </p>
+                )}
               </div>
               <div className="field-row">
                 <div className="field-group">

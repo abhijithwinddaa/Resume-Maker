@@ -12,7 +12,12 @@ import {
   writeServerCache,
 } from "../../src/server/aiCacheStore.js";
 import { callServerAI } from "../../src/server/aiRuntime.js";
+import { redactContactForAI } from "../../src/server/aiRedaction.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import {
+  checkAIRateLimit,
+  rateLimitedResponse,
+} from "../../src/server/rateLimit.js";
 import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
@@ -72,6 +77,11 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
+  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit.retryAfterSeconds);
+  }
+
   let body: RewriteResumeRequest;
   try {
     body = (await request.json()) as RewriteResumeRequest;
@@ -117,13 +127,13 @@ async function handleRequest(request: Request): Promise<Response> {
         const prompt =
           mode === "jd"
             ? buildOptimizePrompt(
-                resumeData,
+                redactContactForAI(resumeData),
                 jobDescription || "",
                 atsResult as ATSResult,
                 iteration,
               )
             : buildSelfOptimizePrompt(
-                resumeData,
+                redactContactForAI(resumeData),
                 atsResult as ATSResult,
                 iteration,
               );

@@ -1,5 +1,11 @@
 import { callServerAI } from "../../src/server/aiRuntime.js";
+import { redactContactForAI } from "../../src/server/aiRedaction.js";
+import type { ResumeData } from "../../src/types/resume.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import {
+  checkAIRateLimit,
+  rateLimitedResponse,
+} from "../../src/server/rateLimit.js";
 import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
@@ -20,14 +26,15 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 const SYSTEM_PROMPT = `You are an expert ATS resume consultant. Your task is to analyze a candidate's resume and identify exactly where each missing keyword can be naturally inserted into their Experience or Projects sections.
 
-For each missing keyword provided, examine the resume's experience and projects entries. If you find a natural place to add or modify a bullet point to include that keyword, suggest the change.
+For each missing keyword provided, examine the resume's experience and projects entries. Suggest a change only where the entry already shows evidence the candidate used that keyword — the same tool under another name, a direct synonym, or work that plainly is that thing. Never place a keyword the resume gives no sign of; the candidate must be able to defend every line in an interview.
 
 Rules:
-- Suggest MAX 2 placements per keyword. If no good placement exists, return an empty array for that keyword.
+- Suggest MAX 2 placements per keyword. If no entry shows evidence for it, return an empty array for that keyword.
 - Only suggest placements in "experience" or "projects" sections.
 - "editType": "rewrite" means replacing an existing bullet. "editType": "new" means adding a new bullet.
 - For "rewrite", preserve the original meaning and metrics, just integrate the keyword naturally.
-- For "new", write a concise bullet that introduces the keyword in a realistic context matching the role.
+- For "new", write a concise bullet that only makes explicit what the entry already shows — no new responsibilities, tools, or outcomes.
+- Never introduce a number (metric, percentage, count, duration) that does not already appear in the resume.
 - The "reason" field must be a one-sentence explanation of why this placement works.
 - Output ONLY valid JSON matching the schema below. No markdown, no code fences, no extra text.
 
@@ -63,6 +70,11 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
+  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit.retryAfterSeconds);
+  }
+
   let body: { resumeData?: unknown; missingKeywords?: string[]; jobDescription?: string };
   try {
     body = await request.json();
@@ -82,7 +94,7 @@ async function handleRequest(request: Request): Promise<Response> {
   const jobDescription = body.jobDescription?.trim();
 
   try {
-    let userContent = `Resume Data (JSON):\n${JSON.stringify(resumeData, null, 2)}\n\nMissing Keywords to Place:\n${missingKeywords.map((k) => `  - ${k}`).join("\n")}`;
+    let userContent = `Resume Data (JSON):\n${JSON.stringify(redactContactForAI(resumeData as ResumeData), null, 2)}\n\nMissing Keywords to Place:\n${missingKeywords.map((k) => `  - ${k}`).join("\n")}`;
 
     if (jobDescription) {
       userContent += `\n\nTarget Job Description:\n${jobDescription}`;

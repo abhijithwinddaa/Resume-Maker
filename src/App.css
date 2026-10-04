@@ -2772,3 +2772,50 @@
     font-size: 13px;
   }
 }
+
+/* Stands in for Clerk's avatar during local development (src/auth). */
+.local-dev-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px dashed var(--warning-text);
+  border-radius: 999px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.landing-error {
+  max-width: 720px;
+  margin: 0 auto 16px;
+}
+
+.editor-error {
+  margin: 0 0 12px;
+}
+
+.error-banner-dismiss {
+  margin-left: auto;
+  display: inline-flex;
+  padding: 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.error-banner-dismiss:hover {
+  background: rgba(127, 127, 127, 0.15);
+}
+
+.header-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.header-help-btn {
+  padding: 6px 8px;
+}

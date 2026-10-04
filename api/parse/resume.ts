@@ -9,6 +9,10 @@ import {
 import { callServerAI } from "../../src/server/aiRuntime.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
 import {
+  checkAIRateLimit,
+  rateLimitedResponse,
+} from "../../src/server/rateLimit.js";
+import {
   DEFAULT_SECTION_ORDER,
   type ResumeData,
 } from "../../src/types/resume.js";
@@ -76,7 +80,27 @@ function validateRequest(body: Partial<ParseResumeRequest>): string | null {
   return null;
 }
 
-function normalizeParsedResume(resumeData: ResumeData): ResumeData {
+/**
+ * True when the parse produced something worth editing. A missing name alone
+ * doesn't count against it: PDFs often render the name as an image or styled
+ * heading that text extraction skips, and the editor (plus export validation)
+ * already asks for it — failing here would discard an otherwise good parse.
+ */
+function hasResumeContent(resumeData: ResumeData): boolean {
+  const { contact } = resumeData;
+  return Boolean(
+    contact.name ||
+      contact.email ||
+      contact.phone ||
+      resumeData.summary?.trim() ||
+      resumeData.experience?.length ||
+      resumeData.education?.length ||
+      resumeData.projects?.length ||
+      resumeData.skills?.length,
+  );
+}
+
+export function normalizeParsedResume(resumeData: ResumeData): ResumeData {
   const contact = resumeData.contact || {
     name: "",
     phone: "",
@@ -95,9 +119,6 @@ function normalizeParsedResume(resumeData: ResumeData): ResumeData {
     portfolio: String(contact.portfolio || ""),
   };
 
-  if (!resumeData.contact.name) {
-    throw new Error("Could not parse resume: missing contact name.");
-  }
 
   if (!Array.isArray(resumeData.education)) resumeData.education = [];
   if (!Array.isArray(resumeData.experience)) resumeData.experience = [];
@@ -121,6 +142,12 @@ function normalizeParsedResume(resumeData: ResumeData): ResumeData {
     resumeData.sectionOrder = [...DEFAULT_SECTION_ORDER];
   }
 
+  if (!hasResumeContent(resumeData)) {
+    throw new Error(
+      "Could not find any resume content in that text. Check that it's your resume and try again.",
+    );
+  }
+
   return normalizeResumeDataSpacing(resumeData).normalized;
 }
 
@@ -139,6 +166,11 @@ async function handleRequest(request: Request): Promise<Response> {
   const authResult = await authenticateClerkRequest(request);
   if (!authResult.ok) {
     return jsonResponse({ error: authResult.message }, authResult.status);
+  }
+
+  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit.retryAfterSeconds);
   }
 
   let body: ParseResumeRequest;

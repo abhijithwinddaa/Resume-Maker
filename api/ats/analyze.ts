@@ -11,7 +11,12 @@ import {
   writeServerCache,
 } from "../../src/server/aiCacheStore.js";
 import { callServerAI } from "../../src/server/aiRuntime.js";
+import { redactContactForAI } from "../../src/server/aiRedaction.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import {
+  checkAIRateLimit,
+  rateLimitedResponse,
+} from "../../src/server/rateLimit.js";
 import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
@@ -64,6 +69,11 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
+  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit.retryAfterSeconds);
+  }
+
   let body: AnalyzeATSRequest;
   try {
     body = (await request.json()) as AnalyzeATSRequest;
@@ -91,8 +101,8 @@ async function handleRequest(request: Request): Promise<Response> {
 
       const prompt =
         mode === "jd"
-          ? buildATSPrompt(resumeData, jobDescription || "")
-          : buildSelfATSPrompt(resumeData);
+          ? buildATSPrompt(redactContactForAI(resumeData), jobDescription || "")
+          : buildSelfATSPrompt(redactContactForAI(resumeData));
 
       const rawResponse = await callServerAI(
         [
@@ -108,7 +118,8 @@ async function handleRequest(request: Request): Promise<Response> {
         ],
         request.signal,
         // A scored breakdown plus suggestions — a few hundred lines of JSON.
-        { maxTokens: 2500 },
+        // Stable: the optimize loop compares this score against a rescan.
+        { maxTokens: 2500, stable: true },
       );
 
       const parsed = parseATSResultResponse(

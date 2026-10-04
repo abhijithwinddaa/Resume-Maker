@@ -1,5 +1,5 @@
 import React from "react";
-import { useUser } from "@clerk/clerk-react";
+import { useUser } from "../auth";
 import { isAdminEmail } from "../utils/adminAccess";
 import { trackEvent } from "../utils/analytics";
 import FeedbackPanel from "./FeedbackPanel";

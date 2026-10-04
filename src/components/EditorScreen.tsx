@@ -1,5 +1,5 @@
 import React, { Suspense } from "react";
-import { X, Eye, EyeOff } from "lucide-react";
+import { X, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import type { ResumeData } from "../types/resume";
 import type { TemplateCustomization } from "../types/templates";
@@ -23,13 +23,32 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
   showMobileResumePreview,
   setShowMobileResumePreview,
 }) => {
-  const { step, resumeData } = useAppStore();
+  const step = useAppStore((s) => s.step);
+  const resumeData = useAppStore((s) => s.resumeData);
+  const error = useAppStore((s) => s.error);
+  const setError = useAppStore((s) => s.setError);
 
   if (step !== "editor" || !resumeData) return null;
 
   return (
     <div className="editor-step" role="region" aria-label="Resume editor">
       <div className="editor-left">
+        {/* Header actions (Self Score, cooldowns, exports) report problems
+            through the store; without this they failed silently here. */}
+        {error && (
+          <div className="error-banner editor-error" role="alert">
+            <AlertCircle size={16} aria-hidden="true" />
+            <span>{error}</span>
+            <button
+              type="button"
+              className="error-banner-dismiss"
+              onClick={() => setError(null)}
+              aria-label="Dismiss message"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <ResumeEditor
           data={resumeData}
           onChange={handleResumeChange}
@@ -38,6 +57,7 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
           <div className="mobile-resume-trigger-row">
             <div className="mobile-export-row">
               <button
+                data-tour="mobile-preview"
                 className={`btn-secondary mobile-resume-trigger ${showMobileResumePreview ? "mobile-eye-btn-active" : ""}`}
                 onClick={() => setShowMobileResumePreview(!showMobileResumePreview)}
                 aria-expanded={showMobileResumePreview}
@@ -50,7 +70,7 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
         )}
       </div>
       {!isCompactScreen && (
-        <div className="editor-right">
+        <div className="editor-right" data-tour="live-preview">
           <div className="preview-container">
             <ErrorBoundary>
               <Suspense fallback={<PreviewSkeleton />}>

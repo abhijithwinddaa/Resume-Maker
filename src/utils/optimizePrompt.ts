@@ -27,7 +27,8 @@ Prompt version: ${OPTIMIZE_PROMPT_VERSION}.
 
 ## CONTEXT
 The resume was scanned against an ATS system and scored **${atsReport.overallScore}/100**.
-The target is **95+/100**. You MUST aggressively fix ALL issues identified below.
+The target is **95+/100** — but only through truthful edits. A lower score on an
+honest resume beats a higher score on one the candidate cannot defend in an interview.
 
 ## ATS SCAN REPORT
 - **Overall Score**: ${atsReport.overallScore}/100
@@ -37,10 +38,10 @@ The target is **95+/100**. You MUST aggressively fix ALL issues identified below
 - **Formatting**: ${atsReport.breakdown.formatting.score}/100 — ${atsReport.breakdown.formatting.feedback}
 - **Impact & Metrics**: ${atsReport.breakdown.impact.score}/100 — ${atsReport.breakdown.impact.feedback}
 
-## MISSING KEYWORDS (MUST ADD THESE)
+## MISSING KEYWORDS (ADD ONLY WITH EVIDENCE)
 ${missingKeywords}
 
-## MISSING SKILLS (MUST ADD THESE)
+## MISSING SKILLS (ADD ONLY WITH EVIDENCE)
 ${missingSkills}
 
 ## SUGGESTIONS TO IMPLEMENT
@@ -53,16 +54,16 @@ ${qualitySignals}
 ${writingContract}
 
 ## CRITICAL INSTRUCTIONS
-1. **Add ALL missing keywords** — Incorporate every missing keyword naturally into summary, project bullets, experience bullets, or skills.
-2. **Add ALL missing skills** — Add them to the appropriate skill categories. If a skill is reasonable given the candidate's background, add it.
-3. **Implement ALL suggestions** — Follow every suggestion from the ATS report.
+1. **Missing keywords: use one only where the existing resume already shows evidence for it** — the same tool under another name ("GitHub Actions" → "CI/CD"), a direct synonym, or work that plainly is that thing ("led a 3-person team" → "mentoring"). Surface it in the bullet that holds the evidence.
+2. **No evidence? Leave it out** — out of bullets, summary AND skills. Never add a tool, platform, or skill the resume gives no sign the candidate has used. The ATS report already shows the candidate those gaps.
+3. **Implement the suggestions** — when they can be done truthfully.
 4. **Use strong action verbs** — Started, Built, Designed, Implemented, Optimized, Deployed, Architected, Led, Scaled, Reduced, Automated, etc.
-5. **Quantify impact** — Add numbers, percentages, metrics wherever the resume provides enough evidence to do so truthfully.
-6. **Summary must be keyword-rich** — Front-load the summary with JD-relevant terms.
+5. **Never introduce a number** — reuse the metrics, counts, and years already in the resume. Do not estimate, round up, or add new percentages, user counts, or years of experience.
+6. **Summary** — Front-load the summary with JD-relevant terms the candidate genuinely has.
 7. **Keep it truthful** — Rephrase and enhance, but don't fabricate experience the candidate doesn't have.
 8. **Education & Contact** — Keep as-is. NEVER remove or change any URLs/links.
 9. **The resume MUST fit on a single page** — Be concise. Each bullet point should be 1-2 lines max.
-10. **Every single missing keyword from the ATS report MUST appear somewhere in the output** — This is the #1 priority.
+10. **Truthfulness outranks keyword coverage** — when the two conflict, keep the resume honest.
 11. **Experience section** — If present, optimize bullets to include JD keywords using the writing contract rather than keyword stuffing.
 12. **sectionOrder** — Keep the same section order.
 13. **PRESERVE ALL LINKS** — Keep ALL githubLink, liveLink, linkedin, github, portfolio, and certificate link values EXACTLY as they are. Never empty or modify URLs.

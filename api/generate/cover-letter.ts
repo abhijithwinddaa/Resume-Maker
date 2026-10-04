@@ -6,6 +6,10 @@ import {
 } from "../../src/server/aiCacheStore.js";
 import { callServerAI } from "../../src/server/aiRuntime.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
+import {
+  checkAIRateLimit,
+  rateLimitedResponse,
+} from "../../src/server/rateLimit.js";
 import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
@@ -110,6 +114,11 @@ async function handleRequest(request: Request): Promise<Response> {
   const authResult = await authenticateClerkRequest(request);
   if (!authResult.ok) {
     return jsonResponse({ error: authResult.message }, authResult.status);
+  }
+
+  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit.retryAfterSeconds);
   }
 
   let body: GenerateCoverLetterRequest;
