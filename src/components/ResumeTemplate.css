@@ -276,10 +276,6 @@
   padding: 0 2px;
 }
 
-.dark .user-highlight {
-  background: rgba(253, 230, 138, 0.25);
-}
-
 /* Certificates */
 .certificates-list {
   margin: 0;

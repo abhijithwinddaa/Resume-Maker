@@ -11,19 +11,21 @@
   },
   "header": {
     "startOver": "Start Over",
-    "newJD": "New JD",
+    "newJD": "Match a job",
     "moreActions": "More actions",
     "loadJSON": "Load JSON",
     "saveJSON": "Save JSON",
     "selfScore": "Self Score",
     "reAnalyze": "Re-Analyze",
     "coverLetter": "Cover Letter",
-    "docx": "DOCX",
+    "docx": "Download Word (.docx)",
     "exportPDF": "Export PDF",
     "undo": "Undo",
     "redo": "Redo",
     "templateStyle": "Template & Style",
-    "aiSettings": "AI Settings"
+    "aiSettings": "AI Settings",
+    "more": "More",
+    "switchMode": "Switch mode"
   },
   "steps": {
     "input": "Input",

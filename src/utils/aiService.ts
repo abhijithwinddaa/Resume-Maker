@@ -1,5 +1,10 @@
 import type { AISettings } from "../types/aiSettings";
 import type { ResumeData } from "../types/resume";
+import {
+  buildResumeSearchIndex,
+  compactKeywordValue,
+  resumeContainsKeyword,
+} from "./keywordMatch";
 import { getCacheKey, getCached, setCache } from "./aiCache";
 import { loadPrivacySettings } from "../types/privacySettings";
 import {
@@ -48,71 +53,6 @@ export interface ATSResult {
   topSuggestions: string[];
   summaryVerdict: string;
   qualityInsights?: ResumeFeedbackInsights;
-}
-
-function normalizeKeywordValue(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9+#]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function canonicalizeKeywordValue(value: string): string {
-  return normalizeKeywordValue(value)
-    .replace(/\bnode\s+js\b/g, "nodejs")
-    .replace(/\breact\s+js\b/g, "reactjs")
-    .replace(/\bnext\s+js\b/g, "nextjs")
-    .replace(/\bexpress\s+js\b/g, "expressjs")
-    .replace(/\bnest\s+js\b/g, "nestjs")
-    .replace(/\bvue\s+js\b/g, "vuejs")
-    .replace(/\bweb\s+sockets?\b/g, "websocket")
-    .replace(/\bwebsockets\b/g, "websocket")
-    .replace(/\brest\s+apis?\b/g, "rest api")
-    .replace(/\bapis\b/g, "api")
-    .replace(/\bllms\b/g, "llm")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function compactKeywordValue(value: string): string {
-  return canonicalizeKeywordValue(value).replace(/\s+/g, "");
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function buildResumeSearchIndex(resumeData: ResumeData): {
-  normalized: string;
-  compact: string;
-} {
-  const serialized = JSON.stringify(resumeData);
-  const normalized = ` ${canonicalizeKeywordValue(serialized)} `;
-  return {
-    normalized,
-    compact: normalized.replace(/\s+/g, ""),
-  };
-}
-
-function resumeContainsKeyword(
-  searchIndex: { normalized: string; compact: string },
-  value: string,
-): boolean {
-  const normalizedValue = canonicalizeKeywordValue(value);
-  if (!normalizedValue) return false;
-
-  const compactValue = normalizedValue.replace(/\s+/g, "");
-  if (compactValue && searchIndex.compact.includes(compactValue)) {
-    return true;
-  }
-
-  const boundaryPattern = new RegExp(
-    `(^|\\s)${escapeRegExp(normalizedValue)}(?=\\s|$)`,
-    "i",
-  );
-  return boundaryPattern.test(searchIndex.normalized);
 }
 
 function uniqueSuggestions(items: string[], maxItems = 7): string[] {

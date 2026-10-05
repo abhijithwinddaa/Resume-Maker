@@ -28,6 +28,8 @@ import {
   selfATSScore,
   selfOptimizeLoop,
   setServerAuthTokenGetter,
+  type ATSResult,
+  type OptimizeProgress,
 } from "./utils/aiService";
 import { setAuthedApiTokenGetter } from "./utils/authedApi";
 import { detectTemplateStyle } from "./utils/templateDetector";
@@ -90,9 +92,9 @@ import {
   Shield,
   PlusCircle,
   CheckCircle2,
-  Settings,
   ArrowLeft,
   HelpCircle,
+  MoreHorizontal,
 } from "lucide-react";
 import { useDebounce } from "./hooks/useDebounce";
 import { useExport } from "./hooks/useExport";
@@ -105,7 +107,14 @@ import { InputScreen } from "./components/InputScreen";
 import { ScoreScreen } from "./components/ScoreScreen";
 import { EditorScreen } from "./components/EditorScreen";
 import { ExportControls } from "./components/ExportControls";
+import { LiveScoreBadge } from "./components/LiveScoreBadge";
+import {
+  applyResumeChanges,
+  diffResumes,
+  type ResumeChange,
+} from "./utils/resumeDiff";
 import { hasSeenTour, type TourId } from "./components/tour/tourSteps";
+import { ANALYZE_STAGES, getAnalyzeStage } from "./utils/analyzeStages";
 import "./App.css";
 
 const ResumeTemplate = lazy(() => import("./components/ResumeTemplate"));
@@ -121,24 +130,6 @@ const FEEDBACK_PROMPT_COOLDOWN_MS = 1000 * 60 * 60 * 24 * 14;
 const FEEDBACK_PROMPT_LAST_AT_KEY = "feedback-prompt-last-at";
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function getAnalyzeProgressPercent(message: string): number {
-  const lowered = message.toLowerCase();
-  const ocrMatch = message.match(/page\s+(\d+)\s+of\s+(\d+)/i);
-  if (ocrMatch) {
-    const page = Number(ocrMatch[1]);
-    const total = Number(ocrMatch[2]);
-    if (total > 0) {
-      return clampPercent(25 + (page / total) * 45);
-    }
-  }
-  if (lowered.includes("image-based pdf")) return 20;
-  if (lowered.includes("parsing your resume")) return 48;
-  if (lowered.includes("running ats analysis")) return 76;
-  if (lowered.includes("running self ats")) return 76;
-  if (lowered.includes("running ocr")) return 55;
-  return 35;
 }
 
 /* ─── Main App ─────────────────────────────────────────── */
@@ -234,20 +225,9 @@ function App() {
   const [showMobileResumePreview, setShowMobileResumePreview] = useState(false);
   const [dbLoadPercent, setDbLoadPercent] = useState(18);
   const [pdfLoadPercent, setPdfLoadPercent] = useState(12);
-  const [modeToastMessage, setModeToastMessage] = useState<string | null>(null);
   const [atsResumeSource, setAtsResumeSource] = useState<"existing" | "new">(
     "existing",
   );
-  const [preferredExportFormat] = useState<
-    "pdf" | "docx"
-  >(() => {
-    try {
-      const saved = localStorage.getItem("preferred-export-format");
-      return saved === "docx" ? "docx" : "pdf";
-    } catch {
-      return "pdf";
-    }
-  });
 
   // Deferred auth: track which mode was selected before sign-in
   const [pendingMode, setPendingMode] = useState<AppMode>(null);
@@ -275,6 +255,7 @@ function App() {
     feedbackInitialTab,
     setFeedbackInitialTab,
     handleFeedbackCompleted,
+    hasExported,
   } = useExport(resumeRef);
   const abortRef = useRef<AbortController | null>(null);
   const authStartTimeoutRef = useRef<number | null>(null);
@@ -431,9 +412,8 @@ function App() {
   }, [isSettingsMenuOpen]);
 
   useEffect(() => {
-    if (step !== "editor" && step !== "score") {
-      setIsSettingsMenuOpen(false);
-    }
+    // The menu belongs to a screen; close it when the screen changes.
+    setIsSettingsMenuOpen(false);
   }, [step]);
 
   /* ── Navigation guard: warn on tab close with unsaved changes ── */
@@ -746,15 +726,19 @@ function App() {
     }
   }, [step]);
 
-  useEffect(() => {
-    if (!modeToastMessage) return;
-    const timeout = window.setTimeout(() => setModeToastMessage(null), 2200);
-    return () => window.clearTimeout(timeout);
-  }, [modeToastMessage]);
 
-  const analyzingPercent = useMemo(
-    () => getAnalyzeProgressPercent(loadingMessage),
+  const analyzeStage = useMemo(
+    () => getAnalyzeStage(loadingMessage),
     [loadingMessage],
+  );
+  // Only list stages that will actually happen on this run.
+  const visibleAnalyzeStages = ANALYZE_STAGES.map((label, index) => ({
+    label,
+    index,
+  })).filter(
+    ({ index }) =>
+      (index !== 0 || uploadedFileName || analyzeStage.current === 0) &&
+      (index !== 2 || mode === "ats" || analyzeStage.current === 2),
   );
   const analyzeCooldownRemaining = useMemo(
     () => (cooldownRemaining < 0 ? 0 : getRateLimitRemaining("analyze", 30000)),
@@ -779,6 +763,100 @@ function App() {
 
   const useStickyMobileActions =
     isCompactScreen && !isMobileKeyboardOpen && !isTextEntryFocused;
+
+  // The live check counts the last job scan's keywords; with no job, none.
+  const liveScoreKeywords = useMemo(() => {
+    if (!jdText.trim() || !atsResult) return [];
+    const { keywordMatch, skillsAlignment } = atsResult.breakdown;
+    return [
+      ...(keywordMatch.matchedKeywords || []),
+      ...(keywordMatch.missingKeywords || []),
+      ...(skillsAlignment.matchedSkills || []),
+      ...(skillsAlignment.missingSkills || []),
+    ];
+  }, [atsResult, jdText]);
+
+  /* ── Review AI changes before they touch the resume ──── */
+  const [pendingReview, setPendingReview] = useState<{
+    original: ResumeData;
+    optimized: ResumeData;
+    atsResult: ATSResult | null;
+    changes: ResumeChange[];
+  } | null>(null);
+  // The score a partial apply made out of date; any new score clears it.
+  const [staleScore, setStaleScore] = useState<ATSResult | null>(null);
+  const [optimizeNotice, setOptimizeNotice] = useState<string | null>(null);
+
+  // A review only applies to the resume it was computed from; once the
+  // resume changes (edits, a new parse) it would merge onto the wrong base.
+  const activeReview =
+    pendingReview && pendingReview.original === resumeData ? pendingReview : null;
+  const scoreIsStale = staleScore !== null && staleScore === atsResult;
+
+  const presentOptimizationForReview = (
+    original: ResumeData,
+    result: OptimizeProgress,
+    trackingMode: "self_optimize" | "jd_optimize",
+  ) => {
+    setOptimizeNotice(null);
+    if (!result.finalResume) {
+      setOptimizeDone(true);
+      return;
+    }
+    const changes = diffResumes(original, result.finalResume);
+    trackEvent("resume_optimized", {
+      mode: trackingMode,
+      overall_score: result.finalATSResult?.overallScore ?? result.finalScore,
+      suggested_changes: changes.length,
+    });
+    if (changes.length === 0) {
+      setPendingReview(null);
+      setOptimizeNotice(
+        "The AI didn't find anything worth changing without inventing experience. Your resume is in good shape.",
+      );
+      setOptimizeDone(true);
+      return;
+    }
+    setPendingReview({
+      original,
+      optimized: result.finalResume,
+      atsResult: result.finalATSResult,
+      changes,
+    });
+  };
+
+  const handleApplyReview = (accepted: Set<string>) => {
+    if (!activeReview) return;
+    const { original, optimized, atsResult: optimizedATS, changes } = activeReview;
+    const keptAll = accepted.size === changes.length;
+
+    handleResumeChange(applyResumeChanges(original, optimized, accepted));
+    if (keptAll && optimizedATS) {
+      // The AI's score was measured on exactly this resume.
+      setATSResult(optimizedATS);
+      setStaleScore(null);
+    } else {
+      // The score on screen now predates the resume; say so, don't fake one.
+      setPreviousScore(null);
+      setStaleScore(atsResult);
+    }
+    setOptimizeDone(true);
+    setPendingReview(null);
+    trackEvent("optimize_review_applied", {
+      kept: accepted.size,
+      suggested: changes.length,
+    });
+  };
+
+  const handleDiscardReview = () => {
+    if (activeReview) {
+      trackEvent("optimize_review_discarded", {
+        suggested: activeReview.changes.length,
+      });
+    }
+    setPendingReview(null);
+    setPreviousScore(null);
+  };
 
   /* ── First-run guide: one tour per screen ───────────── */
   const currentTourId: TourId | null =
@@ -1024,9 +1102,6 @@ function App() {
         // landing screen's <ClerkFailed> banner explains what to do instead.
         if (clerk.status === "error") return;
         setPendingMode(selectedMode);
-        setModeToastMessage(
-          `Selected: ${selectedMode === "ats" ? "ATS" : selectedMode === "edit" ? "Edit" : "Create"}`,
-        );
         setIsAuthStarting(true);
         trackEvent("sign_in_initiated", { mode: selectedMode });
         if (authStartTimeoutRef.current) {
@@ -1058,9 +1133,6 @@ function App() {
         }
       }
       modeSelectionInProgressRef.current = false;
-      setModeToastMessage(
-        `Selected: ${selectedMode === "ats" ? "ATS" : selectedMode === "edit" ? "Edit" : "Create"}`,
-      );
     },
     [
       user,
@@ -1547,18 +1619,7 @@ function App() {
       );
 
       if (controller.signal.aborted) return;
-      if (result.finalResume) {
-        handleResumeChange(result.finalResume);
-        const finalATS = result.finalATSResult;
-        if (finalATS) {
-          setATSResult(finalATS);
-        }
-        trackEvent("resume_optimized", {
-          mode: "self_optimize",
-          overall_score: finalATS?.overallScore ?? result.finalScore,
-        });
-      }
-      setOptimizeDone(true);
+      presentOptimizationForReview(resumeData, result, "self_optimize");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       resetCooldown("optimize");
@@ -1604,18 +1665,7 @@ function App() {
       );
 
       if (controller.signal.aborted) return;
-      if (result.finalResume) {
-        handleResumeChange(result.finalResume);
-        const finalATS = result.finalATSResult;
-        if (finalATS) {
-          setATSResult(finalATS);
-        }
-        trackEvent("resume_optimized", {
-          mode: "jd_optimize",
-          overall_score: finalATS?.overallScore ?? result.finalScore,
-        });
-      }
-      setOptimizeDone(true);
+      presentOptimizationForReview(resumeData, result, "jd_optimize");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       resetCooldown("optimize");
@@ -1801,7 +1851,8 @@ function App() {
         Skip to main content
       </a>
 
-      {/* Header */}
+      {/* Header: identity, status, and the few always-needed actions.
+          Everything occasional lives in the "More" menu. */}
       <header className="app-header" role="banner">
         <div className="header-left">
           <FileText size={22} className="logo-icon" />
@@ -1819,51 +1870,6 @@ function App() {
           {saveStatus === "idle" && step === "editor" && resumeData && user && (
             <span className="save-indicator unsaved">Unsaved changes •</span>
           )}
-
-          {currentTourId && (
-            <button
-              type="button"
-              className="header-btn header-help-btn"
-              onClick={() => setActiveTour(currentTourId)}
-              aria-label="Show guide for this screen"
-              title="Show guide"
-              data-tour="help"
-            >
-              <HelpCircle size={16} />
-            </button>
-          )}
-
-          <ThemeToggle />
-
-          <SignedIn>
-            {step !== "landing" && step !== "analyzing" && (
-              <div
-                className="mode-switch"
-                data-tour="mode-switch"
-                role="group"
-                aria-label="Switch mode"
-              >
-                <button
-                  className={`header-btn ${mode === "ats" ? "btn-accent" : ""}`}
-                  onClick={() => handleSwitchMode("ats")}
-                >
-                  ATS
-                </button>
-                <button
-                  className={`header-btn ${mode === "edit" ? "btn-accent" : ""}`}
-                  onClick={() => handleSwitchMode("edit")}
-                >
-                  Edit
-                </button>
-                <button
-                  className={`header-btn ${mode === "create" ? "btn-accent" : ""}`}
-                  onClick={() => handleSwitchMode("create")}
-                >
-                  Create
-                </button>
-              </div>
-            )}
-          </SignedIn>
 
           {/* Show Original PDF toggle */}
           {originalPdfUrl && (step === "editor" || step === "score") && (
@@ -1884,10 +1890,6 @@ function App() {
           )}
 
           <SignedIn>
-            <UserButton afterSignOutUrl="/" />
-          </SignedIn>
-
-          <SignedIn>
             {isAdminUser && step !== "analyzing" && (
               <button
                 className="header-btn"
@@ -1906,92 +1908,60 @@ function App() {
             )}
           </SignedIn>
 
-          {step !== "landing" && step !== "analyzing" && (
-            <>
-              <button className="header-btn" onClick={handleBackNavigation}>
-                <ArrowLeft size={14} />
-                <span>Back</span>
-              </button>
-              <button className="header-btn" onClick={handleStartOver}>
-                <RotateCcw size={14} />
-                <span>{t("header.startOver")}</span>
-              </button>
-            </>
+          {currentTourId && (
+            <button
+              type="button"
+              className="header-btn header-icon-btn"
+              onClick={() => setActiveTour(currentTourId)}
+              aria-label="Show guide for this screen"
+              title="Show guide"
+              data-tour="help"
+            >
+              <HelpCircle size={16} />
+            </button>
           )}
 
-          {(step === "score" || step === "editor") && (
-            <>
-              {step === "editor" && (
-                <>
-                  <button
-                    className="header-btn btn-accent"
-                    onClick={handleNewJD}
-                  >
-                    <Target size={14} />
-                    <span>{t("header.newJD")}</span>
-                  </button>
-                </>
-              )}
+          <ThemeToggle />
 
-              <div className="settings-menu">
-                <button
-                  ref={settingsMenuButtonRef}
-                  className={`header-btn ${isSettingsMenuOpen ? "btn-accent" : ""}`}
-                  onClick={() => setIsSettingsMenuOpen((prev) => !prev)}
-                  title={t("header.moreActions")}
-                  aria-label={t("header.moreActions")}
-                  aria-haspopup="menu"
-                  aria-expanded={isSettingsMenuOpen}
+          {step !== "landing" && step !== "analyzing" && (
+            <div className="settings-menu">
+              <button
+                ref={settingsMenuButtonRef}
+                className={`header-btn header-icon-btn ${isSettingsMenuOpen ? "btn-accent" : ""}`}
+                onClick={() => setIsSettingsMenuOpen((prev) => !prev)}
+                title={t("header.moreActions")}
+                aria-label={t("header.moreActions")}
+                aria-haspopup="menu"
+                aria-expanded={isSettingsMenuOpen}
+              >
+                <MoreHorizontal size={16} />
+              </button>
+
+              {isSettingsMenuOpen && (
+                <div
+                  className="settings-dropdown"
+                  role="menu"
+                  ref={settingsMenuRef}
+                  style={{
+                    top: `${settingsMenuPosition.top}px`,
+                    left: `${settingsMenuPosition.left}px`,
+                  }}
                 >
-                  <Settings size={14} />
-                </button>
-
-                {isSettingsMenuOpen && (
-                  <div
-                    className="settings-dropdown"
-                    role="menu"
-                    ref={settingsMenuRef}
-                    style={{
-                      top: `${settingsMenuPosition.top}px`,
-                      left: `${settingsMenuPosition.left}px`,
-                    }}
-                  >
-                    {step === "editor" && (
-                      <>
-                        <button
-                          className="settings-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            setIsSettingsMenuOpen(false);
-                            handleLoadJSON();
-                          }}
-                        >
-                          <Upload size={14} />
-                          <span>{t("header.loadJSON")}</span>
-                        </button>
-                        <button
-                          className="settings-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            setIsSettingsMenuOpen(false);
-                            handleSaveJSON();
-                          }}
-                        >
-                          <Save size={14} />
-                          <span>{t("header.saveJSON")}</span>
-                        </button>
-                        <button
-                          className="settings-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            setIsSettingsMenuOpen(false);
-                            handleSelfScore();
-                          }}
-                          title="Score resume on general best practices (no JD needed)"
-                        >
-                          <Trophy size={14} />
-                          <span>{t("header.selfScore")}</span>
-                        </button>
+                  {step === "editor" && (
+                    <>
+                      <button
+                        className="settings-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsSettingsMenuOpen(false);
+                          setShowCoverLetter(true);
+                        }}
+                        title="Generate Cover Letter"
+                      >
+                        <Mail size={14} />
+                        <span>{t("header.coverLetter")}</span>
+                      </button>
+                      {jdText.trim() && (
                         <button
                           className="settings-menu-item"
                           role="menuitem"
@@ -2003,131 +1973,199 @@ function App() {
                           <Search size={14} />
                           <span>{t("header.reAnalyze")}</span>
                         </button>
-                        <button
-                          className="settings-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            setIsSettingsMenuOpen(false);
-                            setShowCoverLetter(true);
-                          }}
-                          title="Generate Cover Letter"
-                        >
-                          <Mail size={14} />
-                          <span>{t("header.coverLetter")}</span>
-                        </button>
-                      </>
-                    )}
+                      )}
+                      <button
+                        className="settings-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsSettingsMenuOpen(false);
+                          handleSaveJSON();
+                        }}
+                      >
+                        <Save size={14} />
+                        <span>{t("header.saveJSON")}</span>
+                      </button>
+                      <button
+                        className="settings-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsSettingsMenuOpen(false);
+                          handleLoadJSON();
+                        }}
+                      >
+                        <Upload size={14} />
+                        <span>{t("header.loadJSON")}</span>
+                      </button>
+                    </>
+                  )}
 
+                  {(step === "score" || step === "editor") && (
+                    <>
+                      <button
+                        className="settings-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsSettingsMenuOpen(false);
+                          exportDocx();
+                        }}
+                        disabled={isExporting}
+                        title="Export as DOCX"
+                      >
+                        <FileType size={14} />
+                        <span>{t("header.docx")}</span>
+                      </button>
+                      <div
+                        className="settings-menu-group"
+                        role="group"
+                        aria-label="PDF page mode"
+                      >
+                        <div className="settings-menu-label">PDF Page Mode</div>
+                        <button
+                          className={`settings-menu-item settings-menu-item-compact ${
+                            exportPageMode === "auto" ? "is-active" : ""
+                          }`}
+                          role="menuitemradio"
+                          aria-checked={exportPageMode === "auto"}
+                          onClick={() => setExportPageMode("auto")}
+                          title={autoModeLabel}
+                        >
+                          {exportPageMode === "auto" ? (
+                            <CheckCircle2 size={14} />
+                          ) : (
+                            <PlusCircle size={14} />
+                          )}
+                          <span>{autoModeLabel}</span>
+                        </button>
+                        <button
+                          className={`settings-menu-item settings-menu-item-compact ${
+                            exportPageMode === "auto-adaptive" ? "is-active" : ""
+                          }`}
+                          role="menuitemradio"
+                          aria-checked={exportPageMode === "auto-adaptive"}
+                          onClick={() => setExportPageMode("auto-adaptive")}
+                          title={adaptiveModeLabel}
+                        >
+                          {exportPageMode === "auto-adaptive" ? (
+                            <CheckCircle2 size={14} />
+                          ) : (
+                            <PlusCircle size={14} />
+                          )}
+                          <span>{adaptiveModeLabel}</span>
+                        </button>
+                        <button
+                          className={`settings-menu-item settings-menu-item-compact ${
+                            exportPageMode === "force-single-page"
+                              ? "is-active"
+                              : ""
+                          }`}
+                          role="menuitemradio"
+                          aria-checked={exportPageMode === "force-single-page"}
+                          onClick={() => setExportPageMode("force-single-page")}
+                          title="Always target one page"
+                        >
+                          {exportPageMode === "force-single-page" ? (
+                            <CheckCircle2 size={14} />
+                          ) : (
+                            <PlusCircle size={14} />
+                          )}
+                          <span>Force single page</span>
+                        </button>
+                        <button
+                          className={`settings-menu-item settings-menu-item-compact ${
+                            exportPageMode === "allow-multi-page"
+                              ? "is-active"
+                              : ""
+                          }`}
+                          role="menuitemradio"
+                          aria-checked={exportPageMode === "allow-multi-page"}
+                          onClick={() => setExportPageMode("allow-multi-page")}
+                          title="Allow two or more pages"
+                        >
+                          {exportPageMode === "allow-multi-page" ? (
+                            <CheckCircle2 size={14} />
+                          ) : (
+                            <PlusCircle size={14} />
+                          )}
+                          <span>Allow multi-page</span>
+                        </button>
+                        {lastExportPageEstimate !== null && (
+                          <div className="settings-menu-hint">
+                            Last estimate: {lastExportPageEstimate} page
+                            {lastExportPageEstimate > 1 ? "s" : ""}
+                          </div>
+                        )}
+                      </div>
+
+                    </>
+                  )}
+
+                  <SignedIn>
                     <div
                       className="settings-menu-group"
                       role="group"
-                      aria-label="PDF page mode"
+                      aria-label={t("header.switchMode")}
                     >
-                      <div className="settings-menu-label">PDF Page Mode</div>
-                      <button
-                        className={`settings-menu-item settings-menu-item-compact ${
-                          exportPageMode === "auto" ? "is-active" : ""
-                        }`}
-                        role="menuitemradio"
-                        aria-checked={exportPageMode === "auto"}
-                        onClick={() => setExportPageMode("auto")}
-                        title={autoModeLabel}
-                      >
-                        {exportPageMode === "auto" ? (
-                          <CheckCircle2 size={14} />
-                        ) : (
-                          <PlusCircle size={14} />
-                        )}
-                        <span>{autoModeLabel}</span>
-                      </button>
-                      <button
-                        className={`settings-menu-item settings-menu-item-compact ${
-                          exportPageMode === "auto-adaptive" ? "is-active" : ""
-                        }`}
-                        role="menuitemradio"
-                        aria-checked={exportPageMode === "auto-adaptive"}
-                        onClick={() => setExportPageMode("auto-adaptive")}
-                        title={adaptiveModeLabel}
-                      >
-                        {exportPageMode === "auto-adaptive" ? (
-                          <CheckCircle2 size={14} />
-                        ) : (
-                          <PlusCircle size={14} />
-                        )}
-                        <span>{adaptiveModeLabel}</span>
-                      </button>
-                      <button
-                        className={`settings-menu-item settings-menu-item-compact ${
-                          exportPageMode === "force-single-page"
-                            ? "is-active"
-                            : ""
-                        }`}
-                        role="menuitemradio"
-                        aria-checked={exportPageMode === "force-single-page"}
-                        onClick={() => setExportPageMode("force-single-page")}
-                        title="Always target one page"
-                      >
-                        {exportPageMode === "force-single-page" ? (
-                          <CheckCircle2 size={14} />
-                        ) : (
-                          <PlusCircle size={14} />
-                        )}
-                        <span>Force single page</span>
-                      </button>
-                      <button
-                        className={`settings-menu-item settings-menu-item-compact ${
-                          exportPageMode === "allow-multi-page"
-                            ? "is-active"
-                            : ""
-                        }`}
-                        role="menuitemradio"
-                        aria-checked={exportPageMode === "allow-multi-page"}
-                        onClick={() => setExportPageMode("allow-multi-page")}
-                        title="Allow two or more pages"
-                      >
-                        {exportPageMode === "allow-multi-page" ? (
-                          <CheckCircle2 size={14} />
-                        ) : (
-                          <PlusCircle size={14} />
-                        )}
-                        <span>Allow multi-page</span>
-                      </button>
-                      {lastExportPageEstimate !== null && (
-                        <div className="settings-menu-hint">
-                          Last estimate: {lastExportPageEstimate} page
-                          {lastExportPageEstimate > 1 ? "s" : ""}
-                        </div>
-                      )}
+                      <div className="settings-menu-label">
+                        {t("header.switchMode")}
+                      </div>
+                      {(
+                        [
+                          ["ats", "ATS Score & Optimize", Target],
+                          ["edit", "Edit my resume", FileText],
+                          ["create", "Create new resume", PlusCircle],
+                        ] as const
+                      ).map(([value, label, Icon]) => (
+                        <button
+                          key={value}
+                          className={`settings-menu-item settings-menu-item-compact ${mode === value ? "is-active" : ""}`}
+                          role="menuitemradio"
+                          aria-checked={mode === value}
+                          onClick={() => {
+                            setIsSettingsMenuOpen(false);
+                            handleSwitchMode(value);
+                          }}
+                        >
+                          <Icon size={14} />
+                          <span>{label}</span>
+                        </button>
+                      ))}
                     </div>
+                  </SignedIn>
 
+                  <div className="settings-menu-group">
                     <button
-                      className="settings-menu-item"
+                      className="settings-menu-item settings-menu-item-danger"
                       role="menuitem"
                       onClick={() => {
                         setIsSettingsMenuOpen(false);
-                        exportDocx();
+                        handleStartOver();
                       }}
-                      disabled={isExporting}
-                      title="Export as DOCX"
                     >
-                      <FileType size={14} />
-                      <span>{t("header.docx")}</span>
+                      <RotateCcw size={14} />
+                      <span>{t("header.startOver")}</span>
                     </button>
                   </div>
-                )}
-              </div>
-
-              <button
-                className={`header-btn ${preferredExportFormat === "pdf" ? "btn-primary" : ""}`}
-                onClick={exportPDF}
-                disabled={isExporting}
-                data-tour="export"
-              >
-                <Download size={14} />
-                <span>{t("header.exportPDF")}</span>
-              </button>
-            </>
+                </div>
+              )}
+            </div>
           )}
+
+          {(step === "score" || step === "editor") && (
+            <button
+              className="header-btn btn-primary"
+              onClick={exportPDF}
+              disabled={isExporting}
+              data-tour="export"
+              aria-label={t("header.exportPDF")}
+            >
+              <Download size={14} />
+              <span>{t("header.exportPDF")}</span>
+            </button>
+          )}
+
+          <SignedIn>
+            <UserButton afterSignOutUrl="/" />
+          </SignedIn>
         </div>
       </header>
 
@@ -2144,11 +2182,6 @@ function App() {
         {step === "analyzing" && loadingMessage}
       </div>
 
-      {modeToastMessage && (
-        <div className="mode-toast" role="status" aria-live="polite">
-          {modeToastMessage}
-        </div>
-      )}
 
       {/* Export progress toast */}
       {exportToastMessage && (
@@ -2158,14 +2191,59 @@ function App() {
         </div>
       )}
 
-      {/* Step Indicator — only for active flows (not landing) */}
+      {/* Flow bar: one row for navigation, progress, and resume tools —
+          replaces the old step bar, toolbar, and mobile breadcrumb. */}
       {mode && step !== "analyzing" && step !== "landing" && (
-        <>
+        <div className="flow-bar" role="toolbar" aria-label="Resume actions">
+          <div className="flow-bar-group">
+            <button
+              className="header-btn flow-btn"
+              onClick={handleBackNavigation}
+              aria-label="Back"
+            >
+              <ArrowLeft size={14} />
+              <span>Back</span>
+            </button>
+            {step === "editor" && (
+              <>
+                <button
+                  className="header-btn flow-btn flow-btn-icon"
+                  onClick={undo}
+                  disabled={!canUndo()}
+                  title="Undo (Ctrl+Z)"
+                  aria-label="Undo"
+                >
+                  <Undo2 size={14} />
+                </button>
+                <button
+                  className="header-btn flow-btn flow-btn-icon"
+                  onClick={redo}
+                  disabled={!canRedo()}
+                  title="Redo (Ctrl+Y)"
+                  aria-label="Redo"
+                >
+                  <Redo2 size={14} />
+                </button>
+                {resumeData && (
+                  <LiveScoreBadge
+                    resume={resumeData}
+                    jobKeywords={liveScoreKeywords}
+                    onFullScore={jdText.trim() ? handleReAnalyze : handleSelfScore}
+                    fullScoreDisabled={isAnalyzeCoolingDown}
+                  />
+                )}
+              </>
+            )}
+          </div>
+
           <nav className="step-indicator" aria-label="Progress">
             {getStepConfig().map((s, i) => (
               <span key={s.key} style={{ display: "contents" }}>
-                {i > 0 && <ChevronRight size={16} className="step-arrow" />}
-                <div className={`step-item ${getStepStatus(s.key)}`}>
+                {i > 0 && <ChevronRight size={14} className="step-arrow" />}
+                <div
+                  className={`step-item ${getStepStatus(s.key)}`}
+                  aria-current={getStepStatus(s.key) === "active" ? "step" : undefined}
+                >
                   <div className="step-number">{i + 1}</div>
                   <span>{s.label}</span>
                 </div>
@@ -2173,53 +2251,21 @@ function App() {
             ))}
           </nav>
 
-          <div
-            className="flow-toolbar"
-            role="toolbar"
-            aria-label="Quick actions"
-          >
-            <div className="flow-toolbar-group">
-              {(step === "editor" || step === "score") && (
-                <button
-                  className={`header-btn flow-btn flow-btn-eye${showMobileResumePreview ? " btn-accent" : ""}`}
-                  onClick={() => setShowMobileResumePreview(!showMobileResumePreview)}
-                  title={showMobileResumePreview ? "Hide Resume" : "Show Resume"}
-                  aria-label={showMobileResumePreview ? "Hide Resume" : "Show Resume"}
-                  aria-expanded={showMobileResumePreview}
-                >
-                  {showMobileResumePreview ? <EyeOff size={14} /> : <Eye size={14} />}
-                  <span>{showMobileResumePreview ? "Hide" : "Preview"}</span>
-                </button>
-              )}
-              {step === "editor" && (
-                <>
-                  <button
-                    className="header-btn flow-btn"
-                    onClick={undo}
-                    disabled={!canUndo()}
-                    title="Undo (Ctrl+Z)"
-                    aria-label="Undo"
-                  >
-                    <Undo2 size={14} />
-                    <span>Undo</span>
-                  </button>
-                  <button
-                    className="header-btn flow-btn"
-                    onClick={redo}
-                    disabled={!canRedo()}
-                    title="Redo (Ctrl+Y)"
-                    aria-label="Redo"
-                  >
-                    <Redo2 size={14} />
-                    <span>Redo</span>
-                  </button>
-                </>
-              )}
-            </div>
-
-            <div className="flow-toolbar-group flow-toolbar-right">
+          {(step === "editor" || step === "score") && (
+            <div className="flow-bar-group flow-bar-tools">
               <button
-                className="header-btn header-btn-labeled flow-btn"
+                className={`header-btn flow-btn flow-btn-eye${showMobileResumePreview ? " btn-accent" : ""}`}
+                onClick={() => setShowMobileResumePreview(!showMobileResumePreview)}
+                title={showMobileResumePreview ? "Hide Resume" : "Show Resume"}
+                aria-label={showMobileResumePreview ? "Hide Resume" : "Show Resume"}
+                aria-expanded={showMobileResumePreview}
+              >
+                {showMobileResumePreview ? <EyeOff size={14} /> : <Eye size={14} />}
+                <span>{showMobileResumePreview ? "Hide" : "Preview"}</span>
+              </button>
+
+              <button
+                className="header-btn flow-btn"
                 onClick={() => setShowTemplatePicker(true)}
                 title="Templates & Style"
                 data-tour="templates"
@@ -2229,28 +2275,42 @@ function App() {
                 <span>Templates & Style</span>
               </button>
 
-              <button
-                className="header-btn header-btn-labeled flow-btn"
-                onClick={handleSelfScore}
-                disabled={isAnalyzeCoolingDown}
-                title={
-                  isAnalyzeCoolingDown
-                    ? `AI cooldown — available in ${formatCooldown(analyzeCooldownRemaining)}`
-                    : "Self ATS Score"
-                }
-                aria-label="Self ATS Score"
-                data-tour="self-score"
-              >
-                <Trophy size={14} />
-                <span>
-                  {isAnalyzeCoolingDown
-                    ? `${t("header.selfScore")} (${formatCooldown(analyzeCooldownRemaining)})`
-                    : t("header.selfScore")}
-                </span>
-              </button>
+              {step === "editor" && (
+                <>
+                  <button
+                    className="header-btn flow-btn"
+                    onClick={handleSelfScore}
+                    disabled={isAnalyzeCoolingDown}
+                    title={
+                      isAnalyzeCoolingDown
+                        ? `AI cooldown — available in ${formatCooldown(analyzeCooldownRemaining)}`
+                        : "Self ATS Score"
+                    }
+                    aria-label="Self ATS Score"
+                    data-tour="self-score"
+                  >
+                    <Trophy size={14} />
+                    <span>
+                      {isAnalyzeCoolingDown
+                        ? `${t("header.selfScore")} (${formatCooldown(analyzeCooldownRemaining)})`
+                        : t("header.selfScore")}
+                    </span>
+                  </button>
+
+                  <button
+                    className="header-btn flow-btn"
+                    onClick={handleNewJD}
+                    title="Score this resume against a job description"
+                    aria-label={t("header.newJD")}
+                  >
+                    <Target size={14} />
+                    <span>{t("header.newJD")}</span>
+                  </button>
+                </>
+              )}
 
               <button
-                className="header-btn header-btn-labeled flow-btn"
+                className="header-btn flow-btn"
                 onClick={() => setShowResumeManager(true)}
                 title="Files"
                 data-tour="files"
@@ -2260,34 +2320,10 @@ function App() {
                 <span>Files</span>
               </button>
             </div>
-          </div>
-        </>
+          )}
+        </div>
       )}
 
-      {isCompactScreen &&
-        mode &&
-        step !== "analyzing" &&
-        step !== "landing" && (
-          <nav className="mobile-breadcrumb" aria-label="Current flow">
-            <button
-              className="mobile-breadcrumb-home"
-              onClick={handleBackToLanding}
-            >
-              Home
-            </button>
-            {getStepConfig().map((s) => (
-              <span
-                key={`crumb-${s.key}`}
-                className={`mobile-breadcrumb-item ${getStepStatus(s.key)}`}
-              >
-                <ChevronRight size={12} />
-                {s.label}
-              </span>
-            ))}
-          </nav>
-        )}
-
-      {/* Main Content */}
       {/* Main Content */}
       <main className="app-main" id="main-content" role="main">
         {/* ═══ LANDING PAGE ═══ */}
@@ -2327,7 +2363,6 @@ function App() {
             handleAnalyze={handleAnalyze}
             handleAnalyzeExisting={handleAnalyzeExisting}
             handleParseResume={handleParseResume}
-            handleBackToLanding={handleBackToLanding}
             useStickyMobileActions={useStickyMobileActions}
             isAnalyzeCoolingDown={isAnalyzeCoolingDown}
             analyzeCooldownRemaining={analyzeCooldownRemaining}
@@ -2341,14 +2376,30 @@ function App() {
         {step === "analyzing" && (
           <div className="analyzing-step" role="status" aria-live="polite">
             <h2>{loadingMessage}</h2>
-            <div className="loading-progress-number">{analyzingPercent}%</div>
-            <div className="loading-progress-track" aria-hidden="true">
-              <div
-                className="loading-progress-fill"
-                style={{ width: `${analyzingPercent}%` }}
-              />
-            </div>
-            <p>Processing step by step...</p>
+            <ol className="analyze-stages">
+              {visibleAnalyzeStages.map(({ label, index }) => {
+                const state =
+                  index < analyzeStage.current
+                    ? "done"
+                    : index === analyzeStage.current
+                      ? "active"
+                      : "pending";
+                return (
+                  <li key={label} className={`analyze-stage analyze-stage-${state}`}>
+                    <span className="analyze-stage-dot" aria-hidden="true">
+                      {state === "done" ? <CheckCircle2 size={16} /> : null}
+                    </span>
+                    <span>{label}</span>
+                    {state === "active" && index === 0 && analyzeStage.ocr && (
+                      <span className="analyze-stage-detail">
+                        page {analyzeStage.ocr.page} of {analyzeStage.ocr.total}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+            <p>This usually takes a few seconds.</p>
           </div>
         )}
 
@@ -2369,6 +2420,12 @@ function App() {
             setShowMobileResumePreview={setShowMobileResumePreview}
             isExporting={isExporting}
             handleBack={handleBackNavigation}
+            reviewChanges={activeReview?.changes ?? null}
+            onApplyReview={handleApplyReview}
+            onDiscardReview={handleDiscardReview}
+            scoreIsStale={scoreIsStale}
+            onRescore={handleReAnalyze}
+            optimizeNotice={optimizeNotice}
           />
         )}
 
@@ -2412,7 +2469,7 @@ function App() {
       )}
 
       <SignedIn>
-        {!showFeedbackPanel && step !== "analyzing" && (
+        {hasExported && !showFeedbackPanel && step !== "analyzing" && (
           <button
             className="floating-feedback-cta"
             onClick={() => {

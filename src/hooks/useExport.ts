@@ -40,6 +40,8 @@ function estimateRenderedPages(element: HTMLElement): number {
   return Math.max(1, Math.ceil((contentHeightPx - tolerancePx) / onePagePx));
 }
 
+const HAS_EXPORTED_KEY = "resume-maker:has-exported";
+
 export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
   const { openSignIn } = useClerk();
   const { user } = useUser();
@@ -51,6 +53,23 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
   const setError = useAppStore((s) => s.setError);
 
   const [isExporting, setIsExporting] = useState(false);
+  // First download unlocks the floating feedback button: asking for feedback
+  // before someone has used the app just covers the screen.
+  const [hasExported, setHasExported] = useState(() => {
+    try {
+      return localStorage.getItem(HAS_EXPORTED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const markExported = useCallback(() => {
+    setHasExported(true);
+    try {
+      localStorage.setItem(HAS_EXPORTED_KEY, "1");
+    } catch {
+      // Storage blocked: the button just waits for the next session's export.
+    }
+  }, []);
   const [exportToastMessage, setExportToastMessage] = useState<string | null>(null);
   const [lastExportPageEstimate, setLastExportPageEstimate] = useState<number | null>(null);
   const [exportCustomizationOverride, setExportCustomizationOverride] = useState<Partial<TemplateCustomization> | null>(null);
@@ -266,6 +285,7 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
       estimated_pages: fitResult.estimatedPages,
       compression_stage: fitResult.stage,
     });
+    markExported();
 
     if (user?.id) {
       void recordFeatureUsage("resume_download");
@@ -286,6 +306,7 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
     setError,
     setResumeData,
     user?.id,
+    markExported,
   ]);
 
   const runExportDocx = useCallback(async () => {
@@ -324,6 +345,7 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
     try {
       await exportToDocx(exportData, customization);
       trackEvent("resume_exported", { format: "docx" });
+      markExported();
       if (user?.id) {
         void recordFeatureUsage("resume_download");
       }
@@ -334,7 +356,7 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
       setIsExporting(false);
       setExportToastMessage(null);
     }
-  }, [resumeData, setError, setResumeData, user?.id, customization]);
+  }, [resumeData, setError, setResumeData, user?.id, customization, markExported]);
 
   // Hook up react-to-print trigger
   const reactToPrintFn = useReactToPrint({
@@ -450,5 +472,6 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
     feedbackInitialTab,
     setFeedbackInitialTab,
     handleFeedbackCompleted,
+    hasExported,
   };
 }

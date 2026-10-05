@@ -54,7 +54,7 @@ export const TOURS: Record<TourId, TourStep[]> = {
   input: [
     {
       id: "upload",
-      targets: ["upload-pdf"],
+      targets: ["upload-pdf", "upload-pdf-button"],
       title: "Upload your resume",
       body: "Choose a PDF. Even scanned resumes work, and your links are kept.",
     },
