@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { LOCAL_DEV_AUTH, useClerk, useUser } from "../auth";
 import { useReactToPrint } from "react-to-print";
 import { useAppStore } from "../store/appStore";
@@ -42,7 +42,20 @@ function estimateRenderedPages(element: HTMLElement): number {
 
 const HAS_EXPORTED_KEY = "resume-maker:has-exported";
 
-export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
+interface UseExportOptions {
+  /** A download finished: print dialog closed (PDF) or file saved (DOCX). */
+  onExportFinished?: () => void;
+}
+
+export function useExport(
+  resumeRef: React.RefObject<HTMLDivElement | null>,
+  options: UseExportOptions = {},
+) {
+  // Read through a ref so the export callbacks needn't re-create per render.
+  const onExportFinishedRef = useRef(options.onExportFinished);
+  useEffect(() => {
+    onExportFinishedRef.current = options.onExportFinished;
+  });
   const { openSignIn } = useClerk();
   const { user } = useUser();
 
@@ -346,6 +359,7 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
       await exportToDocx(exportData, customization);
       trackEvent("resume_exported", { format: "docx" });
       markExported();
+      onExportFinishedRef.current?.();
       if (user?.id) {
         void recordFeatureUsage("resume_download");
       }
@@ -368,6 +382,7 @@ export function useExport(resumeRef: React.RefObject<HTMLDivElement | null>) {
       setExportCustomizationOverride(null);
       setIsExporting(false);
       setExportToastMessage(null);
+      onExportFinishedRef.current?.();
     },
     onPrintError: (error) => {
       console.error("PDF export failed:", error);

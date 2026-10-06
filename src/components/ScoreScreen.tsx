@@ -18,6 +18,7 @@ import {
   Loader2,
   Check,
   ArrowLeft,
+  Share2,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { useShallow } from "zustand/react/shallow";
@@ -54,6 +55,8 @@ interface ScoreScreenProps {
   onRescore?: () => void;
   /** One-line outcome of the last optimize run, e.g. nothing to change. */
   optimizeNotice?: string | null;
+  /** Share a score improvement (from → to). */
+  onShareImprovement?: (from: number, to: number) => void;
 }
 
 function clampPercent(value: number): number {
@@ -336,6 +339,7 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
   scoreIsStale,
   onRescore,
   optimizeNotice,
+  onShareImprovement,
 }) => {
   const {
     step,
@@ -478,6 +482,15 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
               <div className="improvement-badge">
                 <Trophy size={16} />
                 Improved: {previousScore} &rarr; {atsResult.overallScore}
+                {onShareImprovement && atsResult.overallScore > previousScore && (
+                  <button
+                    type="button"
+                    className="improvement-share"
+                    onClick={() => onShareImprovement(previousScore, atsResult.overallScore)}
+                  >
+                    <Share2 size={13} aria-hidden="true" /> Share
+                  </button>
+                )}
               </div>
             )}
             {scoreIsStale && (
