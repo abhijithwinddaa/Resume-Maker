@@ -34,9 +34,9 @@ import {
 import { setAuthedApiTokenGetter } from "./utils/authedApi";
 import { recordCampaignAttribution } from "./utils/campaignAttribution";
 import {
+  isFromLanding,
   parseModeParam,
   stripModeParam,
-  syncSignedInHint,
 } from "./utils/appEntry";
 import { detectTemplateStyle } from "./utils/templateDetector";
 import {
@@ -250,6 +250,11 @@ function App() {
     typeof window === "undefined"
       ? null
       : parseModeParam(window.location.search),
+  );
+
+  // Visitors from the landing page choose a mode; direct visits resume work.
+  const openedFromLandingRef = useRef(
+    typeof window !== "undefined" && isFromLanding(window.location.search),
   );
 
   // Extracted PDF links for parser
@@ -971,6 +976,11 @@ function App() {
             if (modeSelectionInProgressRef.current) {
               return;
             }
+            // Arrived via a landing-page button: show the three options,
+            // with the saved resume loaded for "Edit My Resume".
+            if (openedFromLandingRef.current) {
+              return;
+            }
             // Returning user with saved resume → straight to editor
             setMode("edit");
             setStep("editor");
@@ -1027,11 +1037,7 @@ function App() {
     recordCampaignAttribution("/app/");
   }, []);
 
-  /* ── Landing hint + ?mode= deep link ─────────────── */
-  useEffect(() => {
-    if (isUserLoaded) syncSignedInHint(user?.id);
-  }, [isUserLoaded, user?.id]);
-
+  /* ── ?mode= deep link ─────────────────────────────── */
   const deepLinkHandledRef = useRef(false);
   useEffect(() => {
     if (!isUserLoaded || deepLinkHandledRef.current) return;
@@ -1889,7 +1895,7 @@ function App() {
       <header className="app-header" role="banner">
         <div className="header-left">
           <a
-            href="/?landing=1"
+            href="/"
             className="app-home-link"
             aria-label={`${t("app.title")} home`}
           >

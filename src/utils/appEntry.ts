@@ -1,11 +1,10 @@
 /* ─── App entry helpers ────────────────────────────────
-   Pure helpers for the /app/ entry: the ?mode= deep link from the landing
-   page, and the rm_signed_in hint the landing page reads to skip itself.
+   Pure helpers for the /app/ entry: the ?mode= deep link, and whether the
+   visit came through the landing page.
    ────────────────────────────────────────────────────── */
 
 import type { AppMode } from "../store/appStore";
 
-export const SIGNED_IN_HINT_KEY = "rm_signed_in";
 
 const DEEP_LINK_MODES = ["ats", "edit", "create"] as const;
 
@@ -25,12 +24,11 @@ export function stripModeParam(search: string): string {
   return rest ? `?${rest}` : "";
 }
 
-/** "1" while a user id is known; removed when signed out. */
-export function syncSignedInHint(userId: string | null | undefined): void {
-  try {
-    if (userId) localStorage.setItem(SIGNED_IN_HINT_KEY, "1");
-    else localStorage.removeItem(SIGNED_IN_HINT_KEY);
-  } catch {
-    // Storage unavailable: the landing falls back to the Clerk cookie.
-  }
+/**
+ * True when the visit came through a button on the landing page, which tags
+ * its links `from=landing`. Those visitors should see the mode chooser, not
+ * be forwarded into their saved resume.
+ */
+export function isFromLanding(search: string): boolean {
+  return new URLSearchParams(search).get("from") === "landing";
 }
