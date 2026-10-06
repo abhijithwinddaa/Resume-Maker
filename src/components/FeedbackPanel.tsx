@@ -15,10 +15,10 @@ import {
 import {
   buildFeedbackSummary,
   emptyPopularitySnapshot,
-  maskEmailAddress,
   type PopularityMetricKey,
   type PopularitySnapshot,
   type FeedbackRow,
+  type PublicFeedbackItem,
 } from "../types/feedback";
 import { trackEvent } from "../utils/analytics";
 import "./FeedbackPanel.css";
@@ -66,7 +66,7 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   const [notice, setNotice] = useState<string | null>(null);
 
   const [myFeedback, setMyFeedback] = useState<FeedbackRow | null>(null);
-  const [publicFeedback, setPublicFeedback] = useState<FeedbackRow[]>([]);
+  const [publicFeedback, setPublicFeedback] = useState<PublicFeedbackItem[]>([]);
   const [adminQueue, setAdminQueue] = useState<FeedbackRow[]>([]);
   const [popularity, setPopularity] = useState<PopularitySnapshot>(
     emptyPopularitySnapshot,
@@ -437,7 +437,7 @@ const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
                     </div>
                   )}
                   <small className="feedback-author">
-                    by {maskEmailAddress(row.user_email)}
+                    by {row.author_label}
                   </small>
                 </article>
               ))}

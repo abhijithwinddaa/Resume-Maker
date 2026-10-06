@@ -1,5 +1,9 @@
 import { supabase } from "../lib/supabase";
-import type { FeedbackRow, FeedbackUpsertInput } from "../types/feedback";
+import type {
+  FeedbackRow,
+  FeedbackUpsertInput,
+  PublicFeedbackItem,
+} from "../types/feedback";
 import { authedJsonRequest } from "../utils/authedApi";
 
 const FEEDBACK_TABLE = "app_feedback";
@@ -29,21 +33,47 @@ function isPolicyMismatchError(
   );
 }
 
-export async function loadPublicFeedback(limit = 30): Promise<FeedbackRow[]> {
-  const { data, error } = await supabase
-    .from(FEEDBACK_TABLE)
-    .select(FEEDBACK_COLUMNS)
-    .eq("is_public", true)
-    .neq("status", "rejected")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+/** Only what may be shown to anyone: no email, user id, or admin notes. */
+const PUBLIC_FEEDBACK_COLUMNS =
+  "id, rating, comment, created_at, admin_reply, admin_reply_at";
 
-  if (error) {
-    console.error("Error loading public feedback:", error);
+/** PostgREST: the called function doesn't exist (migration not run yet). */
+const FUNCTION_NOT_FOUND = "PGRST202";
+
+/**
+ * Public reviews, without personal data. Served by the get_public_feedback()
+ * database function, which masks the author server-side
+ * (supabase-public-feedback-privacy-migration.sql). Until that migration
+ * runs, read the display-safe columns directly — never user_email.
+ */
+export async function loadPublicFeedback(limit = 30): Promise<PublicFeedbackItem[]> {
+  const { data, error } = await supabase.rpc("get_public_feedback", {
+    p_limit: limit,
+  });
+
+  if (!error) return (data || []) as PublicFeedbackItem[];
+
+  if (error.code === FUNCTION_NOT_FOUND) {
+    const fallback = await supabase
+      .from(FEEDBACK_TABLE)
+      .select(PUBLIC_FEEDBACK_COLUMNS)
+      .eq("is_public", true)
+      .neq("status", "rejected")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (!fallback.error) {
+      return (fallback.data || []).map((row) => ({
+        ...(row as Omit<PublicFeedbackItem, "author_label">),
+        author_label: "Public review",
+      }));
+    }
+    console.error("Error loading public feedback:", fallback.error);
     return [];
   }
 
-  return (data || []) as FeedbackRow[];
+  console.error("Error loading public feedback:", error);
+  return [];
 }
 
 export async function loadMyFeedback(

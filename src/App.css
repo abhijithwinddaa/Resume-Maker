@@ -3043,3 +3043,20 @@
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
 }
+
+/* The logo/title links back to the landing page (/?landing=1 skips the
+   signed-in redirect so it actually shows). */
+.app-home-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+.app-home-link:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 3px;
+}

@@ -24,6 +24,18 @@ export interface FeedbackRow {
   updated_at: string;
 }
 
+/** A public review as anyone may see it: no email, user id, or admin notes. */
+export interface PublicFeedbackItem {
+  id: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+  admin_reply: string | null;
+  admin_reply_at: string | null;
+  /** Masked by the database, e.g. "ab***@gmail.com", or "Public review". */
+  author_label: string;
+}
+
 export interface FeedbackUpsertInput {
   userId: string;
   userEmail: string;
@@ -81,7 +93,9 @@ export function emptyPopularitySnapshot(): PopularitySnapshot {
   };
 }
 
-export function buildFeedbackSummary(rows: FeedbackRow[]): FeedbackSummary {
+export function buildFeedbackSummary(
+  rows: Pick<FeedbackRow, "rating">[],
+): FeedbackSummary {
   const distribution: FeedbackSummary["distribution"] = {
     1: 0,
     2: 0,

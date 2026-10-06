@@ -3,12 +3,11 @@
    Network-first for API calls and dynamic content.
    ────────────────────────────────────────────────────── */
 
-/// <reference lib="webworker" />
+const CACHE_NAME = "resume-maker-v2";
+const STATIC_ASSETS = ["/", "/app/"];
 
-const CACHE_NAME = "resume-maker-v1";
-const STATIC_ASSETS = ["/", "/index.html"];
-
-const sw = self as unknown as ServiceWorkerGlobalScope;
+// Plain JavaScript: this file is served as-is (not compiled).
+const sw = self;
 
 sw.addEventListener("install", (event) => {
   event.waitUntil(
@@ -87,7 +86,19 @@ sw.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match("/index.html")))
+      .catch(() =>
+        caches
+          .match(request)
+          .then(
+            (cached) =>
+              cached ||
+              caches.match(
+                url.pathname === "/app" || url.pathname.startsWith("/app/")
+                  ? "/app/"
+                  : "/",
+              ),
+          ),
+      )
       .then((response) => response || new Response("Offline", { status: 503 })),
   );
 });
