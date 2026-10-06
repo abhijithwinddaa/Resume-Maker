@@ -32,6 +32,12 @@ import {
   type OptimizeProgress,
 } from "./utils/aiService";
 import { setAuthedApiTokenGetter } from "./utils/authedApi";
+import { recordCampaignAttribution } from "./utils/campaignAttribution";
+import {
+  parseModeParam,
+  stripModeParam,
+  syncSignedInHint,
+} from "./utils/appEntry";
 import { detectTemplateStyle } from "./utils/templateDetector";
 import {
   extractTextAndLinks,
@@ -140,7 +146,7 @@ function clampPercent(value: number): number {
 
 function App() {
   const { getToken } = useAuth();
-  const { user } = useUser();
+  const { user, isLoaded: isUserLoaded } = useUser();
   const clerk = useClerk();
   const { openSignIn } = clerk;
   const { t } = useTranslation();
@@ -240,7 +246,11 @@ function App() {
   );
 
   // Deferred auth: track which mode was selected before sign-in
-  const [pendingMode, setPendingMode] = useState<AppMode>(null);
+  const [pendingMode, setPendingMode] = useState<AppMode>(() =>
+    typeof window === "undefined"
+      ? null
+      : parseModeParam(window.location.search),
+  );
 
   // Extracted PDF links for parser
   const extractedLinksRef = useRef<string[]>([]);
@@ -1014,26 +1024,30 @@ function App() {
   }, [mode, step]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const source = params.get("utm_source");
-    const campaign = params.get("utm_campaign");
-    if (!source || !campaign) return;
-
-    const dedupeKey = `${source}:${campaign}:${params.get("utm_content") || ""}`;
-    const storageKey = "last_landing_campaign";
-    if (window.sessionStorage.getItem(storageKey) === dedupeKey) return;
-
-    trackEvent("landing_campaign_attribution", {
-      utm_source: source,
-      utm_medium: params.get("utm_medium") || "",
-      utm_campaign: campaign,
-      utm_content: params.get("utm_content") || "",
-      entry_path: window.location.pathname,
-    });
-
-    window.sessionStorage.setItem(storageKey, dedupeKey);
+    recordCampaignAttribution("/app/");
   }, []);
+
+  /* ── Landing hint + ?mode= deep link ─────────────── */
+  useEffect(() => {
+    if (isUserLoaded) syncSignedInHint(user?.id);
+  }, [isUserLoaded, user?.id]);
+
+  const deepLinkHandledRef = useRef(false);
+  useEffect(() => {
+    if (!isUserLoaded || deepLinkHandledRef.current) return;
+    deepLinkHandledRef.current = true;
+    const deepLinkMode = parseModeParam(window.location.search);
+    if (!deepLinkMode) return;
+    // Signed in: pendingMode (seeded at mount) is honored by the auto-load.
+    if (!user) handleSelectMode(deepLinkMode);
+    const search = stripModeParam(window.location.search);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${search}${window.location.hash}`,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUserLoaded]);
 
   /* ── Debounced auto-save to Supabase (500ms) ────── */
   const debouncedSupabaseSave = useDebounce(async (data: ResumeData) => {
@@ -1874,8 +1888,14 @@ function App() {
           Everything occasional lives in the "More" menu. */}
       <header className="app-header" role="banner">
         <div className="header-left">
-          <FileText size={22} className="logo-icon" />
-          <h1 className="app-title">{t("app.title")}</h1>
+          <a
+            href="/?landing=1"
+            className="app-home-link"
+            aria-label={`${t("app.title")} home`}
+          >
+            <FileText size={22} className="logo-icon" />
+            <h1 className="app-title">{t("app.title")}</h1>
+          </a>
         </div>
         <div className="header-actions">
           {saveStatus === "saving" && (

@@ -19,3 +19,6 @@ Audience:
 
 Preferred landing page:
 https://resume.batturaj.in/
+
+App (free to use, sign in required to save):
+https://resume.batturaj.in/app/

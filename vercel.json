@@ -5,6 +5,10 @@
       "schedule": "30 15 * * *"
     }
   ],
+  "rewrites": [
+    { "source": "/app", "destination": "/app/index.html" },
+    { "source": "/app/:path*", "destination": "/app/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
