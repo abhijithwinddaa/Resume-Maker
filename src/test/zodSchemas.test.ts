@@ -74,13 +74,13 @@ describe("validateResumeData", () => {
     expect(result.valid).toBe(false);
   });
 
-  it("should reject resume with missing name", () => {
+  it("should accept an empty name (the app starts with empty fields)", () => {
     const data = {
       ...validResumeData,
       contact: { ...validResumeData.contact, name: "" },
     };
     const result = validateResumeData(data);
-    expect(result.valid).toBe(false);
+    expect(result.valid).toBe(true);
   });
 
   it("should reject resume with invalid email", () => {

@@ -53,7 +53,7 @@ describe("server AI cache helpers", () => {
     const second = buildAnalyzeCacheKey("jd", resume, "Full-stack engineer");
 
     expect(first).toBe(second);
-    expect(first.startsWith("analyze:v1:jd:")).toBe(true);
+    expect(first.startsWith("analyze:v2:jd:")).toBe(true);
   });
 
   it("changes rewrite cache keys when iteration or ATS payload changes", () => {

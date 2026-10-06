@@ -1,3 +1,5 @@
+import { buildUntrustedNote, wrapUntrusted } from "./optimizePromptShared.js";
+
 /**
  * AI prompt to detect the visual template style from raw resume text.
  *
@@ -55,8 +57,10 @@ Respond with ONLY valid JSON, no explanation, no code fences:
   "styleName": "Classic Blue"
 }
 
+${buildUntrustedNote()}
+
 Resume text to analyze:
----
-${resumeText.substring(0, 4000)}
----`;
+${wrapUntrusted("resume", resumeText.substring(0, 4000))}
+
+Respond with ONLY the JSON object.`;
 }

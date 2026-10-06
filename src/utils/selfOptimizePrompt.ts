@@ -4,12 +4,14 @@ import {
   buildOptimizationWritingContract,
   buildQualitySignalsBlock,
   OPTIMIZE_PROMPT_VERSION,
+  buildUntrustedNote,
+  wrapUntrusted,
 } from "./optimizePromptShared.js";
 
 /**
  * Builds a prompt for AI-based self-optimization — no JD required.
  * Improves the resume based on general best practices: stronger bullets,
- * better metrics, clearer structure, and industry keyword enrichment.
+ * clearer structure, and industry keyword enrichment.
  */
 export function buildSelfOptimizePrompt(
   resumeData: ResumeData,
@@ -32,8 +34,9 @@ There is NO specific job description — you are optimizing for GENERAL best pra
 
 ## CONTEXT
 The resume was self-scored and got **${atsReport.overallScore}/100**.
-The target is **90+/100** — but only through truthful edits. A lower score on an
-honest resume beats a higher score on one the candidate cannot defend in an interview.
+Improve it only through truthful edits. A lower score on an honest resume beats a
+higher score on one the candidate cannot defend in an interview.
+${buildUntrustedNote()}
 
 ## SELF-ATS SCAN REPORT
 - **Overall Score**: ${atsReport.overallScore}/100
@@ -62,7 +65,7 @@ ${writingContract}
 1. **Missing keywords: use one only where the existing resume already shows evidence for it** — the same tool under another name, a direct synonym, or work that plainly is that thing. Surface it in the bullet that holds the evidence.
 2. **No evidence? Leave it out** — out of bullets, summary AND skills. Never add a tool, platform, or skill the resume gives no sign the candidate has used.
 3. **Implement the suggestions** — when they can be done truthfully.
-4. **Use strong action verbs** — Built, Designed, Implemented, Optimized, Deployed, Architected, Led, Scaled, Reduced, Automated, etc.
+4. **Use accurate action verbs** — Built, Designed, Implemented, Optimized, Deployed, Reduced, Automated, etc. Use Led, Architected, Scaled or Owned only when the original supports that level; keep "helped"/"contributed" roles as such.
 5. **Never introduce a number** — reuse the metrics, counts, and years already in the resume. Do not estimate, round up, or add new percentages, user counts, or years of experience.
 6. **Summary must be strong** — Front-load with the candidate's top strengths and domain expertise.
 7. **Keep it truthful** — Rephrase and enhance, but don't fabricate experience.
@@ -90,7 +93,7 @@ ${writingContract}
 }
 
 ## CURRENT RESUME DATA
-${JSON.stringify(resumeData, null, 2)}
+${wrapUntrusted("resume", JSON.stringify(resumeData, null, 2))}
 
 ## OUTPUT
 Return ONLY the rewritten resume as a valid JSON object. No other text.`;

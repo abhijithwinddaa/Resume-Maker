@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import {
   isNodeResponse,
   sendNodeResponse,
@@ -12,6 +13,14 @@ import {
 import { buildReminderEmail } from "../../src/server/mailTemplates.js";
 import { getMailSiteUrl, sendTransactionalEmail } from "../../src/server/resend.js";
 import { getSupabaseAdminClient } from "../../src/server/supabaseAdmin.js";
+import { buildUnsubscribeUrl } from "../../src/server/unsubscribeToken.js";
+
+// Resend allows roughly 2 requests per second.
+const SEND_DELAY_MS = 600;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -28,7 +37,11 @@ function isAuthorizedCronRequest(request: Request): boolean {
     return false;
   }
 
-  return request.headers.get("authorization") === `Bearer ${cronSecret}`;
+  const provided = Buffer.from(request.headers.get("authorization") || "");
+  const expected = Buffer.from(`Bearer ${cronSecret}`);
+  return (
+    provided.length === expected.length && timingSafeEqual(provided, expected)
+  );
 }
 
 async function resolveRolloutStart(
@@ -80,6 +93,7 @@ async function handleRequest(request: Request): Promise<Response> {
 
     const now = new Date();
     const nowIso = now.toISOString();
+    const startOfTodayIso = `${nowIso.slice(0, 10)}T00:00:00.000Z`;
     const reminderLimit = readOptionalNumber(
       readEnv("REMINDER_DAILY_LIMIT"),
       200,
@@ -97,18 +111,28 @@ async function handleRequest(request: Request): Promise<Response> {
     );
 
     const rolloutStartedAt = await resolveRolloutStart(supabase);
-    const audienceMode = resolveReminderAudienceMode(now, {
-      rolloutStartedAt,
-      warmupDays,
-      recentActivityHours,
-    });
+    const rolloutConfig = { rolloutStartedAt, warmupDays, recentActivityHours };
+    const audienceMode = resolveReminderAudienceMode(now, rolloutConfig);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("app_user_notifications")
       .select(
         "user_id, user_email, first_name, last_seen_at, last_reminder_sent_at, reminder_enabled",
       )
       .eq("reminder_enabled", true)
+      .or(
+        `last_reminder_sent_at.is.null,last_reminder_sent_at.lt.${startOfTodayIso}`,
+      );
+
+    if (audienceMode === "recent-active") {
+      // Filter before the limit so inactive users do not use up the quota.
+      const windowStartIso = new Date(
+        now.getTime() - recentActivityHours * 60 * 60 * 1000,
+      ).toISOString();
+      query = query.gte("last_seen_at", windowStartIso);
+    }
+
+    const { data, error } = await query
       .order("last_seen_at", { ascending: false })
       .limit(reminderLimit);
 
@@ -125,47 +149,60 @@ async function handleRequest(request: Request): Promise<Response> {
     const siteUrl = getMailSiteUrl();
     let sentCount = 0;
     let skippedCount = 0;
+    let failedCount = 0;
 
     for (const row of recipients) {
-      const eligible = shouldSendReminder(row, now, {
-        rolloutStartedAt,
-        warmupDays,
-        recentActivityHours,
-      });
+      const eligible = shouldSendReminder(row, now, rolloutConfig);
 
       if (!eligible) {
         skippedCount += 1;
         continue;
       }
 
-      const email = buildReminderEmail({
-        firstName: row.first_name || undefined,
-        siteUrl,
-        audienceMode,
-      });
+      try {
+        const unsubscribeUrl = buildUnsubscribeUrl(siteUrl, row.user_id);
+        const email = buildReminderEmail({
+          firstName: row.first_name || undefined,
+          siteUrl,
+          audienceMode,
+          unsubscribeUrl: unsubscribeUrl || undefined,
+        });
 
-      const sent = await sendTransactionalEmail({
-        to: row.user_email,
-        subject: email.subject,
-        html: email.html,
-        text: email.text,
-        idempotencyKey: `daily-reminder/${row.user_id}/${nowIso.slice(0, 10)}`,
-        tags: [
-          { name: "type", value: "daily-reminder" },
-          { name: "audience", value: audienceMode },
-        ],
-      });
+        const sent = await sendTransactionalEmail({
+          to: row.user_email,
+          subject: email.subject,
+          html: email.html,
+          text: email.text,
+          idempotencyKey: `daily-reminder/${row.user_id}/${nowIso.slice(0, 10)}`,
+          tags: [
+            { name: "type", value: "daily-reminder" },
+            { name: "audience", value: audienceMode },
+          ],
+          unsubscribeUrl: unsubscribeUrl || undefined,
+        });
 
-      await supabase
-        .from("app_user_notifications")
-        .update({
-          last_reminder_sent_at: nowIso,
-          last_reminder_email_id: sent.id,
-          updated_at: nowIso,
-        })
-        .eq("user_id", row.user_id);
+        const { error: updateError } = await supabase
+          .from("app_user_notifications")
+          .update({
+            last_reminder_sent_at: nowIso,
+            last_reminder_email_id: sent.id,
+            updated_at: nowIso,
+          })
+          .eq("user_id", row.user_id);
 
-      sentCount += 1;
+        if (updateError) {
+          // The email went out; the idempotency key blocks a same-day resend.
+          console.error("Reminder state update failed:", updateError);
+          failedCount += 1;
+        } else {
+          sentCount += 1;
+        }
+      } catch (sendError) {
+        console.error("Reminder send failed:", sendError);
+        failedCount += 1;
+      }
+
+      await sleep(SEND_DELAY_MS);
     }
 
     return jsonResponse({
@@ -175,17 +212,11 @@ async function handleRequest(request: Request): Promise<Response> {
       scanned: recipients.length,
       sent: sentCount,
       skipped: skippedCount,
+      failed: failedCount,
     });
   } catch (error) {
-    return jsonResponse(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Daily reminder cron failed.",
-      },
-      500,
-    );
+    console.error("Daily reminder cron failed:", error);
+    return jsonResponse({ error: "Daily reminder cron failed." }, 500);
   }
 }
 

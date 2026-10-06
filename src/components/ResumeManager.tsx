@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useUser } from "../auth";
 import { createEmptyResume } from "../types/resume";
 import { useAppStore } from "../store/appStore";
+import { discardPendingSave } from "../hooks/useResumeAutosave";
 import {
   loadAllResumes,
   deleteResume,
@@ -18,7 +19,7 @@ interface ResumeManagerProps {
 export default function ResumeManager({ onClose }: ResumeManagerProps) {
   const { user } = useUser();
   const userId = user?.id;
-  const setResumeData = useAppStore((s) => s.setResumeData);
+  const loadResume = useAppStore((s) => s.loadResume);
   const setStep = useAppStore((s) => s.setStep);
   const setMode = useAppStore((s) => s.setMode);
   const activeResumeId = useAppStore((s) => s.activeResumeId);
@@ -64,9 +65,11 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
   }, [userId]);
 
   const handleSelect = (row: ResumeRow) => {
-    setResumeData(row.data, false);
+    // loadResume resets undo history and makes the autosave flush the previous
+    // resume's pending edit to ITS id before this one becomes active.
     setActiveResumeId(row.id);
     setActiveResumeName(row.name || "Untitled Resume");
+    loadResume(row.data);
     setMode("edit");
     setStep("editor");
     onClose();
@@ -76,6 +79,7 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
     if (!confirm("Delete this resume? This cannot be undone.")) return;
 
     const wasActive = id === activeResumeId;
+    discardPendingSave(id); // never write to a row we are deleting
     await deleteResume(id);
     const rows = await fetchResumes();
 
@@ -88,7 +92,7 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
 
     setActiveResumeId(null);
     setActiveResumeName(null);
-    setResumeData(createEmptyResume(), false);
+    loadResume(createEmptyResume());
     setMode("create");
     setStep("editor");
     onClose();
@@ -109,7 +113,7 @@ export default function ResumeManager({ onClose }: ResumeManagerProps) {
   const handleNew = () => {
     setActiveResumeId(null);
     setActiveResumeName(null);
-    setResumeData(createEmptyResume(), false);
+    loadResume(createEmptyResume());
     setMode("create");
     setStep("editor");
     onClose();

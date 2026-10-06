@@ -7,6 +7,9 @@
 import * as pdfjsLib from "pdfjs-dist";
 import { normalizeExtractedResumeText } from "./resumeTextCleanup";
 
+/** OCR is slow and memory hungry; a huge scanned PDF must not freeze the tab. */
+export const MAX_OCR_PAGES = 5;
+
 export interface OCRResult {
   text: string;
 }
@@ -25,7 +28,7 @@ export async function extractTextWithOCR(
   ]);
 
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const numPages = pdf.numPages;
+  const numPages = Math.min(pdf.numPages, MAX_OCR_PAGES);
 
   // Create a single Tesseract worker and reuse across pages
   const worker = await createWorker("eng");

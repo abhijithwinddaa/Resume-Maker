@@ -1,4 +1,5 @@
 import type { ResumeData } from "../types/resume";
+import { buildUntrustedNote, wrapUntrusted } from "./optimizePromptShared.js";
 
 /**
  * Builds a prompt for AI-based self ATS scoring — no JD required.
@@ -42,15 +43,15 @@ Identify the industry/domain the candidate belongs to based on their skills, pro
 - How many industry-standard keywords/technologies appear?
 - Are common tools, frameworks, languages, and methodologies for their field well represented?
 - **matchedKeywords**: List all industry-relevant keywords/technologies already in the resume.
-- **missingKeywords**: List important industry keywords the candidate SHOULD add given their apparent field and experience level. Look at their tech stack and suggest closely related technologies they likely know but didn't list.
+- **missingKeywords**: List terms commonly expected in their field that do not appear in the resume. These are gaps to add only with real experience; do not assume the candidate knows them.
 
 ### 2. skillsAlignment (weight 25%) — "Skills Presentation"
 Evaluate the skills section quality:
 - Are skills well-organized with clear categories?
-- Are there enough skills listed? (At least 15-20 for tech roles)
+- Is the skills section relevant to their field and easy to scan? Never penalise a short skills list.
 - Is the mix of hard skills and soft skills appropriate?
 - **matchedSkills**: Skills that are well-presented and relevant.
-- **missingSkills**: Common skills for their domain that should be added.
+- **missingSkills**: Skills commonly expected in their field that do not appear in the resume, framed as gaps to add only with real experience; do not assume the candidate has them.
 
 ### 3. experienceRelevance (weight 20%) — "Content Quality"
 Evaluate the quality of experience and project descriptions:
@@ -68,7 +69,7 @@ Evaluate ATS-friendliness:
 ### 5. impact (weight 10%) — "Impact & Metrics"
 Evaluate whether the resume shows measurable impact:
 - Does it use strong action verbs? (Built, Designed, Optimized, Deployed, etc.)
-- Are there quantified results? (percentages, user counts, time saved, etc.)
+- Are results stated where the candidate gives them? Judge only what is written; never penalise missing numbers the candidate may not have.
 - Does it show clear outcomes and business value?
 
 ## OUTPUT FORMAT
@@ -80,14 +81,14 @@ Return a JSON object with this EXACT structure:
       "score": <number 0-100>,
       "weight": 35,
       "matchedKeywords": ["every industry keyword found in resume"],
-      "missingKeywords": ["important keywords they should add"],
+      "missingKeywords": ["commonly expected keywords not in the resume (add only if genuinely used)"],
       "feedback": "<brief feedback on industry keyword coverage>"
     },
     "skillsAlignment": {
       "score": <number 0-100>,
       "weight": 25,
       "matchedSkills": ["well-presented relevant skills"],
-      "missingSkills": ["skills they should add for their domain"],
+      "missingSkills": ["commonly expected skills not in the resume (add only if genuinely used)"],
       "feedback": "<brief feedback on skills presentation>"
     },
     "experienceRelevance": {
@@ -107,14 +108,20 @@ Return a JSON object with this EXACT structure:
     }
   },
   "topSuggestions": [
-    "<suggestion 1>",
-    "<suggestion 2>",
-    "<suggestion 3>",
-    "<suggestion 4>",
-    "<suggestion 5>"
+    "<honest, specific suggestion based only on what the resume shows>",
+    "<honest, specific suggestion based only on what the resume shows>",
+    "<honest, specific suggestion based only on what the resume shows>",
+    "<honest, specific suggestion based only on what the resume shows>",
+    "<honest, specific suggestion based only on what the resume shows>"
   ],
   "summaryVerdict": "<2-3 sentence overall assessment of resume quality>"
 }
+
+SUGGESTION RULES (apply to topSuggestions and every feedback field):
+- Suggestions are about wording, structure, ordering, or surfacing evidence already in the resume.
+- For a missing keyword or skill, say to add it ONLY if the candidate has genuinely used it. Never assume the candidate knows a tool.
+- Never include example numbers, percentages or sample metrics. Say "add your real result if you have one" instead.
+- Never suggest claiming anything "even if only briefly or locally used", or adding anything "to pass filters".
 
 SCORING RULES:
 - overallScore = weighted average using the given weights
@@ -124,8 +131,10 @@ SCORING RULES:
 
 ---
 
+${buildUntrustedNote()}
+
 RESUME:
-${resumeText}
+${wrapUntrusted("resume", resumeText)}
 
 ---
 

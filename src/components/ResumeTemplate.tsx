@@ -5,6 +5,8 @@ import { DEFAULT_SECTION_LABELS } from "../types/resume";
 import type { TemplateCustomization } from "../types/templates";
 import { useAppStore } from "../store/appStore";
 import { formatTextToReact } from "../utils/textFormatter";
+import { pruneForExport, sectionHasContent } from "../utils/exportData";
+import { mailtoUrl, safeUrl, telUrl } from "../utils/safeUrl";
 import "./ResumeTemplate.css";
 
 interface ResumeTemplateProps {
@@ -42,7 +44,10 @@ const SPACING_MAP = {
 } as const;
 
 const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
-  ({ data, highlightKeywords = [], customizationOverride, forExport }, ref) => {
+  ({ data: rawData, highlightKeywords = [], customizationOverride, forExport }, ref) => {
+    // The preview and the export render the same pruned copy, so a heading
+    // never appears for an empty section and links are always safe.
+    const data = useMemo(() => pruneForExport(rawData), [rawData]);
     const templateId = useAppStore((s) => s.templateId);
     const customization = useAppStore((s) => s.customization);
     const setActiveSection = useAppStore((s) => s.setActiveSection);
@@ -110,7 +115,10 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
       return label.toUpperCase();
     };
 
+    const linkProps = { target: "_blank", rel: "noreferrer" } as const;
+
     const renderSection = (key: SectionKey) => {
+      if (!sectionHasContent(data, key)) return null;
       switch (key) {
         case "summary":
           return (
@@ -127,44 +135,44 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               <h2 className="section-title">{getSectionTitle("education")}</h2>
               <div className="section-divider"></div>
               {data.education.map((edu, i) => (
-                <div key={i} className="education-item">
-                  <div className="education-row">
-                    <div>
-                      <strong>{formatText(edu.university)}</strong>
+                <div key={edu.id ?? i} className="education-item">
+                  {(edu.university.trim() || edu.yearRange.trim()) && (
+                    <div className="education-row">
+                      <div>
+                        <strong>{formatText(edu.university)}</strong>
+                      </div>
+                      <div className="education-year">{formatText(edu.yearRange)}</div>
                     </div>
-                    <div className="education-year">{formatText(edu.yearRange)}</div>
-                  </div>
-                  <div className="education-row">
-                    <div className="education-degree">{formatText(edu.degree)}</div>
-                    <div className="education-cgpa">{formatText(edu.cgpa)}</div>
-                  </div>
+                  )}
+                  {(edu.degree.trim() || edu.cgpa.trim()) && (
+                    <div className="education-row">
+                      <div className="education-degree">{formatText(edu.degree)}</div>
+                      <div className="education-cgpa">{formatText(edu.cgpa)}</div>
+                    </div>
+                  )}
                 </div>
               ))}
             </section>
           );
 
         case "experience":
-          if (
-            !data.showExperience ||
-            !data.experience ||
-            data.experience.length === 0
-          )
-            return null;
           return (
             <section key="experience" {...getInteractiveProps("experience")} className="resume-section">
               <h2 className="section-title">{getSectionTitle("experience")}</h2>
               <div className="section-divider"></div>
               {data.experience.map((exp, i) => (
-                <div key={i} className="experience-item">
+                <div key={exp.id ?? i} className="experience-item">
                   <div className="experience-header">
                     <div>
-                      <strong>{formatText(exp.role)}</strong>
-                      {" — "}
-                      <span className="experience-company">{formatText(exp.company)}</span>
+                      {exp.role.trim() && <strong>{formatText(exp.role)}</strong>}
+                      {exp.role.trim() && exp.company.trim() && " — "}
+                      {exp.company.trim() && (
+                        <span className="experience-company">{formatText(exp.company)}</span>
+                      )}
                     </div>
                     <div className="experience-date">{formatText(exp.dateRange)}</div>
                   </div>
-                  {exp.location && (
+                  {exp.location.trim() && (
                     <div className="experience-location">{formatText(exp.location)}</div>
                   )}
                   <ul className="experience-bullets">
@@ -182,48 +190,45 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
             <section key="projects" {...getInteractiveProps("projects")} className="resume-section">
               <h2 className="section-title">{getSectionTitle("projects")}</h2>
               <div className="section-divider"></div>
-              {data.projects.map((project, i) => (
-                <div key={i} className="project-item">
-                  <div className="project-header">
-                    <span className="project-title">{formatText(project.title)}</span>
-                    <span className="project-links">
-                      {project.githubLink && (
-                        <>
-                          {" | "}
-                          <a
-                            href={project.githubLink}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Github
-                          </a>
-                        </>
-                      )}
-                      {project.liveLink && (
-                        <>
-                          {" | "}
-                          <a
-                            href={project.liveLink}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Live Demo
-                          </a>
-                        </>
-                      )}
-                    </span>
+              {data.projects.map((project, i) => {
+                const github = safeUrl(project.githubLink);
+                const live = safeUrl(project.liveLink);
+                return (
+                  <div key={project.id ?? i} className="project-item">
+                    <div className="project-header">
+                      <span className="project-title">{formatText(project.title)}</span>
+                      <span className="project-links">
+                        {github && (
+                          <>
+                            {project.title.trim() && " | "}
+                            <a href={github} {...linkProps}>
+                              Github
+                            </a>
+                          </>
+                        )}
+                        {live && (
+                          <>
+                            {(project.title.trim() || github) && " | "}
+                            <a href={live} {...linkProps}>
+                              Live Demo
+                            </a>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    {project.techStack.trim() && (
+                      <div className="project-tech">
+                        <strong>Tech Stack:</strong> {formatText(project.techStack)}
+                      </div>
+                    )}
+                    <ul className="project-bullets">
+                      {project.bullets.map((bullet, j) => (
+                        <li key={j}>{formatText(bullet)}</li>
+                      ))}
+                    </ul>
                   </div>
-                  <div className="project-tech">
-                    <strong>Tech Stack:</strong>{" "}
-                    {formatText(project.techStack)}
-                  </div>
-                  <ul className="project-bullets">
-                    {project.bullets.map((bullet, j) => (
-                      <li key={j}>{formatText(bullet)}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+                );
+              })}
             </section>
           );
 
@@ -234,8 +239,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               <div className="section-divider"></div>
               <ul className="skills-list">
                 {data.skills.map((skill, i) => (
-                  <li key={i}>
-                    <strong>{formatText(skill.label)}:</strong>{" "}
+                  <li key={skill.id ?? i}>
+                    {skill.label.trim() && <strong>{formatText(skill.label)}:</strong>}
+                    {skill.label.trim() && skill.skills.trim() && " "}
                     {formatText(skill.skills)}
                   </li>
                 ))}
@@ -244,7 +250,6 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
           );
 
         case "achievements":
-          if (!data.achievements || data.achievements.length === 0) return null;
           return (
             <section key="achievements" {...getInteractiveProps("achievements")} className="resume-section">
               <h2 className="section-title">
@@ -252,35 +257,27 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               </h2>
               <div className="section-divider"></div>
               <ul className="achievements-list">
-                {data.achievements.map((ach, i) => (
-                  <li key={i}>
-                    {formatText(ach.text)}
-                    {ach.githubLink && (
-                      <>
-                        {" "}
-                        <a
-                          href={ach.githubLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="github-badge"
-                        >
-                          GITHUB LINK
-                        </a>
-                      </>
-                    )}
-                  </li>
-                ))}
+                {data.achievements.map((ach, i) => {
+                  const link = safeUrl(ach.githubLink);
+                  return (
+                    <li key={i}>
+                      {formatText(ach.text)}
+                      {link && (
+                        <>
+                          {" "}
+                          <a href={link} {...linkProps} className="github-badge">
+                            GITHUB LINK
+                          </a>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           );
 
         case "certificates":
-          if (
-            !data.showCertificates ||
-            !data.certificates ||
-            data.certificates.length === 0
-          )
-            return null;
           return (
             <section key="certificates" {...getInteractiveProps("certificates")} className="resume-section">
               <h2 className="section-title">
@@ -288,26 +285,24 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
               </h2>
               <div className="section-divider"></div>
               <ul className="certificates-list">
-                {data.certificates.map((cert, i) => (
-                  <li key={i} className="certificate-item">
-                    <strong>{formatText(cert.name)}</strong>
-                    {" — "}
-                    <span>{formatText(cert.description)}</span>
-                    {cert.link && (
-                      <>
-                        {" "}
-                        <a
-                          href={cert.link}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="cert-link"
-                        >
-                          View Certificate
-                        </a>
-                      </>
-                    )}
-                  </li>
-                ))}
+                {data.certificates.map((cert, i) => {
+                  const link = safeUrl(cert.link);
+                  return (
+                    <li key={i} className="certificate-item">
+                      {cert.name.trim() && <strong>{formatText(cert.name)}</strong>}
+                      {cert.name.trim() && cert.description.trim() && " — "}
+                      {cert.description.trim() && <span>{formatText(cert.description)}</span>}
+                      {link && (
+                        <>
+                          {" "}
+                          <a href={link} {...linkProps} className="cert-link">
+                            View Certificate
+                          </a>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           );
@@ -370,9 +365,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
             {headline && <p className="portfolio-subtitle">{formatText(headline)}</p>}
 
             <div className="resume-contact portfolio-contact">
-              {data.contact.portfolio && (
+              {safeUrl(data.contact.portfolio) && (
                 <a
-                  href={data.contact.portfolio}
+                  href={safeUrl(data.contact.portfolio)}
                   target="_blank"
                   rel="noreferrer"
                   className="portfolio-contact-item"
@@ -382,9 +377,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                 </a>
               )}
 
-              {data.contact.github && (
+              {safeUrl(data.contact.github) && (
                 <a
-                  href={data.contact.github}
+                  href={safeUrl(data.contact.github)}
                   target="_blank"
                   rel="noreferrer"
                   className="portfolio-contact-item"
@@ -394,9 +389,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                 </a>
               )}
 
-              {data.contact.linkedin && (
+              {safeUrl(data.contact.linkedin) && (
                 <a
-                  href={data.contact.linkedin}
+                  href={safeUrl(data.contact.linkedin)}
                   target="_blank"
                   rel="noreferrer"
                   className="portfolio-contact-item"
@@ -406,25 +401,37 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                 </a>
               )}
 
-              {data.contact.email && (
-                <a
-                  href={`mailto:${data.contact.email}`}
-                  className="portfolio-contact-item"
-                >
-                  <Mail size={13} strokeWidth={1.8} />
-                  <span>{formatText(data.contact.email)}</span>
-                </a>
-              )}
+              {data.contact.email.trim() &&
+                (mailtoUrl(data.contact.email) ? (
+                  <a
+                    href={mailtoUrl(data.contact.email)}
+                    className="portfolio-contact-item"
+                  >
+                    <Mail size={13} strokeWidth={1.8} />
+                    <span>{formatText(data.contact.email)}</span>
+                  </a>
+                ) : (
+                  <span className="portfolio-contact-item">
+                    <Mail size={13} strokeWidth={1.8} />
+                    <span>{formatText(data.contact.email)}</span>
+                  </span>
+                ))}
 
-              {data.contact.phone && (
-                <a
-                  href={`tel:${data.contact.phone}`}
-                  className="portfolio-contact-item"
-                >
-                  <Phone size={13} strokeWidth={1.8} />
-                  <span>{formatText(data.contact.phone)}</span>
-                </a>
-              )}
+              {data.contact.phone.trim() &&
+                (telUrl(data.contact.phone) ? (
+                  <a
+                    href={telUrl(data.contact.phone)}
+                    className="portfolio-contact-item"
+                  >
+                    <Phone size={13} strokeWidth={1.8} />
+                    <span>{formatText(data.contact.phone)}</span>
+                  </a>
+                ) : (
+                  <span className="portfolio-contact-item">
+                    <Phone size={13} strokeWidth={1.8} />
+                    <span>{formatText(data.contact.phone)}</span>
+                  </span>
+                ))}
             </div>
           </div>
 
@@ -445,9 +452,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                     {getSectionTitle("projects")}
                   </h2>
                   {projects.map((project, i) => {
-                    const hasProjectLinks = Boolean(
-                      project.githubLink || project.liveLink,
-                    );
+                    const github = safeUrl(project.githubLink);
+                    const live = safeUrl(project.liveLink);
+                    const hasProjectLinks = Boolean(github || live);
 
                     return (
                       <div
@@ -458,11 +465,11 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                           <span className="project-title">{formatText(project.title)}</span>
                           {hasProjectLinks && (
                             <span className="project-links portfolio-project-links">
-                              {project.githubLink && (
+                              {github && (
                                 <>
-                                  {" | "}
+                                  {project.title.trim() && " | "}
                                   <a
-                                    href={project.githubLink}
+                                    href={github}
                                     target="_blank"
                                     rel="noreferrer"
                                   >
@@ -470,11 +477,11 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                                   </a>
                                 </>
                               )}
-                              {project.liveLink && (
+                              {live && (
                                 <>
-                                  {" | "}
+                                  {(project.title.trim() || github) && " | "}
                                   <a
-                                    href={project.liveLink}
+                                    href={live}
                                     target="_blank"
                                     rel="noreferrer"
                                   >
@@ -515,10 +522,10 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                       className="experience-item portfolio-experience-item"
                     >
                       <div className="experience-header portfolio-experience-header">
-                        <strong>{formatText(exp.company)}</strong>
-                        {exp.role && (
+                        {exp.company.trim() && <strong>{formatText(exp.company)}</strong>}
+                        {exp.role.trim() && (
                           <span className="portfolio-experience-role">
-                            | {formatText(exp.role)}
+                            {exp.company.trim() && "| "}{formatText(exp.role)}
                           </span>
                         )}
                       </div>
@@ -548,11 +555,11 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                     {achievements.map((achievement, i) => (
                       <li key={i}>
                         {formatText(achievement.text)}
-                        {achievement.githubLink && (
+                        {safeUrl(achievement.githubLink) && (
                           <>
                             {" "}
                             <a
-                              href={achievement.githubLink}
+                              href={safeUrl(achievement.githubLink)}
                               target="_blank"
                               rel="noreferrer"
                               className="github-badge portfolio-achievement-link"
@@ -581,9 +588,9 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
                           className="certificate-item portfolio-certificate-item"
                         >
                           <span className="portfolio-cert-name">{formatText(title)}</span>
-                          {cert.link && (
+                          {safeUrl(cert.link) && (
                             <a
-                              href={cert.link}
+                              href={safeUrl(cert.link)}
                               target="_blank"
                               rel="noreferrer"
                               className="cert-link portfolio-cert-link"
@@ -650,6 +657,41 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
       return renderPortfolioTemplate();
     }
 
+    const contactItems: Array<{ key: string; node: React.ReactNode }> = [];
+    if (data.contact.phone.trim()) {
+      contactItems.push({ key: "phone", node: <span>{formatText(data.contact.phone)}</span> });
+    }
+    if (data.contact.email.trim()) {
+      const mailto = mailtoUrl(data.contact.email);
+      contactItems.push({
+        key: "email",
+        node: mailto ? (
+          <a href={mailto}>{formatText(data.contact.email)}</a>
+        ) : (
+          <span>{formatText(data.contact.email)}</span>
+        ),
+      });
+    }
+    (
+      [
+        ["linkedin", "Linkedin"],
+        ["github", "Github"],
+        ["portfolio", "Portfolio"],
+      ] as const
+    ).forEach(([field, label]) => {
+      const href = safeUrl(data.contact[field]);
+      if (href) {
+        contactItems.push({
+          key: field,
+          node: (
+            <a href={href} {...linkProps}>
+              {label}
+            </a>
+          ),
+        });
+      }
+    });
+
     return (
       <div
         className={`resume-page template-${templateId}${forExport ? " resume-page--export" : ""}`}
@@ -660,41 +702,12 @@ const ResumeTemplate = React.forwardRef<HTMLDivElement, ResumeTemplateProps>(
         <div className="resume-header" {...getInteractiveProps("contact")}>
           <h1 className="resume-name">{formatText(data.contact.name)}</h1>
           <div className="resume-contact">
-            <span>{formatText(data.contact.phone)}</span>
-            <span className="separator">|</span>
-            <a href={`mailto:${data.contact.email}`}>{formatText(data.contact.email)}</a>
-            {data.contact.linkedin && (
-              <>
-                <span className="separator">|</span>
-                <a
-                  href={data.contact.linkedin}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Linkedin
-                </a>
-              </>
-            )}
-            {data.contact.github && (
-              <>
-                <span className="separator">|</span>
-                <a href={data.contact.github} target="_blank" rel="noreferrer">
-                  Github
-                </a>
-              </>
-            )}
-            {data.contact.portfolio && (
-              <>
-                <span className="separator">|</span>
-                <a
-                  href={data.contact.portfolio}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Portfolio
-                </a>
-              </>
-            )}
+            {contactItems.map((item, i) => (
+              <React.Fragment key={item.key}>
+                {i > 0 && <span className="separator">|</span>}
+                {item.node}
+              </React.Fragment>
+            ))}
           </div>
         </div>
 

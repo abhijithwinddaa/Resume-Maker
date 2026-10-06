@@ -3,7 +3,13 @@ import { useAppStore } from "../store/appStore";
 import { generateCoverLetter } from "../utils/coverLetterService";
 import { trackEvent } from "../utils/analytics";
 import { FileText, Copy, Download, X, Sparkles } from "lucide-react";
+import { redactContactForAI } from "../server/aiRedaction";
+import { numbersGrounded } from "../utils/quantify";
 import "./CoverLetter.css";
+import "./AINotice.css";
+
+const NUMBER_WARNING =
+  "Check the numbers in this letter — they may not be from your resume.";
 
 interface CoverLetterPanelProps {
   onClose: () => void;
@@ -58,7 +64,10 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
     abortRef.current = controller;
 
     try {
-      const resumeText = JSON.stringify(resumeData);
+      // Phone, email and links never leave the browser; the name stays for the sign-off.
+      const resumeText = JSON.stringify(
+        redactContactForAI(resumeData, { keepName: true }),
+      );
       const content = await generateCoverLetter(
         {
           resumeText,
@@ -118,6 +127,18 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
     URL.revokeObjectURL(url);
     trackEvent("cover_letter_downloaded");
   };
+
+  // Same check the server runs; shown even when the letter came from cache.
+  const numberWarning =
+    coverLetter?.content &&
+    resumeData &&
+    !numbersGrounded(coverLetter.content, [
+      JSON.stringify(resumeData),
+      coverLetter.companyName || "",
+      coverLetter.position || "",
+    ])
+      ? NUMBER_WARNING
+      : null;
 
   return (
     <div
@@ -197,6 +218,14 @@ const CoverLetterPanel: React.FC<CoverLetterPanelProps> = ({ onClose }) => {
                 <Download size={14} /> Download
               </button>
             </div>
+            <p className="ai-notice">
+              <span>AI draft — check every claim before sending.</span>
+            </p>
+            {numberWarning && (
+              <div className="cl-error" role="alert">
+                {numberWarning}
+              </div>
+            )}
             <div className="cl-content">{coverLetter.content}</div>
           </div>
         )}

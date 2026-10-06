@@ -56,7 +56,7 @@ describe("notificationLogic", () => {
     ).toBe(true);
   });
 
-  it("does not filter out inactive users after the warmup period", () => {
+  it("skips inactive users once recent-active mode applies", () => {
     expect(
       shouldSendReminder(
         {
@@ -70,6 +70,6 @@ describe("notificationLogic", () => {
           recentActivityHours: 72,
         },
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

@@ -117,6 +117,30 @@ function uniqueSuggestions(items: string[], maxItems = 7): string[] {
   return result;
 }
 
+/**
+ * Backstop for the scoring prompt: a suggestion that quotes an example metric
+ * ("e.g. 'reduced load time by 40%'") or tells the user to claim a skill "even
+ * if" they lack it invites invented claims. Drop those; the prompt is the
+ * primary fix, this only catches what slips through.
+ */
+const INVENTED_EXAMPLE_PATTERNS: RegExp[] = [
+  /\d+\s*%/,
+  /\$\s?\d/,
+  /\d+\+?\s+(?:unit tests|users|tests|ms|seconds|hours)\b/i,
+  /\be\.g\.?,?\s*["'\u201c\u2018][^"'\u201d\u2019]*\d/i,
+  /\beven if\b/i,
+  /\blikely know\b/i,
+  /\bto pass (?:keyword|ats) filters\b/i,
+];
+
+export function filterInventedSuggestions(items: unknown[]): string[] {
+  return items.filter(
+    (item): item is string =>
+      typeof item === "string" &&
+      !INVENTED_EXAMPLE_PATTERNS.some((re) => re.test(item)),
+  );
+}
+
 function enrichATSResult(result: ATSResult, resumeData: ResumeData): ATSResult {
   const qualityInsights = analyzeResumeFeedback(resumeData, {
     matchedKeywords: [
@@ -165,6 +189,8 @@ export function parseATSResultResponse(
     );
   }
 
+  parsed.topSuggestions = filterInventedSuggestions(parsed.topSuggestions);
+
   parsed.overallScore = Math.max(
     0,
     Math.min(100, Math.round(parsed.overallScore)),
@@ -194,7 +220,11 @@ function restoreLinks(parsed: ResumeData, original: ResumeData): void {
 
   if (parsed.achievements && original.achievements) {
     for (let i = 0; i < parsed.achievements.length; i++) {
-      const originalAchievement = original.achievements[i];
+      const text = parsed.achievements[i].text?.toLowerCase().trim();
+      const originalAchievement =
+        original.achievements.find(
+          (a) => a.text?.toLowerCase().trim() === text,
+        ) ?? original.achievements[i];
       if (
         originalAchievement &&
         !parsed.achievements[i].githubLink &&

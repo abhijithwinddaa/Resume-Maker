@@ -21,6 +21,7 @@ function buildBaseHtml(params: {
   ctaLabel: string;
   siteUrl: string;
   body?: string;
+  unsubscribeUrl?: string;
 }) {
   const siteUrl = normalizeSiteUrl(params.siteUrl);
   return [
@@ -38,6 +39,9 @@ function buildBaseHtml(params: {
     `<div style="margin-top:24px;"><a href="${escapeHtml(siteUrl)}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#f8fafc;color:#0f172a;text-decoration:none;font-weight:700;">${escapeHtml(params.ctaLabel)}</a></div>`,
     "</div>",
     `<p style="margin:14px 6px 0;font-size:12px;line-height:1.6;color:#64748b;">Resume Maker • ${escapeHtml(siteUrl)}</p>`,
+    params.unsubscribeUrl
+      ? `<p style="margin:6px 6px 0;font-size:12px;line-height:1.6;color:#64748b;">Don’t want these reminders? <a href="${escapeHtml(params.unsubscribeUrl)}" style="color:#64748b;">Unsubscribe</a></p>`
+      : "",
     "</div>",
     "</body>",
     "</html>",
@@ -71,6 +75,7 @@ export function buildReminderEmail(params: {
   firstName?: string;
   siteUrl: string;
   audienceMode: "all" | "recent-active";
+  unsubscribeUrl?: string;
 }) {
   const greeting = buildGreeting(params.firstName);
   const subject = "Ready to take your resume to the next level? 📈";
@@ -78,13 +83,14 @@ export function buildReminderEmail(params: {
 
   return {
     subject,
-    text: `${intro}\n\nEdit My Resume: ${normalizeSiteUrl(params.siteUrl)}`,
+    text: `${intro}\n\nEdit My Resume: ${normalizeSiteUrl(params.siteUrl)}${params.unsubscribeUrl ? `\n\nUnsubscribe from reminders: ${params.unsubscribeUrl}` : ""}`,
     html: buildBaseHtml({
       eyebrow: "daily progress",
       title: "Your dream job starts with a great resume.",
       intro,
       ctaLabel: "Edit My Resume",
       siteUrl: params.siteUrl,
+      unsubscribeUrl: params.unsubscribeUrl,
     }),
   };
 }

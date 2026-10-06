@@ -7,6 +7,7 @@
 import * as pdfjsLib from "pdfjs-dist";
 const RESUME_DATA_MARKER = "%%RESUME_MAKER_DATA_V1%%";
 import type { ResumeData } from "../types/resume";
+import { normalizeResumeData } from "./normalizeResume";
 import { normalizeExtractedResumeText } from "./resumeTextCleanup";
 
 // Fallback: main-thread worker setup
@@ -35,7 +36,7 @@ export async function extractEmbeddedResumeData(
     const subject = (metadata?.info as Record<string, unknown>)?.Subject;
     if (typeof subject === "string" && subject.startsWith(RESUME_DATA_MARKER)) {
       const json = subject.slice(RESUME_DATA_MARKER.length);
-      return JSON.parse(json) as ResumeData;
+      return normalizeResumeData(JSON.parse(json));
     }
   } catch {
     // Metadata extraction failed — fall through to normal extraction

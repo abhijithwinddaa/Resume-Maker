@@ -12,6 +12,17 @@ import {
 } from "../types/privacySettings";
 import type { DetectedStyle } from "../utils/templateDetector";
 
+// localStorage can throw (Safari private mode, quota full, blocked site data).
+// A preference that fails to persist must never abort the state update.
+export function safeSet(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Undo/Redo History ───────────────────────────────
 const MAX_HISTORY = 50;
 
@@ -64,6 +75,8 @@ interface AppState {
   isDbLoading: boolean;
   cooldownRemaining: number;
   hasBackup: boolean;
+  /** Bumped whenever a DIFFERENT resume is loaded (or cleared). */
+  loadEpoch: number;
 
   // ─── Template ───────────────────────────
   templateId: TemplateId;
@@ -110,6 +123,8 @@ interface AppState {
   setResumeText: (text: string) => void;
   setJdText: (text: string) => void;
   setResumeData: (data: ResumeData | null, recordHistory?: boolean) => void;
+  /** Load a different resume: sets the data AND resets undo history. */
+  loadResume: (data: ResumeData | null) => void;
   setATSResult: (result: ATSResult | null) => void;
   setIsOptimizing: (v: boolean) => void;
   setOptimizeProgress: (p: OptimizeProgress | null) => void;
@@ -157,7 +172,8 @@ interface AppState {
   setKeywordSuggestions: (suggestions: Record<string, KeywordSuggestion[]> | null) => void;
   setIsAnalyzingKeywords: (v: boolean) => void;
   setActiveKeyword: (keyword: string | null) => void;
-  applyKeywordSuggestion: (suggestion: KeywordSuggestion) => void;
+  /** Returns false (and changes nothing) when the target bullet changed. */
+  applyKeywordSuggestion: (suggestion: KeywordSuggestion) => boolean;
 
   // Active section actions
   setActiveSection: (section: string | null) => void;
@@ -242,6 +258,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isDbLoading: false,
   cooldownRemaining: 0,
   hasBackup: false,
+  loadEpoch: 0,
 
   templateId: loadTemplateId(),
   customization: loadCustomization(),
@@ -279,6 +296,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ resumeData: data });
     }
   },
+  loadResume: (data) =>
+    set((state) => ({
+      resumeData: data,
+      history: { past: [], future: [] },
+      loadEpoch: state.loadEpoch + 1,
+    })),
   setATSResult: (atsResult) => set({ atsResult }),
   setIsOptimizing: (isOptimizing) => set({ isOptimizing }),
   setOptimizeProgress: (optimizeProgress) => set({ optimizeProgress }),
@@ -295,12 +318,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Template
   setTemplateId: (templateId) => {
-    localStorage.setItem("template-id", templateId);
+    safeSet("template-id", templateId);
     set({ templateId });
   },
   setCustomization: (partial) => {
     const merged = { ...get().customization, ...partial };
-    localStorage.setItem("template-customization", JSON.stringify(merged));
+    safeSet("template-customization", JSON.stringify(merged));
     set({ customization: merged });
   },
 
@@ -310,11 +333,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { detectedStyle } = get();
     if (!detectedStyle) return;
     const { templateId, customization } = detectedStyle;
-    localStorage.setItem("template-id", templateId);
-    localStorage.setItem(
-      "template-customization",
-      JSON.stringify(customization),
-    );
+    safeSet("template-id", templateId);
+    safeSet("template-customization", JSON.stringify(customization));
     set({ templateId, customization });
   },
   setOriginalPdfUrl: (originalPdfUrl) => {
@@ -333,13 +353,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Theme
   setTheme: (theme) => {
-    localStorage.setItem("theme-mode", theme);
+    safeSet("theme-mode", theme);
     set({ theme });
   },
 
   // Export behavior
   setExportPageMode: (exportPageMode) => {
-    localStorage.setItem("export-page-mode", exportPageMode);
+    safeSet("export-page-mode", exportPageMode);
     set({ exportPageMode });
   },
 
@@ -373,28 +393,46 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActiveKeyword: (activeKeyword) => set({ activeKeyword }),
   applyKeywordSuggestion: (suggestion) => {
     const { resumeData } = get();
-    if (!resumeData) return;
+    if (!resumeData) return false;
     const updated = structuredClone(resumeData);
-    if (suggestion.section === "experience" && updated.experience?.[suggestion.index]) {
-      const entry = updated.experience[suggestion.index];
-      const bullets = entry.bullets || [];
-      if (suggestion.editType === "rewrite" && typeof suggestion.bulletIndex === "number" && bullets[suggestion.bulletIndex]) {
-        bullets[suggestion.bulletIndex] = suggestion.suggestedText;
-      } else if (suggestion.editType === "new") {
-        bullets.push(suggestion.suggestedText);
+    const entry =
+      suggestion.section === "experience"
+        ? updated.experience?.[suggestion.index]
+        : suggestion.section === "projects"
+          ? updated.projects?.[suggestion.index]
+          : undefined;
+    if (!entry) return false;
+    const bullets = Array.isArray(entry.bullets) ? entry.bullets : [];
+
+    if (suggestion.editType === "rewrite") {
+      let target = -1;
+      const original = suggestion.originalText;
+      if (typeof original === "string") {
+        // Only touch a bullet that still says what the suggestion was based on.
+        if (
+          typeof suggestion.bulletIndex === "number" &&
+          bullets[suggestion.bulletIndex] === original
+        ) {
+          target = suggestion.bulletIndex;
+        } else {
+          target = bullets.indexOf(original);
+        }
+      } else if (
+        typeof suggestion.bulletIndex === "number" &&
+        typeof bullets[suggestion.bulletIndex] === "string"
+      ) {
+        target = suggestion.bulletIndex; // no original recorded: legacy behaviour
       }
-      entry.bullets = bullets;
-    } else if (suggestion.section === "projects" && updated.projects?.[suggestion.index]) {
-      const entry = updated.projects[suggestion.index];
-      const bullets = entry.bullets || [];
-      if (suggestion.editType === "rewrite" && typeof suggestion.bulletIndex === "number" && bullets[suggestion.bulletIndex]) {
-        bullets[suggestion.bulletIndex] = suggestion.suggestedText;
-      } else if (suggestion.editType === "new") {
-        bullets.push(suggestion.suggestedText);
-      }
-      entry.bullets = bullets;
+      if (target < 0) return false;
+      bullets[target] = suggestion.suggestedText;
+    } else if (suggestion.editType === "new") {
+      bullets.push(suggestion.suggestedText);
+    } else {
+      return false;
     }
+    entry.bullets = bullets;
     get().setResumeData(updated, true);
+    return true;
   },
 
   // Active Section
@@ -453,6 +491,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       coverLetter: null,
       activeSection: "contact",
       history: { past: [], future: [] },
+      loadEpoch: get().loadEpoch + 1,
       keywordSuggestions: null,
       isAnalyzingKeywords: false,
       activeKeyword: null,

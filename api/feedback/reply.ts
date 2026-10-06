@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { isAdminEmail } from "../../src/utils/adminAccess.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
 import {
@@ -34,11 +35,7 @@ function normalizeReply(value: unknown): string {
 }
 
 function hashString(value: string): string {
-  let hash = 5381;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash * 33) ^ value.charCodeAt(i);
-  }
-  return (hash >>> 0).toString(36);
+  return createHash("sha256").update(value).digest("hex");
 }
 
 async function handleRequest(request: Request): Promise<Response> {
@@ -134,44 +131,47 @@ async function handleRequest(request: Request): Promise<Response> {
       reply,
     });
 
-    const sent = await sendTransactionalEmail({
-      to: existingRow.user_email,
-      subject: email.subject,
-      html: email.html,
-      text: email.text,
-      idempotencyKey: `feedback-reply/${feedbackId}/${hashString(reply.toLowerCase())}`,
-      tags: [
-        { name: "type", value: "feedback-reply" },
-        {
-          name: "feedback_id",
-          value: feedbackId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64),
-        },
-      ],
-    });
+    try {
+      const sent = await sendTransactionalEmail({
+        to: existingRow.user_email,
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
+        idempotencyKey: `feedback-reply/${feedbackId}/${hashString(reply.toLowerCase())}`,
+        tags: [
+          { name: "type", value: "feedback-reply" },
+          {
+            name: "feedback_id",
+            value: feedbackId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64),
+          },
+        ],
+      });
 
-    await supabase
-      .from("app_feedback")
-      .update({
-        admin_reply_emailed_at: nowIso,
-        admin_reply_email_id: sent.id,
-        updated_at: nowIso,
-      })
-      .eq("id", feedbackId);
+      const { error: emailStateError } = await supabase
+        .from("app_feedback")
+        .update({
+          admin_reply_emailed_at: nowIso,
+          admin_reply_email_id: sent.id,
+          updated_at: nowIso,
+        })
+        .eq("id", feedbackId);
 
-    return jsonResponse({
-      feedback: updatedRow,
-      emailed: true,
-    });
+      if (emailStateError) {
+        console.error("Could not record reply email state:", emailStateError);
+      }
+
+      return jsonResponse({ feedback: updatedRow, emailed: true });
+    } catch (sendError) {
+      console.error("Feedback reply email failed:", sendError);
+      return jsonResponse({
+        feedback: updatedRow,
+        emailed: false,
+        message: "Reply saved, but the email could not be sent.",
+      });
+    }
   } catch (error) {
-    return jsonResponse(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Could not send the admin reply.",
-      },
-      500,
-    );
+    console.error("Admin reply failed:", error);
+    return jsonResponse({ error: "Could not send the admin reply." }, 500);
   }
 }
 

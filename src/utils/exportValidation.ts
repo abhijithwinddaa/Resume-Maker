@@ -89,10 +89,14 @@ function findKnownTypos(
   }
 }
 
+const text = (v: unknown): string => (typeof v === "string" ? v : "");
+const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+const filled = (v: unknown): boolean => text(v).trim().length > 0;
+
 function countNumberBlanks(data: ResumeData): number {
   const bullets = [
-    ...data.experience.flatMap((e) => e.bullets),
-    ...data.projects.flatMap((p) => p.bullets),
+    ...arr<{ bullets?: unknown }>(data?.experience).flatMap((e) => arr<string>(e?.bullets)),
+    ...arr<{ bullets?: unknown }>(data?.projects).flatMap((p) => arr<string>(p?.bullets)),
   ];
   return bullets.filter(
     (b) => typeof b === "string" && hasNumberBlank(b) && !PLACEHOLDER_PATTERN.test(b),
@@ -104,28 +108,34 @@ export function validateForExport(data: ResumeData): ExportValidationResult {
   const errors: string[] = [];
 
   // Required fields
-  if (!data.contact.name.trim()) {
+  if (!filled(data?.contact?.name)) {
     errors.push("Please add your full name");
   }
-  if (!data.contact.email.trim()) {
+  if (!filled(data?.contact?.email)) {
     errors.push("Please add your email address");
   }
 
   // At least one content section with data
   const hasExperience =
-    data.showExperience &&
-    data.experience.some((e) => e.company.trim() || e.role.trim());
-  const hasEducation = data.education.some(
-    (e) => e.university.trim() || e.degree.trim(),
+    !!data?.showExperience &&
+    arr<ResumeData["experience"][number]>(data?.experience).some(
+      (e) => filled(e?.company) || filled(e?.role),
+    );
+  const hasEducation = arr<ResumeData["education"][number]>(data?.education).some(
+    (e) => filled(e?.university) || filled(e?.degree),
   );
-  const hasProjects = data.projects.some((p) => p.title.trim());
+  const hasProjects = arr<ResumeData["projects"][number]>(data?.projects).some((p) =>
+    filled(p?.title),
+  );
 
   if (!hasExperience && !hasEducation && !hasProjects) {
     errors.push("Add at least one Experience, Education, or Project");
   }
 
   // At least one skill
-  const hasSkills = data.skills.some((s) => s.label.trim() && s.skills.trim());
+  const hasSkills = arr<ResumeData["skills"][number]>(data?.skills).some(
+    (s) => filled(s?.label) && filled(s?.skills),
+  );
   if (!hasSkills) {
     errors.push("Add at least one skill");
   }
@@ -196,7 +206,7 @@ export function autoFixTypos(data: ResumeData): {
     );
     const bullets = Array.isArray(exp.bullets) ? exp.bullets : [];
     exp.bullets = bullets.map((b, j) =>
-      fixString(b, `experience[${i}].bullets[${j}]`),
+      fixString(text(b), `experience[${i}].bullets[${j}]`),
     );
   });
 
@@ -209,7 +219,7 @@ export function autoFixTypos(data: ResumeData): {
     );
     const bullets = Array.isArray(proj.bullets) ? proj.bullets : [];
     proj.bullets = bullets.map((b, j) =>
-      fixString(b, `projects[${i}].bullets[${j}]`),
+      fixString(text(b), `projects[${i}].bullets[${j}]`),
     );
   });
 
@@ -245,9 +255,9 @@ export function calculateCompleteness(data: ResumeData): {
 
   // Personal info (20%)
   const contactFilled =
-    !!data.contact.name.trim() &&
-    !!data.contact.email.trim() &&
-    !!data.contact.phone.trim();
+    filled(data?.contact?.name) &&
+    filled(data?.contact?.email) &&
+    filled(data?.contact?.phone);
   breakdown.push({
     label: "Personal Info",
     complete: contactFilled,
@@ -255,32 +265,35 @@ export function calculateCompleteness(data: ResumeData): {
   });
 
   // Summary (10%)
-  const hasSummary = !!data.summary.trim();
+  const hasSummary = filled(data?.summary);
   breakdown.push({ label: "Summary", complete: hasSummary, weight: 10 });
 
   // Experience (20%)
   const hasExp =
-    data.showExperience &&
-    data.experience.some(
+    !!data?.showExperience &&
+    arr<ResumeData["experience"][number]>(data?.experience).some(
       (e) =>
-        e.company.trim() && e.role.trim() && e.bullets.some((b) => b.trim()),
+        filled(e?.company) && filled(e?.role) && arr<string>(e?.bullets).some(filled),
     );
   breakdown.push({ label: "Experience", complete: hasExp, weight: 20 });
 
   // Education (15%)
-  const hasEdu = data.education.some(
-    (e) => e.university.trim() && e.degree.trim(),
+  const hasEdu = arr<ResumeData["education"][number]>(data?.education).some(
+    (e) => filled(e?.university) && filled(e?.degree),
   );
   breakdown.push({ label: "Education", complete: hasEdu, weight: 15 });
 
   // Skills (15%)
-  const hasSkills = data.skills.some((s) => s.label.trim() && s.skills.trim());
+  const hasSkills = arr<ResumeData["skills"][number]>(data?.skills).some(
+    (s) => filled(s?.label) && filled(s?.skills),
+  );
   breakdown.push({ label: "Skills", complete: hasSkills, weight: 15 });
 
   // Projects or Certifications (10%)
   const hasProjectsOrCerts =
-    data.projects.some((p) => p.title.trim()) ||
-    (data.showCertificates && data.certificates.some((c) => c.name.trim()));
+    arr<ResumeData["projects"][number]>(data?.projects).some((p) => filled(p?.title)) ||
+    (!!data?.showCertificates &&
+      arr<ResumeData["certificates"][number]>(data?.certificates).some((c) => filled(c?.name)));
   breakdown.push({
     label: "Projects / Certs",
     complete: hasProjectsOrCerts,
@@ -288,8 +301,7 @@ export function calculateCompleteness(data: ResumeData): {
   });
 
   // LinkedIn or Portfolio (10%)
-  const hasLinks =
-    !!data.contact.linkedin.trim() || !!data.contact.portfolio.trim();
+  const hasLinks = filled(data?.contact?.linkedin) || filled(data?.contact?.portfolio);
   breakdown.push({
     label: "LinkedIn / Portfolio",
     complete: hasLinks,

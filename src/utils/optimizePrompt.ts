@@ -4,6 +4,8 @@ import {
   buildOptimizationWritingContract,
   buildQualitySignalsBlock,
   OPTIMIZE_PROMPT_VERSION,
+  buildUntrustedNote,
+  wrapUntrusted,
 } from "./optimizePromptShared.js";
 
 export function buildOptimizePrompt(
@@ -27,8 +29,9 @@ Prompt version: ${OPTIMIZE_PROMPT_VERSION}.
 
 ## CONTEXT
 The resume was scanned against an ATS system and scored **${atsReport.overallScore}/100**.
-The target is **95+/100** — but only through truthful edits. A lower score on an
-honest resume beats a higher score on one the candidate cannot defend in an interview.
+Improve it only through truthful edits. A lower score on an honest resume beats a
+higher score on one the candidate cannot defend in an interview.
+${buildUntrustedNote()}
 
 ## ATS SCAN REPORT
 - **Overall Score**: ${atsReport.overallScore}/100
@@ -57,7 +60,7 @@ ${writingContract}
 1. **Missing keywords: use one only where the existing resume already shows evidence for it** — the same tool under another name ("GitHub Actions" → "CI/CD"), a direct synonym, or work that plainly is that thing ("led a 3-person team" → "mentoring"). Surface it in the bullet that holds the evidence.
 2. **No evidence? Leave it out** — out of bullets, summary AND skills. Never add a tool, platform, or skill the resume gives no sign the candidate has used. The ATS report already shows the candidate those gaps.
 3. **Implement the suggestions** — when they can be done truthfully.
-4. **Use strong action verbs** — Started, Built, Designed, Implemented, Optimized, Deployed, Architected, Led, Scaled, Reduced, Automated, etc.
+4. **Use accurate action verbs** — Built, Designed, Implemented, Optimized, Deployed, Reduced, Automated, etc. Use Led, Architected, Scaled or Owned only when the original supports that level; keep "helped"/"contributed" roles as such.
 5. **Never introduce a number** — reuse the metrics, counts, and years already in the resume. Do not estimate, round up, or add new percentages, user counts, or years of experience.
 6. **Summary** — Front-load the summary with JD-relevant terms the candidate genuinely has.
 7. **Keep it truthful** — Rephrase and enhance, but don't fabricate experience the candidate doesn't have.
@@ -85,10 +88,10 @@ ${writingContract}
 }
 
 ## CURRENT RESUME DATA
-${JSON.stringify(resumeData, null, 2)}
+${wrapUntrusted("resume", JSON.stringify(resumeData, null, 2))}
 
 ## TARGET JOB DESCRIPTION
-${jobDescription}
+${wrapUntrusted("job_description", jobDescription)}
 
 ## OUTPUT
 Return ONLY the rewritten resume as a valid JSON object. No other text.`;

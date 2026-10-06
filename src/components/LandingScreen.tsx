@@ -12,6 +12,7 @@ import {
 import { useAppStore, type AppMode } from "../store/appStore";
 import { useShallow } from "zustand/react/shallow";
 import { loadLocalBackup, formatBackupAge } from "../utils/localBackup";
+import { loadAllResumes } from "../services/resumeService";
 
 interface LandingScreenProps {
   user: any;
@@ -50,7 +51,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
     error,
     setActiveResumeId,
     setActiveResumeName,
-    setResumeData,
+    loadResume,
     setJdText,
     setMode,
     setStep,
@@ -61,7 +62,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
       error: s.error,
       setActiveResumeId: s.setActiveResumeId,
       setActiveResumeName: s.setActiveResumeName,
-      setResumeData: s.setResumeData,
+      loadResume: s.loadResume,
       setJdText: s.setJdText,
       setMode: s.setMode,
       setStep: s.setStep,
@@ -237,17 +238,32 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
         <div className="landing-backup">
           <button
             className="btn-secondary backup-restore-btn"
-            onClick={() => {
+            onClick={async () => {
               if (!user) return;
               const backup = loadLocalBackup();
-              if (backup) {
-                setActiveResumeId(null);
-                setActiveResumeName(null);
-                setResumeData(backup.resumeData, false);
-                if (backup.jdText) setJdText(backup.jdText);
-                setMode("edit");
-                setStep("editor");
+              if (!backup) return;
+              // Restore into the saved resume the backup came from (if it
+              // still exists); otherwise start a clearly named new one.
+              let resumeId: string | null = null;
+              let name = "Restored backup";
+              if (backup.resumeId) {
+                try {
+                  const rows = await loadAllResumes(user.id);
+                  const match = rows.find((r) => r.id === backup.resumeId);
+                  if (match) {
+                    resumeId = match.id;
+                    name = match.name || backup.name || name;
+                  }
+                } catch {
+                  /* fall back to a new resume */
+                }
               }
+              setActiveResumeId(resumeId);
+              setActiveResumeName(name);
+              loadResume(backup.resumeData);
+              if (backup.jdText) setJdText(backup.jdText);
+              setMode("edit");
+              setStep("editor");
             }}
           >
             <HardDrive size={14} />

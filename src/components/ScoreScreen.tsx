@@ -257,10 +257,11 @@ const KeywordGapDrawer = memo(function KeywordGapDrawer({
   keyword: string | null;
   suggestions: KeywordSuggestion[];
   onClose: () => void;
-  onApply: (s: KeywordSuggestion) => void;
+  onApply: (s: KeywordSuggestion) => boolean;
   onDismiss: (s: KeywordSuggestion) => void;
 }) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [staleNotice, setStaleNotice] = useState(false);
 
   const visibleSuggestions = suggestions.filter((s) => {
     const id = `${s.section}-${s.index}-${s.editType}-${s.bulletIndex ?? "new"}-${s.keyword}`;
@@ -284,6 +285,12 @@ const KeywordGapDrawer = memo(function KeywordGapDrawer({
           <X size={18} />
         </button>
       </div>
+      {staleNotice && (
+        <p className="keyword-gap-empty" role="status">
+          That bullet changed after this suggestion was made, so nothing was
+          applied. Run Analyze All Gaps again for fresh suggestions.
+        </p>
+      )}
       {visibleSuggestions.length === 0 ? (
         <p className="keyword-gap-empty">
           All suggestions for <strong>{keyword}</strong> have been dismissed.
@@ -298,7 +305,8 @@ const KeywordGapDrawer = memo(function KeywordGapDrawer({
                 suggestion={s}
                 onApply={(su) => {
                   setDismissedIds((prev) => new Set(prev).add(id));
-                  onApply(su);
+                  // Refused when the bullet was edited after the suggestion was made.
+                  setStaleNotice(!onApply(su));
                 }}
                 onReject={() => {
                   setDismissedIds((prev) => new Set(prev).add(id));
@@ -442,9 +450,7 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
   );
 
   const handleApplySuggestion = useCallback(
-    (suggestion: KeywordSuggestion) => {
-      applyKeywordSuggestion(suggestion);
-    },
+    (suggestion: KeywordSuggestion) => applyKeywordSuggestion(suggestion),
     [applyKeywordSuggestion],
   );
 

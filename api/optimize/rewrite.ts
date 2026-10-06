@@ -144,8 +144,8 @@ async function handleRequest(request: Request): Promise<Response> {
               role: "system",
               content:
                 mode === "jd"
-                  ? "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. You must incorporate ALL missing keywords and skills from the ATS report."
-                  : "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. You must improve the resume based on general best practices.",
+                  ? "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. Incorporate a missing keyword only where the existing resume already shows evidence for it; otherwise leave it out. Never add tools, skills, titles, employers, numbers or outcomes that are not in the resume."
+                  : "You are an expert resume optimizer. You output ONLY valid JSON. No markdown, no explanation, no code fences. Improve wording and structure only. Never add tools, skills, titles, employers, numbers or outcomes that are not in the resume.",
             },
             {
               role: "user",

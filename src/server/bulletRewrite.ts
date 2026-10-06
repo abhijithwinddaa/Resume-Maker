@@ -4,6 +4,7 @@ import {
   numbersGrounded,
   type ChangeTypeId,
 } from "../utils/quantify.js";
+import { knownTermsFromText, ungroundedTerms } from "./groundedTerms.js";
 
 /**
  * Prompting and guarding for the single-bullet rewrite (/api/optimize/bullet).
@@ -66,7 +67,7 @@ export function buildBulletMessages(
       {
         role: "system",
         content:
-          "You are an expert resume writer. Rewrite one resume bullet as a single natural sentence: a strong past-tense action verb, what the candidate did and how, and the result with the candidate's amount. Example: \"Rebuilt the checkout page in React, cutting page load time by ~40%.\" Never write formula words such as \"as measured by\". Use ONLY the facts provided: the result and amount come from the candidate. Do not add any other number, percentage, timeframe, tool, or outcome. Estimates such as \"~\" or \"about\" must stay estimates. " +
+          "You are an expert resume writer. Rewrite one resume bullet as a single natural sentence: a strong past-tense action verb, what the candidate did and how, and the result with the candidate's amount. Shape: \"<past-tense verb> <what> <how>, <result using the candidate's own amount>.\" Never write formula words such as \"as measured by\". Use ONLY the facts provided: the result and amount come from the candidate. Do not add any other number, percentage, timeframe, tool, or outcome. Estimates such as \"~\" or \"about\" must stay estimates. " +
           BASE_RULES,
       },
       {
@@ -119,8 +120,11 @@ export type BulletOutcome =
 export const INVENTED_NUMBER_ERROR =
   "The AI tried to add numbers you never gave, so your bullet was left as is. Use \"Add a result\" to add your own.";
 
+export const INVENTED_TERM_ERROR =
+  "The AI tried to add tools or skills your bullet never mentions, so it was left as is. Edit the wording yourself, or use \"Add a result\" to add your own numbers.";
+
 /**
- * Accept the AI rewrite only if its numbers are the user's. In quantify mode a
+ * Accept the AI rewrite only if its numbers and tools are the user's. In quantify mode a
  * bad or missing rewrite falls back to a plain template with the user's amount.
  */
 export function finalizeBullet(
@@ -130,10 +134,12 @@ export function finalizeBullet(
 ): BulletOutcome {
   const text = rawAI ? cleanBulletOutput(rawAI) : "";
   const sources = [bulletText, facts?.amount ?? "", facts?.detail ?? ""];
+  const termsGrounded =
+    ungroundedTerms(text, knownTermsFromText(sources)).length === 0;
 
   if (facts) {
     const keepsAmount = numbersGrounded(facts.amount, [text]);
-    if (text && numbersGrounded(text, sources) && keepsAmount) {
+    if (text && numbersGrounded(text, sources) && termsGrounded && keepsAmount) {
       return { ok: true, text, source: "ai" };
     }
     return {
@@ -145,5 +151,6 @@ export function finalizeBullet(
 
   if (!text) return { ok: false, error: "The AI returned an empty bullet. Please try again." };
   if (!numbersGrounded(text, sources)) return { ok: false, error: INVENTED_NUMBER_ERROR };
+  if (!termsGrounded) return { ok: false, error: INVENTED_TERM_ERROR };
   return { ok: true, text, source: "ai" };
 }
