@@ -6,6 +6,11 @@ import {
 } from "../../src/server/rateLimit.js";
 import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
+  buildBulletMessages,
+  finalizeBullet,
+  parseFacts,
+} from "../../src/server/bulletRewrite.js";
+import {
   isNodeResponse,
   sendNodeResponse,
   toWebRequest,
@@ -44,7 +49,7 @@ async function handleRequest(request: Request): Promise<Response> {
     return rateLimitedResponse(rateLimit.retryAfterSeconds);
   }
 
-  let body: { bulletText?: string; jobDescription?: string };
+  let body: { bulletText?: string; jobDescription?: string; facts?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -56,47 +61,40 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: "bulletText is required." }, 400);
   }
 
-  const jobDescription = body.jobDescription?.trim();
+  const jobDescription = body.jobDescription?.trim() || undefined;
+  const facts = parseFacts(body.facts);
+  if (body.facts !== undefined && !facts) {
+    return jsonResponse({ error: "Invalid result details." }, 400);
+  }
 
+  let rawResponse: string | null = null;
   try {
-    const systemPrompt = 
-      "You are an expert resume writer. You optimize individual bullet points on resumes using the STAR method (Situation, Task, Action, Result) to make them action-oriented, professional, and ATS-friendly. Keep every metric the original states, and never introduce a number, tool, or outcome it does not — the candidate must be able to defend the line in an interview. Output ONLY the single optimized bullet point text. Do NOT wrap the response in quotes, code fences, markdown, or prefix it with labels. Keep the output to a single concise sentence.";
-
-    const userContent = jobDescription
-      ? `Original Bullet Point: "${bulletText}"\nTarget Job Description:\n"${jobDescription}"\nOptimize this bullet point to match the JD, emphasizing relevant skills and professional impact.`
-      : `Original Bullet Point: "${bulletText}"\nOptimize this bullet point for professional impact and clarity.`;
-
-    const rawResponse = await callServerAI(
-      [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
+    rawResponse = await callServerAI(
+      buildBulletMessages(bulletText, jobDescription, facts),
       request.signal,
       // One rewritten bullet.
       { maxTokens: 800 },
     );
-
-    // Sanitize output to remove any quotes the LLM might have outputted
-    let optimizedText = rawResponse.trim();
-    if (optimizedText.startsWith('"') && optimizedText.endsWith('"')) {
-      optimizedText = optimizedText.slice(1, -1);
-    }
-    if (optimizedText.startsWith('`') && optimizedText.endsWith('`')) {
-      optimizedText = optimizedText.slice(1, -1);
-    }
-
-    return jsonResponse({ optimizedText });
   } catch (error) {
-    return jsonResponse(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "AI bullet optimization failed.",
-      },
-      500,
-    );
+    // With the user's own result in hand we can still write the line ourselves.
+    if (!facts) {
+      return jsonResponse(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "AI bullet optimization failed.",
+        },
+        500,
+      );
+    }
   }
+
+  const outcome = finalizeBullet(rawResponse, bulletText, facts);
+  if (!outcome.ok) {
+    return jsonResponse({ error: outcome.error }, 422);
+  }
+  return jsonResponse({ optimizedText: outcome.text, source: outcome.source });
 }
 
 export default async function handler(

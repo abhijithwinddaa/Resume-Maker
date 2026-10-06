@@ -41,6 +41,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import "./ResumeEditor.css";
 import CompletenessBar from "./CompletenessBar";
+import BulletCoach from "./BulletCoach";
+import AINotice from "./AINotice";
+import { detectRoleFamily } from "../utils/quantify";
 
 const DnDSectionOrder = lazy(() => import("./DnDSectionOrder"));
 
@@ -157,33 +160,41 @@ const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
           const bulletKey = `exp-${index}-bullet-${j}`;
           const isOptimizing = optimizingBullets[bulletKey];
           return (
-            <div key={j} className="bullet-row">
-              <textarea
-                rows={2}
-                value={bullet}
-                onChange={(e) => updateExpBullet(index, j, e.target.value)}
-                placeholder={`Bullet point ${j + 1}...`}
+            <div key={j} className="bullet-item">
+              <div className="bullet-row">
+                <textarea
+                  rows={2}
+                  value={bullet}
+                  onChange={(e) => updateExpBullet(index, j, e.target.value)}
+                  placeholder={`Bullet point ${j + 1}...`}
+                  disabled={isOptimizing}
+                />
+                <div className="bullet-actions">
+                  <button
+                    type="button"
+                    className="btn-icon btn-enhance"
+                    disabled={!bullet.trim() || isOptimizing}
+                    onClick={() => onEnhanceBullet(j, bullet)}
+                    title="Enhance bullet point with AI"
+                  >
+                    {isOptimizing ? "⏳" : "✨"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-icon btn-danger"
+                    onClick={() => removeExpBullet(index, j)}
+                    disabled={isOptimizing}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+              <BulletCoach
+                text={bullet}
+                roleFamily={detectRoleFamily(exp.role)}
+                onApply={(newText) => updateExpBullet(index, j, newText)}
                 disabled={isOptimizing}
               />
-              <div className="bullet-actions">
-                <button
-                  type="button"
-                  className="btn-icon btn-enhance"
-                  disabled={!bullet.trim() || isOptimizing}
-                  onClick={() => onEnhanceBullet(j, bullet)}
-                  title="Enhance bullet point with AI"
-                >
-                  {isOptimizing ? "⏳" : "✨"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-icon btn-danger"
-                  onClick={() => removeExpBullet(index, j)}
-                  disabled={isOptimizing}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
             </div>
           );
         })}
@@ -381,33 +392,41 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
           const bulletKey = `proj-${index}-bullet-${j}`;
           const isOptimizing = optimizingBullets[bulletKey];
           return (
-            <div key={j} className="bullet-row">
-              <textarea
-                rows={2}
-                value={bullet}
-                onChange={(e) => updateBullet(index, j, e.target.value)}
-                placeholder={`Bullet point ${j + 1}...`}
+            <div key={j} className="bullet-item">
+              <div className="bullet-row">
+                <textarea
+                  rows={2}
+                  value={bullet}
+                  onChange={(e) => updateBullet(index, j, e.target.value)}
+                  placeholder={`Bullet point ${j + 1}...`}
+                  disabled={isOptimizing}
+                />
+                <div className="bullet-actions">
+                  <button
+                    type="button"
+                    className="btn-icon btn-enhance"
+                    disabled={!bullet.trim() || isOptimizing}
+                    onClick={() => onEnhanceBullet(j, bullet)}
+                    title="Enhance bullet point with AI"
+                  >
+                    {isOptimizing ? "⏳" : "✨"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-icon btn-danger"
+                    onClick={() => removeBullet(index, j)}
+                    disabled={isOptimizing}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+              <BulletCoach
+                text={bullet}
+                roleFamily={detectRoleFamily("", project.techStack)}
+                onApply={(newText) => updateBullet(index, j, newText)}
                 disabled={isOptimizing}
               />
-              <div className="bullet-actions">
-                <button
-                  type="button"
-                  className="btn-icon btn-enhance"
-                  disabled={!bullet.trim() || isOptimizing}
-                  onClick={() => onEnhanceBullet(j, bullet)}
-                  title="Enhance bullet point with AI"
-                >
-                  {isOptimizing ? "⏳" : "✨"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-icon btn-danger"
-                  onClick={() => removeBullet(index, j)}
-                  disabled={isOptimizing}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
             </div>
           );
         })}
@@ -1361,6 +1380,8 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
           </div>
         )}
       </div>
+
+      <AINotice className="ai-notice--editor" />
     </div>
   );
 };

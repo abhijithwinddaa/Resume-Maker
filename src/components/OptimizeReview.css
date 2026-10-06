@@ -262,3 +262,13 @@
     transition: none;
   }
 }
+
+.optimize-review-notice {
+  justify-content: flex-end;
+  padding: 10px 16px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.optimize-review-notice + .optimize-review-actions {
+  border-top: none;
+}

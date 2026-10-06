@@ -31,7 +31,7 @@ interface BulletRecord {
 const METRIC_PATTERN =
   /\b(?:\$?\d[\d,.]*(?:\.\d+)?%?|\d+(?:\.\d+)?\s?(?:x|X|k|m|b|ms|s|sec|secs|seconds|min|mins|minutes|hr|hrs|hours|days|weeks|months|years|users?|customers?|clients?|requests?|tickets?|projects?|features?|pipelines?|services?|deployments?|tests?|queries?|records?|students?|team members?|engineers?))\b/;
 
-const WEAK_BULLET_PATTERNS = [
+export const WEAK_BULLET_PATTERNS = [
   /^responsible for\b/i,
   /^worked on\b/i,
   /^worked with\b/i,
@@ -45,7 +45,7 @@ const WEAK_BULLET_PATTERNS = [
   /^did\b/i,
 ];
 
-const VAGUE_BULLET_PATTERNS = [
+export const VAGUE_BULLET_PATTERNS = [
   /\bvarious\b/i,
   /\bmultiple tasks\b/i,
   /\betc\.?\b/i,

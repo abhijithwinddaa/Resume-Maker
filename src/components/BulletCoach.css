@@ -1,0 +1,199 @@
+/* Per-bullet STAR/XYZ coach and the "Add a result" panel. */
+
+.bullet-coach {
+  margin: 0 0 10px;
+  font-size: 11px;
+}
+
+.coach-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.coach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 500;
+  line-height: 1.6;
+  cursor: help;
+}
+
+.coach-chip--pass {
+  color: var(--success-text);
+  background: var(--success-bg);
+}
+
+.coach-chip--partial {
+  color: var(--warning-text);
+  background: var(--warning-bg);
+}
+
+.coach-chip--fail {
+  color: var(--error-text);
+  background: var(--error-bg);
+}
+
+.coach-add-result {
+  margin-left: auto;
+  padding: 1px 8px;
+  border: 1px solid var(--accent-color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent-color);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.coach-add-result:hover:not(:disabled) {
+  background: var(--accent-light);
+}
+
+.coach-add-result:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.coach-tip {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+}
+
+.coach-blank {
+  margin: 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: var(--warning-text);
+  background: var(--warning-bg);
+}
+
+.quantify-panel {
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quantify-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quantify-question {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.quantify-panel input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+}
+
+.quantify-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.quantify-idea {
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.quantify-idea:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  background: var(--accent-light);
+}
+
+.quantify-hint {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.quantify-preview {
+  margin: 0;
+  padding: 8px;
+  border-left: 3px solid var(--accent-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.quantify-error {
+  margin: 0;
+  color: var(--error-text);
+}
+
+.quantify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.quantify-primary,
+.quantify-secondary,
+.quantify-link {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quantify-primary {
+  border: 1px solid var(--accent-color);
+  background: var(--accent-color);
+  color: var(--accent-contrast);
+}
+
+.quantify-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quantify-secondary {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.quantify-secondary:hover {
+  border-color: var(--accent-color);
+}
+
+.quantify-link {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  padding-inline: 4px;
+}
+
+.quantify-link:hover {
+  color: var(--accent-color);
+}
