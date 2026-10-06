@@ -1,0 +1,19 @@
+.ai-notice {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.ai-notice svg {
+  flex-shrink: 0;
+}
+
+.ai-notice--editor {
+  justify-content: center;
+  margin-top: 16px;
+  text-align: center;
+}

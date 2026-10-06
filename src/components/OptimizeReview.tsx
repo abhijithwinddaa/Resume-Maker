@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, X, Sparkles } from "lucide-react";
 import type { ResumeChange } from "../utils/resumeDiff";
 import { diffWords, type DiffSegment } from "../utils/wordDiff";
+import AINotice from "./AINotice";
 import "./OptimizeReview.css";
 
 interface OptimizeReviewProps {
@@ -142,6 +143,8 @@ export function OptimizeReview({ changes, onApply, onDiscard }: OptimizeReviewPr
           />
         ))}
       </ul>
+
+      <AINotice className="optimize-review-notice" />
 
       <footer className="optimize-review-actions">
         <button type="button" className="review-secondary" onClick={onDiscard}>

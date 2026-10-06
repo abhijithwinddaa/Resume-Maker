@@ -1,4 +1,5 @@
 import type { ResumeData } from "../types/resume";
+import { hasPlaceholder as hasNumberBlank } from "./quantify";
 
 export interface ExportValidationResult {
   valid: boolean;
@@ -30,7 +31,8 @@ const TYPO_RULES: TypoRule[] = [
 
 /** Scan a string for placeholder patterns */
 function containsPlaceholder(text: string): boolean {
-  return PLACEHOLDER_PATTERN.test(text);
+  // Also the [X%] / [N] blanks "Add a result" leaves for the user to fill.
+  return PLACEHOLDER_PATTERN.test(text) || hasNumberBlank(text);
 }
 
 /** Recursively scan all string values in an object for placeholder text */
@@ -87,6 +89,16 @@ function findKnownTypos(
   }
 }
 
+function countNumberBlanks(data: ResumeData): number {
+  const bullets = [
+    ...data.experience.flatMap((e) => e.bullets),
+    ...data.projects.flatMap((p) => p.bullets),
+  ];
+  return bullets.filter(
+    (b) => typeof b === "string" && hasNumberBlank(b) && !PLACEHOLDER_PATTERN.test(b),
+  ).length;
+}
+
 /** Validate resume data before export — checks required fields and placeholders */
 export function validateForExport(data: ResumeData): ExportValidationResult {
   const errors: string[] = [];
@@ -122,7 +134,13 @@ export function validateForExport(data: ResumeData): ExportValidationResult {
   const placeholderSections: string[] = [];
   findPlaceholders(data, "", placeholderSections);
 
-  if (placeholderSections.length > 0) {
+  const blankCount = countNumberBlanks(data);
+  if (blankCount > 0) {
+    errors.push(
+      `Fill in the ${blankCount === 1 ? "[X] blank" : `${blankCount} [X] blanks`} in your bullets with your real numbers (estimates are fine), or remove ${blankCount === 1 ? "it" : "them"}.`,
+    );
+  }
+  if (placeholderSections.length > blankCount) {
     errors.push(
       "Your resume has unfilled placeholder sections. Please review and complete all highlighted areas before exporting.",
     );

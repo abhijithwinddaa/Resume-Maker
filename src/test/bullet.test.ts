@@ -20,6 +20,12 @@ vi.mock("../../src/server/requestUtils.js", () => ({
 
 import handler from "../../api/optimize/bullet";
 
+const post = (body: unknown) =>
+  new Request("http://localhost/api/optimize/bullet", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
 describe("api/optimize/bullet", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -103,7 +109,7 @@ describe("api/optimize/bullet", () => {
 
     const request = new Request("http://localhost/api/optimize/bullet", {
       method: "POST",
-      body: JSON.stringify({ bulletText: "helped with coding" }),
+      body: JSON.stringify({ bulletText: "helped a team of 5 with coding" }),
     });
 
     const response = await handler(request) as Response;
@@ -117,7 +123,7 @@ describe("api/optimize/bullet", () => {
         expect.objectContaining({ role: "system" }),
         expect.objectContaining({
           role: "user",
-          content: expect.stringContaining('Original Bullet Point: "helped with coding"'),
+          content: expect.stringContaining('Original Bullet Point: "helped a team of 5 with coding"'),
         }),
       ]),
       expect.any(AbortSignal),
@@ -169,5 +175,78 @@ describe("api/optimize/bullet", () => {
     expect(response.status).toBe(500);
     const body = await response.json();
     expect(body.error).toBe("AI connection error");
+  });
+  it("rejects a rewrite that invents a number", async () => {
+    callServerAIMock.mockResolvedValue("Led a team of 5 to ship features 30% faster.");
+
+    const response = await handler(post({ bulletText: "helped with coding" })) as Response;
+
+    expect(response.status).toBe(422);
+    expect((await response.json()).error).toMatch(/numbers you never gave/);
+  });
+
+  describe("quantify with the user's own result", () => {
+    const facts = { changeType: "faster", amount: "about 40%", detail: "page load" };
+
+    it("puts the user's facts in the prompt and keeps a grounded rewrite", async () => {
+      callServerAIMock.mockResolvedValue("Rebuilt the checkout page in React, cutting page load by ~40%.");
+
+      const response = await handler(
+        post({ bulletText: "Rebuilt the checkout page in React", facts }),
+      ) as Response;
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        optimizedText: "Rebuilt the checkout page in React, cutting page load by ~40%.",
+        source: "ai",
+      });
+      const userMessage = callServerAIMock.mock.calls[0][0].find(
+        (m: { role: string }) => m.role === "user",
+      );
+      expect(userMessage.content).toContain("The candidate says: about 40%");
+    });
+
+    it("falls back to a plain template when the AI adds its own numbers", async () => {
+      callServerAIMock.mockResolvedValue("Rebuilt checkout for 20k users, 40% faster in 2 weeks.");
+
+      const response = await handler(
+        post({ bulletText: "Rebuilt the checkout page in React", facts }),
+      ) as Response;
+
+      expect(await response.json()).toEqual({
+        optimizedText: "Rebuilt the checkout page in React, making it about 40% faster",
+        source: "template",
+      });
+    });
+
+    it("falls back when the AI drops the user's amount", async () => {
+      callServerAIMock.mockResolvedValue("Rebuilt the checkout page in React, making it much faster.");
+
+      const body = await (
+        handler(post({ bulletText: "Rebuilt the checkout page in React", facts })) as Promise<Response>
+      ).then((r) => r.json());
+
+      expect(body.source).toBe("template");
+    });
+
+    it("still writes the line when every AI provider fails", async () => {
+      callServerAIMock.mockRejectedValue(new Error("All providers down"));
+
+      const response = await handler(
+        post({ bulletText: "Rebuilt the checkout page in React", facts }),
+      ) as Response;
+
+      expect(response.status).toBe(200);
+      expect((await response.json()).source).toBe("template");
+    });
+
+    it("rejects malformed facts", async () => {
+      const response = await handler(
+        post({ bulletText: "Rebuilt checkout", facts: { changeType: "magic", amount: "40%" } }),
+      ) as Response;
+
+      expect(response.status).toBe(400);
+      expect(callServerAIMock).not.toHaveBeenCalled();
+    });
   });
 });

@@ -101,3 +101,27 @@ describe("export validation typo checks", () => {
     expect(result.typoWarnings).toHaveLength(0);
   });
 });
+
+describe("export validation number blanks", () => {
+  function readyResume(bullet: string) {
+    const resume = createEmptyResume();
+    resume.contact.name = "Asha Rao";
+    resume.contact.email = "asha@example.com";
+    resume.projects = [
+      { title: "Checkout", githubLink: "", liveLink: "", techStack: "React", bullets: [bullet] },
+    ];
+    resume.skills = [{ label: "Languages", skills: "TypeScript" }];
+    return resume;
+  }
+
+  it("blocks export while an [X%] blank from 'Add a result' is unfilled", () => {
+    const result = validateForExport(readyResume("Rebuilt checkout, making it [X%] faster"));
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/Fill in the \[X\] blank/);
+    expect(result.placeholderSections).toEqual(["projects[0].bullets[0]"]);
+  });
+
+  it("allows export once the user puts in their number", () => {
+    expect(validateForExport(readyResume("Rebuilt checkout, making it ~40% faster")).valid).toBe(true);
+  });
+});
