@@ -134,7 +134,7 @@ describe("api/optimize/bullet", () => {
   });
 
   it("includes jobDescription in prompt if provided", async () => {
-    callServerAIMock.mockResolvedValue("Optimized text with JD context");
+    callServerAIMock.mockResolvedValue("Optimized text with job context");
 
     const request = new Request("http://localhost/api/optimize/bullet", {
       method: "POST",
@@ -148,7 +148,7 @@ describe("api/optimize/bullet", () => {
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.optimizedText).toBe("Optimized text with JD context");
+    expect(body.optimizedText).toBe("Optimized text with job context");
 
     expect(callServerAIMock).toHaveBeenCalledWith(
       expect.arrayContaining([

@@ -44,7 +44,7 @@ import {
   extractEmbeddedResumeData,
 } from "./utils/pdfExtractorWorker";
 import { extractTextWithOCR } from "./utils/pdfOcr";
-import { loadLatestResume, saveResume } from "./services/resumeService";
+import { loadLatestResume } from "./services/resumeService";
 import { setSupabaseAccessTokenGetter } from "./lib/supabase";
 import {
   isRateLimited,
@@ -60,7 +60,6 @@ import {
   sanitizeText,
 } from "./utils/inputValidation";
 import {
-  saveLocalBackup,
   loadLocalBackup,
 } from "./utils/localBackup";
 import {
@@ -103,7 +102,8 @@ import {
   MoreHorizontal,
   Share2,
 } from "lucide-react";
-import { useDebounce } from "./hooks/useDebounce";
+import { useResumeAutosave } from "./hooks/useResumeAutosave";
+import { normalizeResumeData } from "./utils/normalizeResume";
 import { useExport } from "./hooks/useExport";
 import { validateResumeData } from "./utils/zodSchemas";
 import { getExperienceTier } from "./utils/experienceEstimator";
@@ -167,6 +167,7 @@ function App() {
   const jdText = useAppStore((s) => s.jdText);
   const resumeData = useAppStore((s) => s.resumeData);
   const setResumeData = useAppStore((s) => s.setResumeData);
+  const loadResume = useAppStore((s) => s.loadResume);
   const atsResult = useAppStore((s) => s.atsResult);
   const setATSResult = useAppStore((s) => s.setATSResult);
   const isOptimizing = useAppStore((s) => s.isOptimizing);
@@ -183,14 +184,12 @@ function App() {
   const isPdfLoading = useAppStore((s) => s.isPdfLoading);
   const setIsPdfLoading = useAppStore((s) => s.setIsPdfLoading);
   const isSaving = useAppStore((s) => s.isSaving);
-  const setIsSaving = useAppStore((s) => s.setIsSaving);
   const isDbLoading = useAppStore((s) => s.isDbLoading);
   const setIsDbLoading = useAppStore((s) => s.setIsDbLoading);
   const cooldownRemaining = useAppStore((s) => s.cooldownRemaining);
   const setCooldownRemaining = useAppStore((s) => s.setCooldownRemaining);
   const setHasBackup = useAppStore((s) => s.setHasBackup);
   const aiSettings = useAppStore((s) => s.aiSettings);
-  const privacySettings = useAppStore((s) => s.privacySettings);
   const startOver = useAppStore((s) => s.startOver);
   const newJD = useAppStore((s) => s.newJD);
   const undo = useAppStore((s) => s.undo);
@@ -204,7 +203,6 @@ function App() {
   const setShowOriginalPdf = useAppStore((s) => s.setShowOriginalPdf);
   const activeResumeId = useAppStore((s) => s.activeResumeId);
   const setActiveResumeId = useAppStore((s) => s.setActiveResumeId);
-  const activeResumeName = useAppStore((s) => s.activeResumeName);
   const setActiveResumeName = useAppStore((s) => s.setActiveResumeName);
   const exportPageMode = useAppStore((s) => s.exportPageMode);
   const setExportPageMode = useAppStore((s) => s.setExportPageMode);
@@ -226,10 +224,6 @@ function App() {
     left: 0,
   });
 
-  // Save status tracking
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
-    "idle",
-  );
   const [isAuthStarting, setIsAuthStarting] = useState(false);
   const [isCompactScreen, setIsCompactScreen] = useState(() =>
     typeof window !== "undefined"
@@ -286,14 +280,10 @@ function App() {
   });
   const abortRef = useRef<AbortController | null>(null);
   const authStartTimeoutRef = useRef<number | null>(null);
-  const activeResumeIdRef = useRef<string | null>(activeResumeId);
   const modeSelectionInProgressRef = useRef(false);
   const trackedUsageRef = useRef<Set<string>>(new Set());
   const trackedAtsUsageRef = useRef(false);
   const notificationSyncRef = useRef<Set<string>>(new Set());
-  const pendingResumeCreationRef = useRef<Promise<
-    Awaited<ReturnType<typeof saveResume>>
-  > | null>(null);
 
   const initialViewportHeightRef = useRef<number>(
     typeof window !== "undefined" ? window.innerHeight : 0,
@@ -317,6 +307,17 @@ function App() {
         return;
       }
       if (e.ctrlKey || e.metaKey) {
+        // Inside a text field the browser native text undo must win.
+        const target = e.target as HTMLElement | null;
+        if (
+          target &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT" ||
+            target.isContentEditable)
+        ) {
+          return;
+        }
         if (e.key === "z" && !e.shiftKey) {
           e.preventDefault();
           undo();
@@ -442,17 +443,6 @@ function App() {
     // The menu belongs to a screen; close it when the screen changes.
     setIsSettingsMenuOpen(false);
   }, [step]);
-
-  /* ── Navigation guard: warn on tab close with unsaved changes ── */
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isSaving || isOptimizing || (step === "editor" && resumeData)) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isSaving, isOptimizing, step, resumeData]);
 
   /* ── Cooldown timer tick ──────────────────────────── */
   useEffect(() => {
@@ -935,10 +925,6 @@ function App() {
     isOptimizing,
   ]);
 
-  useEffect(() => {
-    activeResumeIdRef.current = activeResumeId;
-  }, [activeResumeId]);
-
   /* ── Auto-load from Supabase when user signs in ──── */
   useEffect(() => {
     if (!user?.id) return;
@@ -949,7 +935,7 @@ function App() {
         if (pendingMode === "create") {
           setActiveResumeId(null);
           setActiveResumeName(null);
-          setResumeData(createEmptyResume(), false);
+          loadResume(createEmptyResume());
           setMode("create");
           setPendingMode(null);
           modeSelectionInProgressRef.current = false;
@@ -959,9 +945,9 @@ function App() {
 
         if (savedRow) {
           trackEvent("resume_loaded", { source: "supabase" });
-          setResumeData(savedRow.data, false);
           setActiveResumeId(savedRow.id);
           setActiveResumeName(savedRow.name || "Untitled Resume");
+          loadResume(savedRow.data);
           // If user had a pending mode from landing page, honor it
           if (pendingMode) {
             setMode(pendingMode);
@@ -995,7 +981,7 @@ function App() {
           // No saved resume and no pending mode — show landing
           setActiveResumeId(null);
           setActiveResumeName(null);
-          setResumeData(null, false);
+          loadResume(null);
           setStep("landing");
         }
       })
@@ -1013,7 +999,7 @@ function App() {
           if (pendingMode === "create") {
             setActiveResumeId(null);
             setActiveResumeName(null);
-            setResumeData(createEmptyResume(), false);
+            loadResume(createEmptyResume());
             setStep("editor");
           } else {
             setStep("input");
@@ -1055,76 +1041,61 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUserLoaded]);
 
-  /* ── Debounced auto-save to Supabase (500ms) ────── */
-  const debouncedSupabaseSave = useDebounce(async (data: ResumeData) => {
-    if (!user?.id) return;
-    setIsSaving(true);
-    setSaveStatus("saving");
-
-    try {
-      const currentResumeId = activeResumeIdRef.current;
-      let savedRow;
-
-      if (currentResumeId) {
-        savedRow = await saveResume(user.id, data, {
-          resumeId: currentResumeId,
-          name: activeResumeName ?? undefined,
-        });
-      } else {
-        if (!pendingResumeCreationRef.current) {
-          pendingResumeCreationRef.current = saveResume(user.id, data, {
-            name: activeResumeName ?? undefined,
-          });
-        }
-
-        savedRow = await pendingResumeCreationRef.current;
-        pendingResumeCreationRef.current = null;
-      }
-
-      if (!savedRow) {
-        throw new Error("Resume save returned no row.");
-      }
-
-      activeResumeIdRef.current = savedRow.id;
-      setActiveResumeId(savedRow.id);
-      setActiveResumeName(savedRow.name || "Untitled Resume");
+  /* ── Autosave ───────────────────────────────────────
+     Every change to the active resume content (typing, undo/redo, AI
+     apply, export auto-fix) is saved by a store subscription; each save is
+     bound to the resume id it belongs to when it was scheduled. ── */
+  const { status: saveStatus, persist: persistResume } = useResumeAutosave({
+    userId: user?.id,
+    onSaved: (row, info) => {
       trackEvent("resume_saved", {
         destination: "supabase",
         success: true,
-        resume_id: savedRow.id,
-        created_new_resume: !currentResumeId,
+        resume_id: row.id,
+        created_new_resume: info.created,
       });
-      setSaveStatus("saved");
-    } catch (err) {
-      pendingResumeCreationRef.current = null;
+    },
+    onFailed: (err) => {
       console.error("Supabase save failed:", err);
       trackEvent("resume_save_failed", { destination: "supabase" });
-      setSaveStatus("idle");
-    } finally {
-      setIsSaving(false);
-    }
-  }, 500);
+    },
+  });
 
   const handleResumeChange = useCallback(
     (data: ResumeData) => {
-      setResumeData(data);
-      setSaveStatus("idle"); // Mark as unsaved immediately
-      debouncedSupabaseSave(data);
-      if (privacySettings.saveLocalBackups) {
-        saveLocalBackup(data, jdText);
-        setHasBackup(true);
-      }
+      setResumeData(data); // the autosave subscription persists it
     },
-    [
-      setResumeData,
-      debouncedSupabaseSave,
-      jdText,
-      privacySettings.saveLocalBackups,
-      setHasBackup,
-    ],
+    [setResumeData],
   );
 
+  /** A brand-new resume (upload, pasted text, JSON import): own row, saved. */
+  const startNewResumeFrom = useCallback(
+    (raw: unknown): ResumeData => {
+      const clean = normalizeResumeData(raw);
+      setActiveResumeId(null);
+      setActiveResumeName(null);
+      loadResume(clean);
+      persistResume(clean);
+      return clean;
+    },
+    [setActiveResumeId, setActiveResumeName, loadResume, persistResume],
+  );
 
+  /* ── Navigation guard: warn on tab close only with unsaved work ── */
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const unsaved =
+        saveStatus === "dirty" ||
+        saveStatus === "saving" ||
+        saveStatus === "error";
+      if (unsaved || isSaving || isOptimizing) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isSaving, isOptimizing, saveStatus]);
 
   /* ── Mode Selection (landing page) ───────────────── */
 
@@ -1158,7 +1129,7 @@ function App() {
       if (selectedMode === "create") {
         setActiveResumeId(null);
         setActiveResumeName(null);
-        setResumeData(createEmptyResume(), false);
+        loadResume(createEmptyResume());
         setStep("editor");
       } else if (selectedMode === "ats") {
         setAtsResumeSource(resumeData && activeResumeId ? "existing" : "new");
@@ -1179,7 +1150,7 @@ function App() {
       setStep,
       setError,
       resumeData,
-      setResumeData,
+      loadResume,
       activeResumeId,
       setActiveResumeId,
       setActiveResumeName,
@@ -1234,7 +1205,7 @@ function App() {
 
     if (mode === "ats" && atsResumeSource === "new") {
       // New ATS upload should not reuse the currently saved resume in memory.
-      setResumeData(null, false);
+      loadResume(null);
       setActiveResumeId(null);
       setActiveResumeName(null);
     }
@@ -1252,7 +1223,7 @@ function App() {
         setUploadedFileName(file.name);
         const pdfBlobUrl = URL.createObjectURL(file);
         setOriginalPdfUrl(pdfBlobUrl);
-        handleResumeChange(embedded);
+        startNewResumeFrom(embedded);
 
         if (mode === "ats") {
           setStep("input");
@@ -1332,7 +1303,7 @@ function App() {
         source: "pdf_upload",
         links_found: links.length,
       });
-      handleResumeChange(parsed);
+      startNewResumeFrom(parsed);
 
       if (mode === "ats") {
         // In ATS mode, go to input for JD entry
@@ -1401,7 +1372,7 @@ function App() {
       );
       if (controller.signal.aborted) return;
       trackEvent("resume_parsed", { source: "pasted_text" });
-      handleResumeChange(parsed);
+      startNewResumeFrom(parsed);
       setStep("editor");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -1467,11 +1438,7 @@ function App() {
             : undefined,
         );
         if (controller.signal.aborted) return;
-        if (requireNewResumeInput) {
-          setActiveResumeId(null);
-          setActiveResumeName(null);
-        }
-        handleResumeChange(parsed);
+        parsed = startNewResumeFrom(parsed);
       }
 
       setLoadingMessage("Running ATS analysis...");
@@ -1795,7 +1762,6 @@ function App() {
     ]) {
       abortRequestController(key);
     }
-    pendingResumeCreationRef.current = null;
     startOver();
   }, [startOver, resumeData]);
 
@@ -1829,9 +1795,7 @@ function App() {
               setError(`Invalid resume JSON: ${validation.errors?.join(", ")}`);
               return;
             }
-            setActiveResumeId(null);
-            setActiveResumeName(null);
-            handleResumeChange(raw as ResumeData);
+            startNewResumeFrom(validation.data);
             setStep("editor");
             trackEvent("resume_imported", { format: "json" });
           } catch {
@@ -1912,8 +1876,13 @@ function App() {
               Saved ✓
             </span>
           )}
-          {saveStatus === "idle" && step === "editor" && resumeData && user && (
+          {saveStatus === "dirty" && step === "editor" && resumeData && user && (
             <span className="save-indicator unsaved">Unsaved changes •</span>
+          )}
+          {saveStatus === "error" && step === "editor" && resumeData && user && (
+            <span className="save-indicator unsaved" role="alert">
+              Not saved — retrying •
+            </span>
           )}
 
           {/* Show Original PDF toggle */}
@@ -2234,6 +2203,7 @@ function App() {
       >
         {saveStatus === "saving" && "Saving resume..."}
         {saveStatus === "saved" && "Resume saved"}
+        {saveStatus === "error" && "Resume could not be saved. Retrying."}
         {error && `Error: ${error}`}
         {step === "analyzing" && loadingMessage}
       </div>

@@ -77,7 +77,7 @@ describe("optimize prompts", () => {
     );
 
     expect(prompt).toContain("WRITING CONTRACT");
-    expect(prompt).toContain("strong action verb -> what changed -> tool/context -> measurable outcome");
+    expect(prompt).toContain("strong action verb -> what changed -> tool/context -> outcome");
     expect(prompt).toContain("worked on");
     expect(prompt).toContain("results-driven");
     expect(prompt).toContain("LOCAL QUALITY SIGNALS");

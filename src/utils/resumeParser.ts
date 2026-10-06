@@ -1,3 +1,5 @@
+import { buildUntrustedNote, wrapUntrusted } from "./optimizePromptShared.js";
+
 export function buildResumeParsePrompt(
   resumeText: string,
   extractedLinks?: string[],
@@ -20,7 +22,8 @@ This is the #1 priority. The user has links in their resume that are TIME-CONSUM
 - Certificate URLs → certificate.link
 - Achievement GitHub URLs → achievement.githubLink
 - If a URL appears in both text and hyperlinks, include it
-- NEVER leave a link field as empty string if a URL exists for it
+- NEVER leave a link field as empty string if a URL exists for it in the text or the hyperlinks list
+- Only output URLs, emails and phone numbers that literally appear in the resume text or the hyperlinks list. Otherwise use an empty string. Never guess or construct one (for example from the person's name).
 ${linksSection}
 OUTPUT FORMAT — return ONLY valid JSON with this EXACT structure:
 {
@@ -97,8 +100,10 @@ PARSING RULES:
 10. For contact info: extract name, phone, email from the header area of the resume
 11. sectionOrder should reflect the order sections appear in the original resume
 12. Keep the resume summary/objective EXACTLY as written — do not change wording
-13. Return ONLY the JSON object — no markdown, no code fences, no explanation
+13. ${buildUntrustedNote()}
 
 RESUME TEXT:
-${resumeText}`;
+${wrapUntrusted("resume", resumeText)}
+
+Return ONLY the JSON object — no markdown, no code fences, no explanation.`;
 }

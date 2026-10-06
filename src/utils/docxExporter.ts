@@ -8,6 +8,7 @@ import {
   ShadingType,
   TabStopPosition,
   TabStopType,
+  ExternalHyperlink,
   Packer,
 } from "docx";
 import { saveAs } from "file-saver";
@@ -15,6 +16,8 @@ import type { ResumeData, SectionKey } from "../types/resume";
 import type { TemplateCustomization } from "../types/templates";
 import { DEFAULT_CUSTOMIZATION } from "../types/templates";
 import { tokenizeText } from "./textFormatter";
+import { pruneForExport } from "./exportData";
+import { displayUrl, mailtoUrl, safeUrl, telUrl } from "./safeUrl";
 
 const cleanColor = (hex?: string) => hex ? hex.replace("#", "") : "2980b9";
 
@@ -55,12 +58,24 @@ const getSpacing = (
   return { bodyAfter: after, headBefore, headAfter: after };
 };
 
-export async function exportToDocx(
-  data: ResumeData,
+
+type Inline = TextRun | ExternalHyperlink;
+
+/**
+ * Builds the DOCX document for a resume. Pure (no download), so it can be
+ * tested. Works on a pruned copy: blank entries, blank bullets and empty
+ * sections never reach the file, matching the PDF.
+ */
+export function buildResumeDocument(
+  rawData: ResumeData,
   customization: TemplateCustomization = DEFAULT_CUSTOMIZATION,
-): Promise<void> {
+): Document {
+  const data = pruneForExport(rawData);
   const paragraphs: Paragraph[] = [];
-  const font = customization.fontFamily;
+  const family = customization.fontFamily;
+  // Hindi / Devanagari and CJK text fall back per script, so name the font for
+  // every script slot instead of only the Latin one.
+  const font = { ascii: family, hAnsi: family, eastAsia: family, cs: family };
   const primary = cleanColor(customization.primaryColor);
   const secondary = cleanColor(customization.secondaryColor);
   const sizes = getFontSizes(customization.fontSize);
@@ -73,16 +88,24 @@ export async function exportToDocx(
     });
   };
 
-  const textToRuns = (text: string, size: number): TextRun[] => {
-    const tokens = tokenizeText(text);
-    return tokens.map(
+  interface RunStyle {
+    bold?: boolean;
+    italics?: boolean;
+    color?: string;
+  }
+
+  /** Every text field goes through here so **bold**, *italic* and ==highlight== survive. */
+  const textToRuns = (text: string, size: number, base: RunStyle = {}): TextRun[] => {
+    if (!text) return [];
+    return tokenizeText(text).map(
       (t) =>
         new TextRun({
           text: t.text,
           size,
           font,
-          bold: t.bold || undefined,
-          italics: t.italic || undefined,
+          color: base.color,
+          bold: t.bold || base.bold || undefined,
+          italics: t.italic || base.italics || undefined,
           shading: t.highlight
             ? { type: ShadingType.CLEAR, fill: "FFF3CD", color: "auto" }
             : undefined,
@@ -90,10 +113,21 @@ export async function exportToDocx(
     );
   };
 
-  const bulletParagraph = (text: string): Paragraph => {
+  const linkRun = (href: string, label: string, size: number): ExternalHyperlink =>
+    new ExternalHyperlink({
+      link: href,
+      children: [
+        new TextRun({ text: label, size, font, color: primary, underline: {} }),
+      ],
+    });
+
+  const plain = (text: string, size: number, style: RunStyle = {}): TextRun =>
+    new TextRun({ text, size, font, ...style });
+
+  const bulletParagraph = (children: Inline[]): Paragraph => {
     return new Paragraph({
       bullet: { level: 0 },
-      children: textToRuns(text, sizes.body),
+      children,
       spacing: { after: spacing.bodyAfter },
     });
   };
@@ -115,40 +149,59 @@ export async function exportToDocx(
   };
 
   const getSectionLabel = (key: SectionKey, defaultLabel: string): string => {
-    return data.sectionLabels?.[key] || defaultLabel;
+    return data.sectionLabels?.[key]?.trim() || defaultLabel;
   };
 
+  const rightTab = [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }];
+
   // Header
-  paragraphs.push(
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [
-        new TextRun({ text: data.contact.name, bold: true, size: sizes.title, color: primary, font }),
-      ],
-    }),
-  );
+  if (data.contact.name.trim()) {
+    paragraphs.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({ text: data.contact.name, bold: true, size: sizes.title, color: primary, font }),
+        ],
+      }),
+    );
+  }
 
-  const contactParts: string[] = [];
-  if (data.contact.phone) contactParts.push(data.contact.phone);
-  if (data.contact.email) contactParts.push(data.contact.email);
-  if (data.contact.linkedin) contactParts.push(data.contact.linkedin);
-  if (data.contact.github) contactParts.push(data.contact.github);
-  if (data.contact.portfolio) contactParts.push(data.contact.portfolio);
+  const contactParts: Inline[][] = [];
+  if (data.contact.phone.trim()) {
+    const tel = telUrl(data.contact.phone);
+    contactParts.push([
+      tel
+        ? linkRun(tel, data.contact.phone.trim(), sizes.meta)
+        : plain(data.contact.phone.trim(), sizes.meta, { color: secondary }),
+    ]);
+  }
+  if (data.contact.email.trim()) {
+    const mail = mailtoUrl(data.contact.email);
+    contactParts.push([
+      mail
+        ? linkRun(mail, data.contact.email.trim(), sizes.meta)
+        : plain(data.contact.email.trim(), sizes.meta, { color: secondary }),
+    ]);
+  }
+  for (const field of ["linkedin", "github", "portfolio"] as const) {
+    const href = safeUrl(data.contact[field]);
+    if (href) contactParts.push([linkRun(href, displayUrl(href), sizes.meta)]);
+  }
 
-  paragraphs.push(
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [
-        new TextRun({
-          text: contactParts.join(" | "),
-          size: sizes.meta,
-          color: secondary,
-          font,
-        }),
-      ],
-      spacing: { after: spacing.bodyAfter * 2.5 },
-    }),
-  );
+  if (contactParts.length > 0) {
+    const children: Inline[] = [];
+    contactParts.forEach((part, i) => {
+      if (i > 0) children.push(plain(" | ", sizes.meta, { color: secondary }));
+      children.push(...part);
+    });
+    paragraphs.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children,
+        spacing: { after: spacing.bodyAfter * 2.5 },
+      }),
+    );
+  }
 
   const order: SectionKey[] = data.sectionOrder?.length
     ? data.sectionOrder
@@ -165,7 +218,7 @@ export async function exportToDocx(
   for (const section of order) {
     switch (section) {
       case "summary":
-        if (data.summary) {
+        if (data.summary.trim()) {
           paragraphs.push(sectionHeading(getSectionLabel("summary", "Summary")), makeLine());
           paragraphs.push(
             new Paragraph({
@@ -180,74 +233,67 @@ export async function exportToDocx(
         if (data.education.length > 0) {
           paragraphs.push(sectionHeading(getSectionLabel("education", "Education")), makeLine());
           for (const edu of data.education) {
-            paragraphs.push(
-              new Paragraph({
-                tabStops: [
-                  { type: TabStopType.RIGHT, position: TabStopPosition.MAX },
-                ],
-                children: [
-                  new TextRun({ text: edu.university, bold: true, size: sizes.body, font }),
-                  new TextRun({ text: `\t${edu.yearRange}`, size: sizes.body, font }),
-                ],
-              }),
-            );
-            paragraphs.push(
-              new Paragraph({
-                tabStops: [
-                  { type: TabStopType.RIGHT, position: TabStopPosition.MAX },
-                ],
-                children: [
-                  new TextRun({ text: edu.degree, italics: true, size: sizes.body, font }),
-                  new TextRun({
-                    text: edu.cgpa ? `\t${edu.cgpa}` : "",
-                    size: sizes.body,
-                    font,
-                  }),
-                ],
-                spacing: { after: spacing.bodyAfter * 2 },
-              }),
-            );
+            if (edu.university.trim() || edu.yearRange.trim()) {
+              paragraphs.push(
+                new Paragraph({
+                  tabStops: rightTab,
+                  children: [
+                    ...textToRuns(edu.university, sizes.body, { bold: true }),
+                    ...(edu.yearRange.trim() ? [plain(`\t${edu.yearRange}`, sizes.body)] : []),
+                  ],
+                }),
+              );
+            }
+            if (edu.degree.trim() || edu.cgpa.trim()) {
+              paragraphs.push(
+                new Paragraph({
+                  tabStops: rightTab,
+                  children: [
+                    ...textToRuns(edu.degree, sizes.body, { italics: true }),
+                    ...(edu.cgpa.trim() ? [plain(`\t${edu.cgpa}`, sizes.body)] : []),
+                  ],
+                  spacing: { after: spacing.bodyAfter * 2 },
+                }),
+              );
+            }
           }
         }
         break;
 
       case "experience":
-        if (data.showExperience && data.experience?.length > 0) {
+        if (data.showExperience && data.experience.length > 0) {
           paragraphs.push(sectionHeading(getSectionLabel("experience", "Experience")), makeLine());
           for (const exp of data.experience) {
-            paragraphs.push(
-              new Paragraph({
-                tabStops: [
-                  { type: TabStopType.RIGHT, position: TabStopPosition.MAX },
-                ],
-                children: [
-                  new TextRun({
-                    text: `${exp.role} — ${exp.company}`,
-                    bold: true,
-                    size: sizes.body,
-                    font,
-                  }),
-                  new TextRun({ text: `\t${exp.dateRange}`, size: sizes.body, font }),
-                ],
-              }),
-            );
-            if (exp.location) {
+            const title: TextRun[] = [
+              ...textToRuns(exp.role, sizes.body, { bold: true }),
+              ...(exp.role.trim() && exp.company.trim()
+                ? [plain(" — ", sizes.body, { bold: true })]
+                : []),
+              ...textToRuns(exp.company, sizes.body, { bold: true }),
+            ];
+            if (title.length > 0 || exp.dateRange.trim()) {
               paragraphs.push(
                 new Paragraph({
+                  tabStops: rightTab,
                   children: [
-                    new TextRun({
-                      text: exp.location,
-                      italics: true,
-                      size: sizes.meta,
-                      color: secondary,
-                      font,
-                    }),
+                    ...title,
+                    ...(exp.dateRange.trim() ? [plain(`\t${exp.dateRange}`, sizes.body)] : []),
                   ],
                 }),
               );
             }
+            if (exp.location.trim()) {
+              paragraphs.push(
+                new Paragraph({
+                  children: textToRuns(exp.location, sizes.meta, {
+                    italics: true,
+                    color: secondary,
+                  }),
+                }),
+              );
+            }
             for (const b of exp.bullets) {
-              paragraphs.push(bulletParagraph(b));
+              paragraphs.push(bulletParagraph(textToRuns(b, sizes.body)));
             }
           }
         }
@@ -257,38 +303,31 @@ export async function exportToDocx(
         if (data.projects.length > 0) {
           paragraphs.push(sectionHeading(getSectionLabel("projects", "Projects")), makeLine());
           for (const proj of data.projects) {
-            const links: string[] = [];
-            if (proj.githubLink) links.push(`Github: ${proj.githubLink}`);
-            if (proj.liveLink) links.push(`Live: ${proj.liveLink}`);
-            paragraphs.push(
-              new Paragraph({
-                children: [
-                  new TextRun({ text: proj.title, bold: true, size: sizes.body, font }),
-                  ...(links.length > 0
-                    ? [
-                        new TextRun({
-                          text: ` | ${links.join(" | ")}`,
-                          size: sizes.meta,
-                          color: primary,
-                          font,
-                        }),
-                      ]
-                    : []),
-                ],
-              }),
-            );
-            if (proj.techStack) {
+            const github = safeUrl(proj.githubLink);
+            const live = safeUrl(proj.liveLink);
+            const header: Inline[] = textToRuns(proj.title, sizes.body, { bold: true });
+            const links: Array<[string, string]> = [];
+            if (github) links.push(["Github", github]);
+            if (live) links.push(["Live Demo", live]);
+            links.forEach(([label, href], i) => {
+              if (i > 0 || proj.title.trim()) header.push(plain(" | ", sizes.meta));
+              header.push(linkRun(href, label, sizes.meta));
+            });
+            if (header.length > 0) {
+              paragraphs.push(new Paragraph({ children: header }));
+            }
+            if (proj.techStack.trim()) {
               paragraphs.push(
                 new Paragraph({
                   children: [
-                    new TextRun({ text: "Tech Stack: ", bold: true, size: sizes.meta, font }),
+                    plain("Tech Stack: ", sizes.meta, { bold: true }),
                     ...textToRuns(proj.techStack, sizes.meta),
                   ],
                 }),
               );
             }
             for (const b of proj.bullets) {
-              paragraphs.push(bulletParagraph(b));
+              paragraphs.push(bulletParagraph(textToRuns(b, sizes.body)));
             }
           }
         }
@@ -301,12 +340,12 @@ export async function exportToDocx(
             paragraphs.push(
               new Paragraph({
                 children: [
-                  new TextRun({
-                    text: `${skill.label}: `,
-                    bold: true,
-                    size: sizes.body,
-                    font,
-                  }),
+                  ...(skill.label.trim()
+                    ? [
+                        ...textToRuns(skill.label, sizes.body, { bold: true }),
+                        plain(skill.skills.trim() ? ": " : ":", sizes.body, { bold: true }),
+                      ]
+                    : []),
                   ...textToRuns(skill.skills, sizes.body),
                 ],
                 spacing: { after: spacing.bodyAfter },
@@ -317,32 +356,37 @@ export async function exportToDocx(
         break;
 
       case "achievements":
-        if (data.achievements?.length > 0) {
+        if (data.achievements.length > 0) {
           paragraphs.push(sectionHeading(getSectionLabel("achievements", "Achievements")), makeLine());
           for (const ach of data.achievements) {
-            paragraphs.push(bulletParagraph(ach.text));
+            const link = safeUrl(ach.githubLink);
+            paragraphs.push(
+              bulletParagraph([
+                ...textToRuns(ach.text, sizes.body),
+                ...(link
+                  ? [plain(" ", sizes.body), linkRun(link, "GitHub link", sizes.meta)]
+                  : []),
+              ]),
+            );
           }
         }
         break;
 
       case "certificates":
-        if (data.showCertificates && data.certificates?.length > 0) {
+        if (data.showCertificates && data.certificates.length > 0) {
           paragraphs.push(sectionHeading(getSectionLabel("certificates", "Certificates")), makeLine());
           for (const cert of data.certificates) {
+            const link = safeUrl(cert.link);
             paragraphs.push(
               new Paragraph({
                 children: [
-                  new TextRun({ text: cert.name, bold: true, size: sizes.body, font }),
-                  new TextRun({ text: ` — ${cert.description}`, size: sizes.body, font }),
-                  ...(cert.link
-                    ? [
-                        new TextRun({
-                          text: ` (${cert.link})`,
-                          size: sizes.meta,
-                          color: primary,
-                          font,
-                        }),
-                      ]
+                  ...textToRuns(cert.name, sizes.body, { bold: true }),
+                  ...(cert.name.trim() && cert.description.trim()
+                    ? [plain(" — ", sizes.body)]
+                    : []),
+                  ...textToRuns(cert.description, sizes.body),
+                  ...(link
+                    ? [plain(" ", sizes.body), linkRun(link, "View Certificate", sizes.meta)]
                     : []),
                 ],
                 spacing: { after: spacing.bodyAfter },
@@ -354,13 +398,18 @@ export async function exportToDocx(
     }
   }
 
-  const doc = new Document({
+  return new Document({
     sections: [{ children: paragraphs }],
   });
+}
 
+export async function exportToDocx(
+  data: ResumeData,
+  customization: TemplateCustomization = DEFAULT_CUSTOMIZATION,
+): Promise<void> {
+  const doc = buildResumeDocument(data, customization);
   const blob = await Packer.toBlob(doc);
-  const fileName = data.contact.name
-    ? `${data.contact.name.replace(/\s+/g, "_")}_Resume.docx`
-    : "Resume.docx";
+  const name = (data?.contact?.name ?? "").trim();
+  const fileName = name ? `${name.replace(/\s+/g, "_")}_Resume.docx` : "Resume.docx";
   saveAs(blob, fileName);
 }

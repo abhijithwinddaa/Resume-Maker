@@ -126,54 +126,66 @@ async function handleRequest(request: Request): Promise<Response> {
       });
     }
 
-    const email = buildWelcomeEmail({
-      firstName: notificationRow.first_name || undefined,
-      siteUrl: getMailSiteUrl(),
-    });
-
-    const sent = await sendTransactionalEmail({
-      to: notificationRow.user_email,
-      subject: email.subject,
-      html: email.html,
-      text: email.text,
-      idempotencyKey: `welcome-user/${userId}`,
-      tags: [
-        { name: "type", value: "welcome" },
-        { name: "user_id", value: userId.slice(0, 64) },
-      ],
-    });
-
-    const { error: updateError } = await supabase
+    // Claim the welcome atomically so concurrent syncs cannot double-send.
+    const { data: claimed, error: claimError } = await supabase
       .from("app_user_notifications")
-      .update({
-        welcome_email_sent_at: nowIso,
-        welcome_email_id: sent.id,
-        updated_at: nowIso,
-      })
-      .eq("user_id", userId);
+      .update({ welcome_email_sent_at: nowIso, updated_at: nowIso })
+      .eq("user_id", userId)
+      .is("welcome_email_sent_at", null)
+      .select("user_id");
 
-    if (updateError) {
-      return jsonResponse(
-        {
-          error:
-            "Welcome email was sent, but the delivery state could not be saved.",
-        },
-        500,
-      );
+    if (claimError) {
+      console.error("Welcome claim failed:", claimError);
+      return jsonResponse({ synced: true, welcomeSent: false });
     }
 
-    return jsonResponse({
-      synced: true,
-      welcomeSent: true,
-    });
+    if (!claimed || claimed.length === 0) {
+      return jsonResponse({ synced: true, welcomeSent: false });
+    }
+
+    try {
+      const email = buildWelcomeEmail({
+        firstName: notificationRow.first_name || undefined,
+        siteUrl: getMailSiteUrl(),
+      });
+
+      const sent = await sendTransactionalEmail({
+        to: notificationRow.user_email,
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
+        idempotencyKey: `welcome-user/${userId}`,
+        tags: [
+          { name: "type", value: "welcome" },
+          { name: "user_id", value: userId.slice(0, 64) },
+        ],
+      });
+
+      const { error: idError } = await supabase
+        .from("app_user_notifications")
+        .update({ welcome_email_id: sent.id })
+        .eq("user_id", userId);
+      if (idError) {
+        console.error("Welcome email id save failed:", idError);
+      }
+
+      return jsonResponse({ synced: true, welcomeSent: true });
+    } catch (sendError) {
+      console.error("Welcome email failed:", sendError);
+      // Release the claim so a later page load retries.
+      const { error: releaseError } = await supabase
+        .from("app_user_notifications")
+        .update({ welcome_email_sent_at: null })
+        .eq("user_id", userId);
+      if (releaseError) {
+        console.error("Welcome claim release failed:", releaseError);
+      }
+      return jsonResponse({ synced: true, welcomeSent: false });
+    }
   } catch (error) {
+    console.error("Notification sync failed:", error);
     return jsonResponse(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Could not sync your notification profile.",
-      },
+      { error: "Could not sync your notification profile." },
       500,
     );
   }

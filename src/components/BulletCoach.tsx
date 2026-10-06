@@ -24,7 +24,7 @@ type Step =
   | { name: "pick" }
   | { name: "amount"; idea: ChangeIdea }
   | { name: "loading"; idea: ChangeIdea }
-  | { name: "preview"; idea: ChangeIdea; text: string }
+  | { name: "preview"; idea: ChangeIdea; text: string; base: string }
   | { name: "error"; idea: ChangeIdea; message: string };
 
 const CHECK_LABELS = { action: "Action verb", scope: "What & how", result: "Result" } as const;
@@ -80,6 +80,9 @@ const BulletCoach: React.FC<BulletCoachProps> = ({ text, roleFamily, onApply, di
   };
 
   const write = async (idea: ChangeIdea) => {
+    // The text this suggestion is written for; it is only applied if the
+    // bullet still reads the same when the user accepts it.
+    const base = text;
     setStep({ name: "loading", idea });
     try {
       const response = await postServerAIRequest<
@@ -94,7 +97,7 @@ const BulletCoach: React.FC<BulletCoachProps> = ({ text, roleFamily, onApply, di
         jobDescription: jdText || undefined,
         facts: { changeType: idea.id, amount: amount.trim(), detail: detail.trim() || undefined },
       });
-      setStep({ name: "preview", idea, text: response.optimizedText });
+      setStep({ name: "preview", idea, text: response.optimizedText, base });
     } catch (error) {
       setStep({
         name: "error",
@@ -104,7 +107,15 @@ const BulletCoach: React.FC<BulletCoachProps> = ({ text, roleFamily, onApply, di
     }
   };
 
-  const keep = (newText: string) => {
+  const keep = (newText: string, base: string = text, idea?: ChangeIdea) => {
+    if (base !== text) {
+      setStep({
+        name: "error",
+        idea: idea ?? ideas[0],
+        message: "This bullet changed while the suggestion was being written, so it wasn't applied. Try again on the current text.",
+      });
+      return;
+    }
     onApply(newText);
     close();
   };
@@ -216,7 +227,7 @@ const BulletCoach: React.FC<BulletCoachProps> = ({ text, roleFamily, onApply, di
               <p className="quantify-preview">{step.text}</p>
               <AINotice />
               <div className="quantify-actions">
-                <button type="button" className="quantify-primary" onClick={() => keep(step.text)}>
+                <button type="button" className="quantify-primary" onClick={() => keep(step.text, step.base, step.idea)}>
                   Use this
                 </button>
                 <button type="button" className="quantify-secondary" onClick={() => void write(step.idea)}>

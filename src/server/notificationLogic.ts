@@ -61,11 +61,19 @@ export function wasSentToday(
 export function shouldSendReminder(
   row: NotificationRecipient,
   now: Date,
-  _config: ReminderRolloutConfig,
+  config: ReminderRolloutConfig,
 ): boolean {
   if (!row.reminder_enabled) return false;
   if (!row.user_email.trim()) return false;
   if (wasSentToday(row.last_reminder_sent_at, now)) return false;
+
+  if (resolveReminderAudienceMode(now, config) === "recent-active") {
+    return hasRecentActivity(
+      row.last_seen_at,
+      config.recentActivityHours,
+      now,
+    );
+  }
 
   return true;
 }

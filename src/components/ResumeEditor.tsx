@@ -52,6 +52,59 @@ interface ResumeEditorProps {
   onChange: (data: ResumeData) => void;
 }
 
+/** Collision-safe ids for list entries (crypto where available). */
+function newId(prefix: string): string {
+  const uuid =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${uuid}`;
+}
+
+type BulletKind = "exp" | "proj";
+
+/**
+ * Applies an async bullet result to the LATEST resume (not the render that
+ * started the request). The bullet is found by entry id (else index) and only
+ * replaced if it still holds the text the request was made from; if bullets
+ * above it were removed meanwhile it is found by that text instead. Returns
+ * null when the bullet changed, so nothing is overwritten.
+ */
+function applyBulletResult(
+  latest: ResumeData,
+  kind: BulletKind,
+  entryId: string | undefined,
+  entryIndex: number,
+  bulletIndex: number,
+  baseText: string,
+  newText: string,
+): ResumeData | null {
+  const listKey = kind === "exp" ? "experience" : "projects";
+  const entries = (latest[listKey] || []) as Array<Experience | Project>;
+  let at = entryId ? entries.findIndex((e) => e.id === entryId) : -1;
+  if (at === -1 && !entryId) at = entryIndex;
+  const entry = entries[at];
+  if (!entry) return null;
+
+  let target = -1;
+  if (entry.bullets[bulletIndex] === baseText) {
+    target = bulletIndex;
+  } else {
+    const matches = entry.bullets.flatMap((b, i) => (b === baseText ? [i] : []));
+    if (matches.length === 1) target = matches[0];
+  }
+  if (target === -1) return null;
+
+  const bullets = [...entry.bullets];
+  bullets[target] = newText;
+  const nextEntries = [...entries];
+  nextEntries[at] = { ...entry, bullets };
+  return { ...latest, [listKey]: nextEntries } as ResumeData;
+}
+
+const BULLET_CHANGED_NOTICE =
+  "This bullet changed while the AI was working, so the suggestion wasn't applied. Try again on the current text.";
+
 
 
 interface SortableExperienceItemProps {
@@ -63,7 +116,9 @@ interface SortableExperienceItemProps {
   removeExpBullet: (expIndex: number, bulletIndex: number) => void;
   addExpBullet: (expIndex: number) => void;
   onEnhanceBullet: (bulletIndex: number, currentText: string) => Promise<void>;
+  onApplyBullet: (bulletIndex: number, baseText: string, newText: string) => void;
   optimizingBullets: Record<string, boolean>;
+  bulletNotices: Record<string, string>;
 }
 
 const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
@@ -75,7 +130,9 @@ const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
   removeExpBullet,
   addExpBullet,
   onEnhanceBullet,
+  onApplyBullet,
   optimizingBullets,
+  bulletNotices,
 }) => {
   const id = exp.id || `exp-${index}`;
   const {
@@ -192,9 +249,14 @@ const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
               <BulletCoach
                 text={bullet}
                 roleFamily={detectRoleFamily(exp.role)}
-                onApply={(newText) => updateExpBullet(index, j, newText)}
+                onApply={(newText) => onApplyBullet(j, bullet, newText)}
                 disabled={isOptimizing}
               />
+              {bulletNotices[bulletKey] && (
+                <p className="quantify-error" role="alert">
+                  {bulletNotices[bulletKey]}
+                </p>
+              )}
             </div>
           );
         })}
@@ -305,7 +367,9 @@ interface SortableProjectItemProps {
   removeBullet: (projectIndex: number, bulletIndex: number) => void;
   addBullet: (projectIndex: number) => void;
   onEnhanceBullet: (bulletIndex: number, currentText: string) => Promise<void>;
+  onApplyBullet: (bulletIndex: number, baseText: string, newText: string) => void;
   optimizingBullets: Record<string, boolean>;
+  bulletNotices: Record<string, string>;
 }
 
 const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
@@ -317,7 +381,9 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   removeBullet,
   addBullet,
   onEnhanceBullet,
+  onApplyBullet,
   optimizingBullets,
+  bulletNotices,
 }) => {
   const id = project.id || `proj-${index}`;
   const {
@@ -424,9 +490,14 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
               <BulletCoach
                 text={bullet}
                 roleFamily={detectRoleFamily("", project.techStack)}
-                onApply={(newText) => updateBullet(index, j, newText)}
+                onApply={(newText) => onApplyBullet(j, bullet, newText)}
                 disabled={isOptimizing}
               />
+              {bulletNotices[bulletKey] && (
+                <p className="quantify-error" role="alert">
+                  {bulletNotices[bulletKey]}
+                </p>
+              )}
             </div>
           );
         })}
@@ -514,14 +585,56 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   const templateId = useAppStore((s) => s.templateId);
 
   const [optimizingBullets, setOptimizingBullets] = useState<Record<string, boolean>>({});
+  const [bulletNotices, setBulletNotices] = useState<Record<string, string>>({});
   const jdText = useAppStore((s) => s.jdText);
 
+  const setNotice = (key: string, message: string | null) =>
+    setBulletNotices((prev) => {
+      const next = { ...prev };
+      if (message) next[key] = message;
+      else delete next[key];
+      return next;
+    });
+
+  /** Writes `newText` into the bullet it was made for, on top of the latest resume. */
+  const applyToBullet = (
+    kind: BulletKind,
+    entryId: string | undefined,
+    entryIndex: number,
+    bulletIndex: number,
+    baseText: string,
+    newText: string,
+  ): boolean => {
+    const key = `${kind}-${entryIndex}-bullet-${bulletIndex}`;
+    const latest = useAppStore.getState().resumeData ?? data;
+    const updated = applyBulletResult(
+      latest,
+      kind,
+      entryId,
+      entryIndex,
+      bulletIndex,
+      baseText,
+      newText,
+    );
+    if (!updated) {
+      setNotice(key, BULLET_CHANGED_NOTICE);
+      return false;
+    }
+    setNotice(key, null);
+    onChange(updated);
+    return true;
+  };
+
   const handleEnhanceBullet = async (
-    key: string,
+    kind: BulletKind,
+    entryIndex: number,
+    bulletIndex: number,
     currentText: string,
-    onSuccess: (newText: string) => void
   ) => {
     if (!currentText.trim()) return;
+    const key = `${kind}-${entryIndex}-bullet-${bulletIndex}`;
+    const entryId = (kind === "exp" ? data.experience : data.projects)?.[entryIndex]?.id;
+    setNotice(key, null);
     setOptimizingBullets((prev) => ({ ...prev, [key]: true }));
     try {
       const response = await postServerAIRequest<
@@ -535,11 +648,14 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
         }
       );
       if (response && response.optimizedText) {
-        onSuccess(response.optimizedText);
+        applyToBullet(kind, entryId, entryIndex, bulletIndex, currentText, response.optimizedText);
       }
     } catch (error) {
       console.error("Failed to enhance bullet:", error);
-      alert(error instanceof Error ? error.message : "Failed to optimize bullet point.");
+      setNotice(
+        key,
+        error instanceof Error ? error.message : "Failed to optimize bullet point.",
+      );
     } finally {
       setOptimizingBullets((prev) => ({ ...prev, [key]: false }));
     }
@@ -552,52 +668,32 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
     }),
   );
 
+  // Give list entries stable ids (needed for drag and drop). This is not a user
+  // edit, so it must not add an undo entry or clear the redo stack.
   React.useEffect(() => {
     let changed = false;
-    const experiencesWithIds = (data.experience || []).map((exp) => {
-      if (!exp.id) {
+    const withIds = <T extends { id?: string }>(items: T[] | undefined, prefix: string): T[] =>
+      (items || []).map((item) => {
+        if (item.id) return item;
         changed = true;
-        return { ...exp, id: `exp-${Math.random().toString(36).substr(2, 9)}` };
-      }
-      return exp;
-    });
+        return { ...item, id: newId(prefix) };
+      });
 
-    const educationWithIds = (data.education || []).map((edu) => {
-      if (!edu.id) {
-        changed = true;
-        return { ...edu, id: `edu-${Math.random().toString(36).substr(2, 9)}` };
-      }
-      return edu;
-    });
-
-    const projectsWithIds = (data.projects || []).map((proj) => {
-      if (!proj.id) {
-        changed = true;
-        return { ...proj, id: `proj-${Math.random().toString(36).substr(2, 9)}` };
-      }
-      return proj;
-    });
-
-    const skillsWithIds = (data.skills || []).map((skill) => {
-      if (!skill.id) {
-        changed = true;
-        return { ...skill, id: `skill-${Math.random().toString(36).substr(2, 9)}` };
-      }
-      return skill;
-    });
+    const next = {
+      ...data,
+      experience: withIds(data.experience, "exp"),
+      education: withIds(data.education, "edu"),
+      projects: withIds(data.projects, "proj"),
+      skills: withIds(data.skills, "skill"),
+    };
 
     if (changed) {
-      onChange({ 
-        ...data, 
-        experience: experiencesWithIds,
-        education: educationWithIds,
-        projects: projectsWithIds,
-        skills: skillsWithIds
-      });
+      const store = useAppStore.getState();
+      // Only write when the store still holds the snapshot we were given;
+      // otherwise a newer edit would be overwritten and the next render retries.
+      if (store.resumeData === data) store.setResumeData(next, false);
     }
-  }, [data.experience, data.education, data.projects, data.skills, onChange]);
-
-
+  }, [data]);
 
   const updateContact = (field: string, value: string) => {
     onChange({ ...data, contact: { ...data.contact, [field]: value } });
@@ -623,7 +719,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       ...data,
       education: [
         ...data.education,
-        { id: `edu-${Math.random().toString(36).substr(2, 9)}`, university: "", location: "", degree: "", yearRange: "", cgpa: "" },
+        { id: newId("edu"), university: "", location: "", degree: "", yearRange: "", cgpa: "" },
       ],
     });
   };
@@ -652,10 +748,10 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       projects: [
         ...data.projects,
         {
-          id: `proj-${Math.random().toString(36).substr(2, 9)}`,
+          id: newId("proj"),
           title: "",
-          githubLink: "#",
-          liveLink: "#",
+          githubLink: "",
+          liveLink: "",
           techStack: "",
           bullets: [""],
         },
@@ -714,7 +810,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   };
 
   const addSkill = () => {
-    onChange({ ...data, skills: [...data.skills, { id: `skill-${Math.random().toString(36).substr(2, 9)}`, label: "", skills: "" }] });
+    onChange({ ...data, skills: [...data.skills, { id: newId("skill"), label: "", skills: "" }] });
   };
 
   const removeSkill = (index: number) => {
@@ -794,7 +890,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       ...data,
       experience: [
         ...(data.experience || []),
-        { id: `exp-${Math.random().toString(36).substr(2, 9)}`, company: "", role: "", location: "", dateRange: "", bullets: [""] },
+        { id: newId("exp"), company: "", role: "", location: "", dateRange: "", bullets: [""] },
       ],
     });
   };
@@ -1129,13 +1225,13 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                       removeExpBullet={removeExpBullet}
                       addExpBullet={addExpBullet}
                       onEnhanceBullet={(bulletIndex, currentText) =>
-                        handleEnhanceBullet(
-                          `exp-${i}-bullet-${bulletIndex}`,
-                          currentText,
-                          (newText) => updateExpBullet(i, bulletIndex, newText)
-                        )
+                        handleEnhanceBullet("exp", i, bulletIndex, currentText)
+                      }
+                      onApplyBullet={(bulletIndex, baseText, newText) =>
+                        applyToBullet("exp", exp.id, i, bulletIndex, baseText, newText)
                       }
                       optimizingBullets={optimizingBullets}
+                      bulletNotices={bulletNotices}
                     />
                   ))}
                 </SortableContext>
@@ -1173,13 +1269,13 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                       removeBullet={removeBullet}
                       addBullet={addBullet}
                       onEnhanceBullet={(bulletIndex, currentText) =>
-                        handleEnhanceBullet(
-                          `proj-${i}-bullet-${bulletIndex}`,
-                          currentText,
-                          (newText) => updateBullet(i, bulletIndex, newText)
-                        )
+                        handleEnhanceBullet("proj", i, bulletIndex, currentText)
+                      }
+                      onApplyBullet={(bulletIndex, baseText, newText) =>
+                        applyToBullet("proj", project.id, i, bulletIndex, baseText, newText)
                       }
                       optimizingBullets={optimizingBullets}
+                      bulletNotices={bulletNotices}
                     />
                   ))}
                 </SortableContext>
@@ -1230,6 +1326,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
               <div className="tab-section-header">
                 <h3>Achievements</h3>
               </div>
+              {/* Achievement has no id in the type, so rows are keyed by index. */}
               {data.achievements.map((ach, i) => (
                 <div key={i} className="editor-card">
                   <div className="card-header">
@@ -1306,6 +1403,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                   show.
                 </div>
               )}
+              {/* Certificate has no id in the type, so rows are keyed by index. */}
               {(data.certificates || []).map((cert, i) => (
                 <div key={i} className="cert-editor-row-container" style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "12px" }}>
                   <FormatToolbar />

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { ATSResult } from "./aiParsing.js";
 import type { ResumeData } from "../types/resume.js";
@@ -29,12 +30,8 @@ function readEnv(...keys: string[]): string {
   return "";
 }
 
-function hashString(value: string): string {
-  let hash = 5381;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash * 33) ^ value.charCodeAt(i);
-  }
-  return (hash >>> 0).toString(36);
+export function hashString(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function getSupabaseAdminClient() {
@@ -69,7 +66,7 @@ export function buildAnalyzeCacheKey(
 ): string {
   return [
     "analyze",
-    "v1",
+    "v2",
     mode,
     buildPayloadHash(resumeData),
     buildJobHash(jobDescription),
@@ -102,14 +99,14 @@ export function buildParseCacheKey(
 ): string {
   return [
     "parse",
-    "v1",
+    "v2",
     hashString(resumeText.trim()),
     hashString(JSON.stringify(extractedLinks || [])),
   ].join(":");
 }
 
 export function buildTemplateDetectCacheKey(resumeText: string): string {
-  return ["template-detect", "v1", hashString(resumeText.trim())].join(":");
+  return ["template-detect", "v2", hashString(resumeText.trim())].join(":");
 }
 
 export function buildCoverLetterCacheKey(
@@ -178,19 +175,70 @@ export async function writeServerCache(
   );
 }
 
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { name?: string }).name === "AbortError"
+  );
+}
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException("Aborted", "AbortError");
+}
+
+function raceSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    promise.catch(() => undefined);
+    return Promise.reject(abortReason(signal));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortReason(signal));
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
+ * Shares one in-flight computation per cache key. The first caller's factory
+ * may be bound to that caller's AbortSignal, so a joiner must not inherit its
+ * failure: if the shared work died from an abort that is not the joiner's own,
+ * the joiner runs its own factory. Pass `signal` (the caller's own) so each
+ * caller can also stop waiting independently of the shared work.
+ */
 export async function withInFlightDedup<T>(
   cacheKey: string,
   factory: () => Promise<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
   const existing = inFlightRequests.get(cacheKey);
   if (existing) {
-    return existing as Promise<T>;
+    try {
+      return await raceSignal(existing as Promise<T>, signal);
+    } catch (error) {
+      if (signal?.aborted || !isAbortError(error)) {
+        throw error;
+      }
+      return withInFlightDedup(cacheKey, factory, signal);
+    }
   }
 
-  const pending = factory().finally(() => {
-    inFlightRequests.delete(cacheKey);
+  const pending: Promise<T> = factory().finally(() => {
+    if (inFlightRequests.get(cacheKey) === pending) {
+      inFlightRequests.delete(cacheKey);
+    }
   });
 
   inFlightRequests.set(cacheKey, pending);
-  return pending;
+  return raceSignal(pending, signal);
 }

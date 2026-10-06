@@ -1,4 +1,5 @@
 import type { ResumeData } from "../types/resume";
+import { buildUntrustedNote, wrapUntrusted } from "./optimizePromptShared.js";
 
 export function buildATSPrompt(
   resumeData: ResumeData,
@@ -76,15 +77,15 @@ Analyze the resume comprehensively and return a JSON object with this EXACT stru
     "impact": {
       "score": <number 0-100>,
       "weight": 10,
-      "feedback": "<brief feedback on quantified achievements and action verbs>"
+      "feedback": "<brief feedback on how clearly results and action verbs are shown, based only on what is written>"
     }
   },
   "topSuggestions": [
-    "<suggestion 1>",
-    "<suggestion 2>",
-    "<suggestion 3>",
-    "<suggestion 4>",
-    "<suggestion 5>"
+    "<honest, specific suggestion based only on what the resume shows>",
+    "<honest, specific suggestion based only on what the resume shows>",
+    "<honest, specific suggestion based only on what the resume shows>",
+    "<honest, specific suggestion based only on what the resume shows>",
+    "<honest, specific suggestion based only on what the resume shows>"
   ],
   "summaryVerdict": "<2-3 sentence overall assessment>"
 }
@@ -95,19 +96,27 @@ SCORING RULES:
 - skillsAlignment (25%): How well listed skills match JD requirements. List EVERY found and missing skill.
 - experienceRelevance (20%): How relevant projects/experience are to the role
 - formatting (10%): Resume structure, readability, ATS-friendly format
-- impact (10%): Use of action verbs, quantified results, measurable achievements
+- impact (10%): Use of action verbs and clearly stated results. Judge only what is written; never penalise a resume for lacking numbers it cannot honestly have.
+
+SUGGESTION RULES (apply to topSuggestions and every feedback field):
+- Suggestions are about wording, structure, ordering, or surfacing evidence already in the resume.
+- For a missing keyword or skill, say to add it ONLY if the candidate has genuinely used it. Never assume the candidate knows a tool.
+- Never include example numbers, percentages or sample metrics. Say "add your real result if you have one" instead.
+- Never suggest claiming anything "even if only briefly or locally used", or adding anything "to pass filters".
 
 Be strict but fair. A perfect resume rarely scores above 90.
 
 ---
 
+${buildUntrustedNote()}
+
 JOB DESCRIPTION:
-${jobDescription}
+${wrapUntrusted("job_description", jobDescription)}
 
 ---
 
 RESUME:
-${resumeText}
+${wrapUntrusted("resume", resumeText)}
 
 ---
 

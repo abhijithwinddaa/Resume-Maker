@@ -1,5 +1,15 @@
 import { callServerAI } from "../../src/server/aiRuntime.js";
 import { redactContactForAI } from "../../src/server/aiRedaction.js";
+import { extractJSON } from "../../src/server/aiParsing.js";
+import {
+  isItemGrounded,
+  isKnown,
+  knownTerms,
+  knownTermsFromText,
+  resumeContentText,
+  termsIn,
+} from "../../src/server/groundedTerms.js";
+import { numbersGrounded } from "../../src/utils/quantify.js";
 import type { ResumeData } from "../../src/types/resume.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
 import {
@@ -56,6 +66,92 @@ Response schema:
   }
 }`;
 
+const SECTIONS = ["experience", "projects"] as const;
+type PlacementSection = (typeof SECTIONS)[number];
+
+interface PlacementSuggestion {
+  section: PlacementSection;
+  index: number;
+  editType: "rewrite" | "new";
+  bulletIndex: number;
+  originalText: string;
+  suggestedText: string;
+  keyword: string;
+  reason: string;
+}
+
+const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/**
+ * Keep only suggestions that point at a real bullet and add nothing the
+ * resume does not already show: numbers must come from the resume, and so must
+ * tools — except the suggestion's own keyword, and only when the same
+ * experience/project entry already mentions it (or a close form).
+ */
+export function validateKeywordSuggestions(
+  raw: unknown,
+  resume: ResumeData,
+): Record<string, PlacementSuggestion[]> {
+  const result: Record<string, PlacementSuggestion[]> = {};
+  if (!raw || typeof raw !== "object") return result;
+
+  const contentText = resumeContentText(resume).join("\n");
+  const known = knownTerms(resume);
+
+  for (const [key, list] of Object.entries(raw as Record<string, unknown>)) {
+    result[key] = [];
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      if (!item || typeof item !== "object") continue;
+      const s = item as Record<string, unknown>;
+      if (!SECTIONS.includes(s.section as PlacementSection)) continue;
+      const section = s.section as PlacementSection;
+      const entries = (resume[section] || []) as Array<{
+        bullets?: string[];
+        techStack?: string;
+      }>;
+      const index = s.index;
+      if (typeof index !== "number" || !Number.isInteger(index)) continue;
+      const entry = entries[index];
+      if (!entry) continue;
+      const bullets = Array.isArray(entry.bullets) ? entry.bullets : [];
+
+      const editType = s.editType === "new" ? "new" : s.editType === "rewrite" ? "rewrite" : null;
+      if (!editType) continue;
+      const bulletIndex = typeof s.bulletIndex === "number" ? s.bulletIndex : -1;
+      if (typeof s.suggestedText !== "string" || !s.suggestedText.trim()) continue;
+      const originalText = typeof s.originalText === "string" ? s.originalText : "";
+      if (editType === "rewrite") {
+        if (!Number.isInteger(bulletIndex) || bulletIndex < 0 || bulletIndex >= bullets.length) continue;
+        if (squash(originalText) !== squash(bullets[bulletIndex] || "")) continue;
+      }
+
+      if (!numbersGrounded(s.suggestedText, [contentText])) continue;
+
+      const keyword = typeof s.keyword === "string" && s.keyword.trim() ? s.keyword : key;
+      const entryKnown = knownTermsFromText([...bullets, entry.techStack || ""]);
+      const keywordShown = isItemGrounded(keyword, entryKnown);
+      const keywordKnown = knownTermsFromText([keyword]);
+      const invented = [...new Set(termsIn(s.suggestedText))].filter((t) =>
+        isKnown(t, keywordKnown) ? !keywordShown : !isKnown(t, known),
+      );
+      if (invented.length) continue;
+
+      result[key].push({
+        section,
+        index,
+        editType,
+        bulletIndex,
+        originalText,
+        suggestedText: s.suggestedText,
+        keyword,
+        reason: typeof s.reason === "string" ? s.reason : "",
+      });
+    }
+  }
+  return result;
+}
+
 async function handleRequest(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
@@ -110,27 +206,18 @@ async function handleRequest(request: Request): Promise<Response> {
       { maxTokens: 2500 },
     );
 
-    // Parse JSON from response (strip any potential markdown fences)
-    let cleaned = rawResponse.trim();
-    if (cleaned.startsWith("```")) {
-      const firstNewline = cleaned.indexOf("\n");
-      if (firstNewline !== -1) {
-        cleaned = cleaned.slice(firstNewline + 1);
-      }
-      if (cleaned.endsWith("```")) {
-        cleaned = cleaned.slice(0, -3);
-      }
-    }
-    cleaned = cleaned.trim();
+    const parsed = JSON.parse(extractJSON(rawResponse));
 
-    const parsed = JSON.parse(cleaned);
-
-    // Validate shape
     if (!parsed.suggestions || typeof parsed.suggestions !== "object") {
       throw new Error("Response missing 'suggestions' object");
     }
 
-    return jsonResponse({ suggestions: parsed.suggestions });
+    return jsonResponse({
+      suggestions: validateKeywordSuggestions(
+        parsed.suggestions,
+        resumeData as ResumeData,
+      ),
+    });
   } catch (error) {
     return jsonResponse(
       {

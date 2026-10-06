@@ -7,7 +7,7 @@ import {
   saveLocalResume,
 } from "./localResumeStore";
 import type { ResumeData } from "../types/resume";
-import { DEFAULT_SECTION_ORDER } from "../types/resume";
+import { normalizeResumeData } from "../utils/normalizeResume";
 
 /* ─────────────────────────────────────────────────────
    Supabase table: resumes
@@ -27,19 +27,10 @@ export interface ResumeRow {
   updated_at: string;
 }
 
-function normalizeResume(resume: ResumeData): ResumeData {
-  if (!resume.experience) resume.experience = [];
-  if (resume.showExperience === undefined) resume.showExperience = false;
-  if (!resume.sectionOrder) resume.sectionOrder = DEFAULT_SECTION_ORDER;
-  if (!resume.certificates) resume.certificates = [];
-  if (resume.showCertificates === undefined) resume.showCertificates = false;
-  return resume;
-}
-
 function normalizeRow(row: ResumeRow): ResumeRow {
   return {
     ...row,
-    data: normalizeResume(row.data),
+    data: normalizeResumeData(row.data),
   };
 }
 
@@ -50,7 +41,7 @@ function deriveResumeName(
   const trimmedProvided = providedName?.trim();
   if (trimmedProvided) return trimmedProvided;
 
-  const contactName = resumeData.contact.name.trim();
+  const contactName = (resumeData?.contact?.name ?? "").trim();
   if (contactName) return `${contactName} Resume`;
 
   return "Untitled Resume";

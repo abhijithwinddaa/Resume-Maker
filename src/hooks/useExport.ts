@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { createElement, useState, useCallback, useEffect, useRef } from "react";
+import type { ResumeData } from "../types/resume";
 import { LOCAL_DEV_AUTH, useClerk, useUser } from "../auth";
 import { useReactToPrint } from "react-to-print";
 import { useAppStore } from "../store/appStore";
@@ -40,6 +41,91 @@ function estimateRenderedPages(element: HTMLElement): number {
   return Math.max(1, Math.ceil((contentHeightPx - tolerancePx) / onePagePx));
 }
 
+interface ExportCopy {
+  /** Re-render the copy with a different spacing/size override, synchronously. */
+  render: (override: Partial<TemplateCustomization> | null) => void;
+  node: () => HTMLDivElement | null;
+  dispose: () => void;
+}
+
+/**
+ * Renders the data to be exported into its own off-screen template, so the PDF
+ * is built from the derived copy and not from whatever the live preview shows.
+ * Rendering is synchronous (flushSync), so there is nothing to wait for.
+ */
+async function mountExportCopy(data: ResumeData): Promise<ExportCopy> {
+  const [{ default: ResumeTemplate }, { createRoot }, { flushSync }] = await Promise.all([
+    import("../components/ResumeTemplate"),
+    import("react-dom/client"),
+    import("react-dom"),
+  ]);
+  const host = document.createElement("div");
+  host.setAttribute("aria-hidden", "true");
+  Object.assign(host.style, {
+    position: "fixed",
+    left: "-9999px",
+    top: "0",
+    width: "210mm",
+    opacity: "0",
+    pointerEvents: "none",
+    zIndex: "-1",
+  });
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  const holder: { current: HTMLDivElement | null } = { current: null };
+
+  const render = (override: Partial<TemplateCustomization> | null) => {
+    flushSync(() => {
+      root.render(
+        createElement(ResumeTemplate, {
+          ref: holder,
+          data,
+          customizationOverride: override ?? undefined,
+          forExport: true,
+        }),
+      );
+    });
+  };
+  render(null);
+
+  return {
+    render,
+    node: () => holder.current,
+    dispose: () => {
+      try {
+        root.unmount();
+      } finally {
+        host.remove();
+      }
+    },
+  };
+}
+
+/**
+ * Everything export changes about the resume (spacing clean-up, typo fixes)
+ * happens on this copy. The user's saved resume is never written to.
+ */
+function prepareExportData(source: ResumeData):
+  | { ok: true; data: ResumeData; note: string | null }
+  | { ok: false; errors: string[] } {
+  let data = source;
+  const spacingFix = normalizeResumeDataSpacing(data);
+  if (spacingFix.changedFields > 0) data = spacingFix.normalized;
+
+  const validation = validateForExport(data);
+  if (!validation.valid) return { ok: false, errors: validation.errors };
+
+  let note: string | null = null;
+  if (validation.typoWarnings.length > 0) {
+    const { fixed, corrections } = autoFixTypos(data);
+    if (corrections.length > 0) {
+      data = fixed;
+      note = `Corrected ${corrections.length} typo${corrections.length > 1 ? "s" : ""} in the exported file only (your resume is unchanged): ${corrections.map((c) => c.split(": ")[1]).join(", ")}`;
+    }
+  }
+  return { ok: true, data, note };
+}
+
 const HAS_EXPORTED_KEY = "resume-maker:has-exported";
 
 interface UseExportOptions {
@@ -48,7 +134,7 @@ interface UseExportOptions {
 }
 
 export function useExport(
-  resumeRef: React.RefObject<HTMLDivElement | null>,
+  _resumeRef: React.RefObject<HTMLDivElement | null>,
   options: UseExportOptions = {},
 ) {
   // Read through a ref so the export callbacks needn't re-create per render.
@@ -60,7 +146,6 @@ export function useExport(
   const { user } = useUser();
 
   const resumeData = useAppStore((s) => s.resumeData);
-  const setResumeData = useAppStore((s) => s.setResumeData);
   const exportPageMode = useAppStore((s) => s.exportPageMode);
   const customization = useAppStore((s) => s.customization);
   const setError = useAppStore((s) => s.setError);
@@ -93,10 +178,17 @@ export function useExport(
   const [feedbackInitialTab, setFeedbackInitialTab] = useState<"my" | "community" | "admin">("my");
   
   const feedbackGateCheckInFlightRef = useRef(false);
+  const exportCopyRef = useRef<ExportCopy | null>(null);
+  const disposeExportCopy = useCallback(() => {
+    exportCopyRef.current?.dispose();
+    exportCopyRef.current = null;
+  }, []);
+  useEffect(() => disposeExportCopy, [disposeExportCopy]);
 
   // Evaluate PDF spacing & density fitting
   const evaluatePdfFit = useCallback(
     async (
+      copy: ExportCopy,
       requireSinglePage: boolean,
     ): Promise<{
       estimatedPages: number;
@@ -130,10 +222,12 @@ export function useExport(
       }> = [];
 
       for (const attempt of fitAttempts) {
+        // The live preview mirrors the compression; the measured node is the copy.
         setExportCustomizationOverride(attempt.override);
+        copy.render(attempt.override);
         await waitForNextPaint();
 
-        const node = resumeRef.current;
+        const node = copy.node();
         if (!node) {
           continue;
         }
@@ -184,6 +278,7 @@ export function useExport(
       }
 
       setExportCustomizationOverride(bestResult.override);
+      copy.render(bestResult.override);
       await waitForNextPaint();
 
       return {
@@ -192,69 +287,48 @@ export function useExport(
         override: bestResult.override,
       };
     },
-    [resumeRef],
+    [],
   );
 
   const runExportPDF = useCallback(async () => {
-    let el = resumeRef.current;
-    if (!el) {
-      setError("Resume preview not available for export. Please try again.");
+    const source = useAppStore.getState().resumeData;
+    if (!source) {
+      setError("No resume data to export. Please create or load a resume first.");
       return;
     }
-    if (resumeData) {
-      let exportData = resumeData;
 
-      const spacingFix = normalizeResumeDataSpacing(exportData);
-      if (spacingFix.changedFields > 0) {
-        exportData = spacingFix.normalized;
-        setResumeData(exportData);
-
-        // Wait for template to render normalized text
-        await new Promise((r) => setTimeout(r, 200));
-        el = resumeRef.current;
-        if (!el) {
-          setError("Resume preview not available for export. Please try again.");
-          return;
-        }
-      }
-
-      const validation = validateForExport(exportData);
-      if (!validation.valid) {
-        setError(validation.errors.join("\n"));
-        return;
-      }
-
-      // Auto-fix typos
-      if (validation.typoWarnings.length > 0) {
-        const { fixed, corrections } = autoFixTypos(exportData);
-        if (corrections.length > 0) {
-          setResumeData(fixed);
-          setExportToastMessage(
-            `Auto-fixed ${corrections.length} typo${corrections.length > 1 ? "s" : ""}: ${corrections.map((c) => c.split(": ")[1]).join(", ")}`,
-          );
-          await new Promise((r) => setTimeout(r, 600));
-
-          el = resumeRef.current;
-          if (!el) {
-            setError("Resume preview not available for export. Please try again.");
-            return;
-          }
-        }
-      }
-      setError(null);
+    const prepared = prepareExportData(source);
+    if (!prepared.ok) {
+      setError(prepared.errors.join("\n"));
+      return;
     }
+    setError(null);
+    const exportData = prepared.data;
+    const typoNote = prepared.note;
 
-    const experienceTier = getExperienceTier(resumeData);
+    const experienceTier = getExperienceTier(exportData);
     const pageModeDecision = resolveExportPageMode(
       exportPageMode,
       experienceTier,
     );
     const singlePageRequired = pageModeDecision.singlePageRequired;
 
+    disposeExportCopy();
+    let copy: ExportCopy;
+    try {
+      copy = await mountExportCopy(exportData);
+    } catch (err) {
+      console.error("Export render failed:", err);
+      setError("Resume preview not available for export. Please try again.");
+      return;
+    }
+    exportCopyRef.current = copy;
+
     setIsExporting(true);
     setExportToastMessage("Preparing PDF...");
 
     let fitResult = await evaluatePdfFit(
+      copy,
       pageModeDecision.fitRequiresSinglePageAttempts,
     );
 
@@ -268,13 +342,14 @@ export function useExport(
 
       if (!shouldContinueAsMultiPage) {
         setExportCustomizationOverride(null);
+        disposeExportCopy();
         setError(
           "Single-page export cancelled. Trim content or set PDF page mode to allow multi-page.",
         );
         return;
       }
 
-      fitResult = await evaluatePdfFit(false);
+      fitResult = await evaluatePdfFit(copy, false);
       setIsExporting(true);
     }
 
@@ -288,12 +363,12 @@ export function useExport(
     };
 
     setExportToastMessage(
-      `Preparing PDF (${fitResult.estimatedPages} page${fitResult.estimatedPages > 1 ? "s" : ""}, ${stageLabels[fitResult.stage]})...`,
+      `Preparing PDF (${fitResult.estimatedPages} page${fitResult.estimatedPages > 1 ? "s" : ""}, ${stageLabels[fitResult.stage]})...${typoNote ? ` ${typoNote}` : ""}`,
     );
 
     trackEvent("resume_exported", {
       format: "pdf",
-      has_resume_data: Boolean(resumeData),
+      has_resume_data: true,
       page_mode: exportPageMode,
       estimated_pages: fitResult.estimatedPages,
       compression_stage: fitResult.stage,
@@ -305,56 +380,42 @@ export function useExport(
     }
 
     try {
-      reactToPrintFn();
+      // Print the copy built from the export data, not the live preview.
+      reactToPrintFn(() => copy.node());
     } catch (err) {
       console.error("react-to-print failed:", err);
       setError("Failed to open print dialog.");
       setIsExporting(false);
       setExportToastMessage(null);
+      disposeExportCopy();
     }
   }, [
+    disposeExportCopy,
     evaluatePdfFit,
     exportPageMode,
-    resumeData,
     setError,
-    setResumeData,
     user?.id,
     markExported,
   ]);
 
   const runExportDocx = useCallback(async () => {
-    if (!resumeData) {
+    const source = useAppStore.getState().resumeData;
+    if (!source) {
       setError("No resume data to export. Please create or load a resume first.");
       return;
     }
-    let exportData = resumeData;
 
-    const spacingFix = normalizeResumeDataSpacing(exportData);
-    if (spacingFix.changedFields > 0) {
-      exportData = spacingFix.normalized;
-      setResumeData(exportData);
-    }
-
-    const validation = validateForExport(exportData);
-    if (!validation.valid) {
-      setError(validation.errors.join("\n"));
+    const prepared = prepareExportData(source);
+    if (!prepared.ok) {
+      setError(prepared.errors.join("\n"));
       return;
     }
-
-    if (validation.typoWarnings.length > 0) {
-      const { fixed, corrections } = autoFixTypos(exportData);
-      if (corrections.length > 0) {
-        exportData = fixed;
-        setResumeData(fixed);
-        setExportToastMessage(
-          `Auto-fixed ${corrections.length} typo${corrections.length > 1 ? "s" : ""}: ${corrections.map((c) => c.split(": ")[1]).join(", ")}`,
-        );
-        await new Promise((r) => setTimeout(r, 600));
-      }
-    }
+    const exportData = prepared.data;
     setError(null);
     setIsExporting(true);
-    setExportToastMessage("Generating DOCX...");
+    setExportToastMessage(
+      prepared.note ? `Generating DOCX... ${prepared.note}` : "Generating DOCX...",
+    );
     try {
       await exportToDocx(exportData, customization);
       trackEvent("resume_exported", { format: "docx" });
@@ -370,15 +431,15 @@ export function useExport(
       setIsExporting(false);
       setExportToastMessage(null);
     }
-  }, [resumeData, setError, setResumeData, user?.id, customization, markExported]);
+  }, [setError, user?.id, customization, markExported]);
 
   // Hook up react-to-print trigger
+  const exportName = (resumeData?.contact?.name ?? "").trim();
   const reactToPrintFn = useReactToPrint({
-    contentRef: resumeRef,
-    documentTitle: resumeData
-      ? `${resumeData.contact.name.replace(/\s+/g, "_")}_Resume`
-      : "Resume",
+    // The node to print is passed per call (the export copy), not via contentRef.
+    documentTitle: exportName ? `${exportName.replace(/\s+/g, "_")}_Resume` : "Resume",
     onAfterPrint: () => {
+      disposeExportCopy();
       setExportCustomizationOverride(null);
       setIsExporting(false);
       setExportToastMessage(null);
@@ -388,6 +449,7 @@ export function useExport(
       console.error("PDF export failed:", error);
       trackEvent("resume_export_failed", { format: "pdf" });
       setError("PDF export failed. Please try again.");
+      disposeExportCopy();
       setExportCustomizationOverride(null);
       setIsExporting(false);
       setExportToastMessage(null);

@@ -13,6 +13,8 @@ interface SendEmailParams {
   idempotencyKey?: string;
   replyTo?: string;
   tags?: ResendTag[];
+  /** When set, adds RFC 8058 one-click List-Unsubscribe headers. */
+  unsubscribeUrl?: string;
 }
 
 interface ResendSuccessResponse {
@@ -77,6 +79,12 @@ export async function sendTransactionalEmail(params: SendEmailParams) {
       text: params.text,
       reply_to: params.replyTo || config.replyTo || undefined,
       tags: params.tags,
+      headers: params.unsubscribeUrl
+        ? {
+            "List-Unsubscribe": `<${params.unsubscribeUrl}>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          }
+        : undefined,
     }),
   });
 

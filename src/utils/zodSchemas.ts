@@ -1,53 +1,71 @@
 import { z } from "zod";
+import { isSafeLink } from "./normalizeResume";
+
+// Generous limits: this schema validates the app's OWN export, which can hold
+// empty starter entries and long bullets. It guards shape and unsafe URLs, not
+// content quality.
+const text = (max: number) => z.string().max(max);
+
+/** Empty, http(s), or scheme-less ("linkedin.com/in/x"); never javascript:. */
+const linkField = z
+  .string()
+  .max(2000)
+  .refine(isSafeLink, "Links must be http(s) URLs");
+
+const bullets = z.array(z.string().max(5000)).max(100);
 
 // Contact validation
 export const contactSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100),
-  phone: z.string().max(30),
-  email: z.string().email("Invalid email").or(z.literal("")),
-  linkedin: z.string().url("Invalid URL").or(z.literal("")),
-  github: z.string().url("Invalid URL").or(z.literal("")),
-  portfolio: z.string().url("Invalid URL").or(z.literal("")),
+  name: text(200),
+  phone: text(60),
+  email: z.string().max(320).email("Invalid email").or(z.literal("")),
+  linkedin: linkField,
+  github: linkField,
+  portfolio: linkField,
 });
 
 export const educationSchema = z.object({
-  university: z.string().min(1).max(200),
-  location: z.string().max(100),
-  degree: z.string().min(1).max(200),
-  yearRange: z.string().max(50),
-  cgpa: z.string().max(30),
+  id: z.string().optional(),
+  university: text(300),
+  location: text(200),
+  degree: text(300),
+  yearRange: text(100),
+  cgpa: text(60),
 });
 
 export const experienceSchema = z.object({
-  company: z.string().min(1).max(200),
-  role: z.string().min(1).max(200),
-  location: z.string().max(100),
-  dateRange: z.string().max(50),
-  bullets: z.array(z.string().max(500)).max(10),
+  id: z.string().optional(),
+  company: text(300),
+  role: text(300),
+  location: text(200),
+  dateRange: text(100),
+  bullets,
 });
 
 export const projectSchema = z.object({
-  title: z.string().min(1).max(200),
-  githubLink: z.string().url().or(z.literal("")),
-  liveLink: z.string().url().or(z.literal("")),
-  techStack: z.string().max(300),
-  bullets: z.array(z.string().max(500)).max(10),
+  id: z.string().optional(),
+  title: text(300),
+  githubLink: linkField,
+  liveLink: linkField,
+  techStack: text(1000),
+  bullets,
 });
 
 export const skillCategorySchema = z.object({
-  label: z.string().min(1).max(100),
-  skills: z.string().max(500),
+  id: z.string().optional(),
+  label: text(200),
+  skills: text(2000),
 });
 
 export const achievementSchema = z.object({
-  text: z.string().min(1).max(500),
-  githubLink: z.string().url().or(z.literal("")).optional(),
+  text: text(2000),
+  githubLink: linkField.optional(),
 });
 
 export const certificateSchema = z.object({
-  name: z.string().min(1).max(200),
-  description: z.string().max(500),
-  link: z.string().url().or(z.literal("")),
+  name: text(300),
+  description: text(2000),
+  link: linkField,
 });
 
 export const sectionKeySchema = z.enum([
@@ -62,16 +80,35 @@ export const sectionKeySchema = z.enum([
 
 export const resumeDataSchema = z.object({
   contact: contactSchema,
-  summary: z.string().max(2000),
-  education: z.array(educationSchema).max(10),
-  experience: z.array(experienceSchema).max(20),
+  summary: text(10000),
+  education: z.array(educationSchema).max(50),
+  experience: z.array(experienceSchema).max(50),
   showExperience: z.boolean(),
-  projects: z.array(projectSchema).max(20),
-  skills: z.array(skillCategorySchema).max(15),
-  achievements: z.array(achievementSchema).max(20),
-  certificates: z.array(certificateSchema).max(20),
+  projects: z.array(projectSchema).max(50),
+  skills: z.array(skillCategorySchema).max(50),
+  achievements: z.array(achievementSchema).max(100),
+  certificates: z.array(certificateSchema).max(100),
   showCertificates: z.boolean(),
   sectionOrder: z.array(sectionKeySchema),
+  sectionLabels: z.record(z.string(), z.string()).optional(),
+  meta: z
+    .object({
+      template: z.string().optional(),
+      createdAt: z.number().optional(),
+      lastModified: z.number().optional(),
+      entryPath: z.string().optional(),
+    })
+    .optional(),
+  volunteer: z
+    .array(
+      z.object({
+        organization: text(300),
+        role: text(300),
+        dateRange: text(100),
+        bullets,
+      }),
+    )
+    .optional(),
 });
 
 export function validateResumeData(data: unknown) {
