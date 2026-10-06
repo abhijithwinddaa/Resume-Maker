@@ -109,7 +109,7 @@
 
 .template-card.selected {
   border-color: var(--accent-color, #2980b9);
-  background: rgba(41, 128, 185, 0.08);
+  background: var(--accent-light);
 }
 
 .template-card-detected {
@@ -238,8 +238,8 @@
   justify-content: center;
   gap: 8px;
   padding: 11px;
-  background: linear-gradient(135deg, #2563eb, #0d9488);
-  color: white;
+  background: linear-gradient(135deg, var(--accent-color), #0d9488);
+  color: var(--accent-contrast);
   border: none;
   border-radius: 8px;
   font-size: 13px;
@@ -252,7 +252,7 @@
 .btn-autofit:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
-  background: linear-gradient(135deg, #1d4ed8, #0f766e);
+  background: linear-gradient(135deg, var(--accent-hover), #0f766e);
 }
 
 .btn-autofit:active:not(:disabled) {

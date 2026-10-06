@@ -1,5 +1,5 @@
 import React from "react";
-import { ClerkFailed, SignedOut, SignedIn } from "../auth";
+import { ClerkFailed, SignedOut } from "../auth";
 import {
   FileText,
   Target,
@@ -131,11 +131,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             optimize your resume to match the job requirements.
           </p>
           <span className="landing-card-hint">
-            {!user && pendingMode === "ats"
-              ? "Selected"
-              : user
-                ? "Click to continue"
-                : "Choose this option"}
+            {!user && pendingMode === "ats" ? "Selected" : "Score my resume"}
           </span>
         </div>
 
@@ -164,11 +160,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             edit in our live preview editor.
           </p>
           <span className="landing-card-hint">
-            {!user && pendingMode === "edit"
-              ? "Selected"
-              : user
-                ? "Click to continue"
-                : "Choose this option"}
+            {!user && pendingMode === "edit" ? "Selected" : "Upload & edit"}
           </span>
         </div>
 
@@ -197,11 +189,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             templates and fill in your details.
           </p>
           <span className="landing-card-hint">
-            {!user && pendingMode === "create"
-              ? "Selected"
-              : user
-                ? "Click to continue"
-                : "Choose this option"}
+            {!user && pendingMode === "create" ? "Selected" : "Start from scratch"}
           </span>
         </div>
       </div>
@@ -231,13 +219,6 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
           </button>
         </div>
       </SignedOut>
-      <SignedIn>
-        <div className="landing-shared-action landing-shared-action-signed-in">
-          <p className="landing-selection-copy">
-            Choose any option above to continue.
-          </p>
-        </div>
-      </SignedIn>
 
       {/* Restore backup hint */}
       {hasBackup && privacySettings.saveLocalBackups && (

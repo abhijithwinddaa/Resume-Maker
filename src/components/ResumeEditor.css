@@ -7,10 +7,10 @@
 .editor-title {
   font-size: 18px;
   font-weight: 700;
-  color: #1a5276;
+  color: var(--accent-dark);
   margin: 0 0 16px 0;
   padding-bottom: 8px;
-  border-bottom: 2px solid #2980b9;
+  border-bottom: 2px solid var(--accent-color);
 }
 
 /* Section */
@@ -87,8 +87,8 @@
 .field-group input:focus,
 .editor-fields textarea:focus {
   outline: none;
-  border-color: #2980b9;
-  box-shadow: 0 0 0 2px rgba(41, 128, 185, 0.15);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .field-row {
@@ -115,7 +115,7 @@
 .card-number {
   font-size: 11px;
   font-weight: 600;
-  color: #2980b9;
+  color: var(--accent-color);
 }
 
 /* Buttons */
@@ -133,11 +133,11 @@
 }
 
 .btn-danger {
-  color: #ef4444;
+  color: var(--error-text);
 }
 
 .btn-danger:hover {
-  background: #fef2f2;
+  background: var(--error-bg);
 }
 
 .btn-add {
@@ -208,8 +208,8 @@
   gap: 2px;
   margin-bottom: 6px;
   padding: 4px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   width: fit-content;
 }
@@ -223,40 +223,40 @@
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #475569;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 
 .format-toolbar-btn:hover {
   background: #e2e8f0;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .format-toolbar-btn:active {
   background: #cbd5e1;
 }
 
-.dark .format-toolbar {
+[data-theme="dark"] .format-toolbar {
   background: #1e293b;
   border-color: #334155;
 }
 
-.dark .format-toolbar-btn {
-  color: #94a3b8;
+[data-theme="dark"] .format-toolbar-btn {
+  color: var(--text-muted);
 }
 
-.dark .format-toolbar-btn:hover {
+[data-theme="dark"] .format-toolbar-btn:hover {
   background: #334155;
   color: #e2e8f0;
 }
 
-.dark .format-toolbar-btn:active {
+[data-theme="dark"] .format-toolbar-btn:active {
   background: #475569;
 }
 
 .btn-enhance {
-  color: #2563eb;
+  color: var(--accent-color);
 }
 
 .btn-enhance:hover {
@@ -321,11 +321,11 @@
 }
 
 .toggle-cert-btn.on {
-  color: #16a34a;
+  color: var(--success-text);
 }
 
 .toggle-cert-btn.off {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .toggle-cert-btn:hover {
@@ -338,7 +338,7 @@
 
 .toggle-hint {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-style: italic;
   padding: 4px 0 8px 0;
 }
@@ -386,8 +386,8 @@
 
 .cert-fields input:focus {
   outline: none;
-  border-color: #2980b9;
-  box-shadow: 0 0 0 2px rgba(41, 128, 185, 0.15);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .cert-editor-row .btn-icon {
@@ -472,7 +472,7 @@
 }
 
 .grip-icon {
-  color: #94a3b8;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -483,8 +483,8 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #2980b9;
-  color: white;
+  background: var(--accent-color);
+  color: var(--accent-contrast);
   font-size: 11px;
   font-weight: 700;
   flex-shrink: 0;
@@ -589,18 +589,18 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  background: #fffbeb;
+  background: var(--warning-bg);
   border: 1px solid #fde68a;
   border-radius: 8px;
   padding: 10px 14px;
   margin-bottom: 16px;
-  color: #b45309;
+  color: var(--warning-text);
   font-size: 12.5px;
   line-height: 1.4;
 }
 
 .ats-layout-warning .warning-icon {
-  color: #d97706;
+  color: var(--warning-text);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -611,7 +611,7 @@
 }
 
 [data-theme="dark"] .editor-tab-btn {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 [data-theme="dark"] .editor-tab-btn:hover {
@@ -653,4 +653,21 @@
   margin: 4px 0 0;
   font-size: 12px;
   color: var(--warning-text, #d97706);
+}
+
+/* Desktop: wrap the section tabs so none is cut off ("Certificates" was).
+   Narrow screens keep one scrolling row, with a fade showing there's more. */
+@media (min-width: 901px) {
+  .editor-tabs-nav {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
+@media (max-width: 900px) {
+  .editor-tabs-nav {
+    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+    mask-image: linear-gradient(90deg, #000 85%, transparent);
+    padding-right: 24px;
+  }
 }

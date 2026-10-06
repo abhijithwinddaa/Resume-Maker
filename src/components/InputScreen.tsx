@@ -15,6 +15,7 @@ import { useAppStore } from "../store/appStore";
 import { useShallow } from "zustand/react/shallow";
 import { LIMITS } from "../utils/inputValidation";
 import { formatCooldown } from "../utils/rateLimiter";
+import { PdfDropZone } from "./PdfDropZone";
 
 interface InputScreenProps {
   pdfInputRef: React.RefObject<HTMLInputElement | null>;
@@ -25,7 +26,6 @@ interface InputScreenProps {
   handleAnalyze: () => void;
   handleAnalyzeExisting: () => void;
   handleParseResume: () => void;
-  handleBackToLanding: () => void;
   useStickyMobileActions: boolean;
   isAnalyzeCoolingDown: boolean;
   analyzeCooldownRemaining: number;
@@ -43,7 +43,6 @@ export const InputScreen: React.FC<InputScreenProps> = ({
   handleAnalyze,
   handleAnalyzeExisting,
   handleParseResume,
-  handleBackToLanding,
   useStickyMobileActions,
   isAnalyzeCoolingDown,
   analyzeCooldownRemaining,
@@ -166,7 +165,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                       </span>
                     )}
                     <label
-                      data-tour="upload-pdf"
+                      data-tour="upload-pdf-button"
                       className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
                       aria-disabled={isPdfLoading}
                     >
@@ -205,6 +204,13 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                   </div>
                 ) : (
                   <>
+                    {!resumeText.trim() && !uploadedFileName && (
+                      <PdfDropZone
+                        inputRef={pdfInputRef}
+                        disabled={isPdfLoading}
+                        onRejected={setError}
+                      />
+                    )}
                     <textarea
                       className="input-textarea"
                       placeholder="Paste your full resume text here or upload a PDF..."
@@ -310,9 +316,6 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                 Back to Editor
               </button>
             )}
-            <button className="btn-secondary" onClick={handleBackToLanding}>
-              Back
-            </button>
           </div>
         </div>
       )}
@@ -362,7 +365,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                     </span>
                   )}
                   <label
-                    data-tour="upload-pdf"
+                    data-tour="upload-pdf-button"
                       className={`upload-btn ${isPdfLoading ? "disabled" : ""}`}
                     aria-disabled={isPdfLoading}
                   >
@@ -398,6 +401,13 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                 </div>
               ) : (
                 <>
+                  {!resumeText.trim() && !uploadedFileName && (
+                      <PdfDropZone
+                        inputRef={pdfInputRef}
+                        disabled={isPdfLoading}
+                        onRejected={setError}
+                      />
+                    )}
                   <textarea
                     className="input-textarea"
                     placeholder="Paste your full resume text here or upload a PDF..."
@@ -437,9 +447,6 @@ export const InputScreen: React.FC<InputScreenProps> = ({
                 Back to Editor
               </button>
             )}
-            <button className="btn-secondary" onClick={handleBackToLanding}>
-              Back
-            </button>
             <button
               className="analyze-btn"
                 data-tour="primary-action"

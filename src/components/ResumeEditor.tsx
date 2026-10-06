@@ -901,7 +901,8 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
   return (
     <div className="resume-editor" role="form" aria-label="Resume editor form">
-      <h2 className="editor-title">Resume Editor</h2>
+      {/* Kept for screen readers; visually it repeated the page context. */}
+      <h2 className="sr-only">Resume Editor</h2>
 
       <CompletenessBar data={data} />
 
@@ -937,7 +938,6 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
               <div className="tab-section-header">
                 <h3>Contact Information</h3>
               </div>
-              <FormatToolbar />
               <div className="field-group">
                 <label htmlFor="contact-name">Full Name</label>
                 <input

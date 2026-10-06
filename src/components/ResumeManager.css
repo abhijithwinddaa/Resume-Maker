@@ -226,6 +226,6 @@
 }
 
 .rm-btn-danger:hover {
-  color: #ef4444;
+  color: var(--error-text);
   background: rgba(239, 68, 68, 0.1);
 }

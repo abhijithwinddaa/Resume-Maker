@@ -11,19 +11,21 @@
   },
   "header": {
     "startOver": "शुरू से करें",
-    "newJD": "नई JD",
+    "newJD": "जॉब से मिलाएं",
     "moreActions": "और क्रियाएं",
     "loadJSON": "JSON लोड करें",
     "saveJSON": "JSON सहेजें",
     "selfScore": "स्वयं स्कोर",
     "reAnalyze": "पुनः विश्लेषण",
     "coverLetter": "कवर लेटर",
-    "docx": "DOCX",
+    "docx": "Word (.docx) डाउनलोड करें",
     "exportPDF": "PDF निर्यात",
     "undo": "पूर्ववत",
     "redo": "पुनः करें",
     "templateStyle": "टेम्पलेट और शैली",
-    "aiSettings": "AI सेटिंग्स"
+    "aiSettings": "AI सेटिंग्स",
+    "more": "और",
+    "switchMode": "मोड बदलें"
   },
   "steps": {
     "input": "इनपुट",

@@ -42,13 +42,14 @@
     background 0.4s ease;
 }
 
+/* Only the missing sections, as compact chips that wrap. */
 .completeness-checklist {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .completeness-checklist li {
@@ -60,20 +61,24 @@
   color: var(--text-secondary);
 }
 
-.completeness-checklist li.done {
-  color: #22c55e;
+.completeness-checklist li.pending {
+  padding: 2px 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-secondary);
 }
 
-.completeness-checklist li.pending {
-  color: var(--text-muted);
+.completeness-done {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--success-text);
 }
 
 @media (max-width: 600px) {
-  .completeness-checklist {
-    grid-template-columns: 1fr;
-    gap: 3px;
-  }
-
   .completeness-bar {
     padding: 10px 12px;
   }

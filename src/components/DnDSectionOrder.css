@@ -87,7 +87,7 @@
 
 .dnd-delete-btn:hover {
   color: #e74c3c;
-  background: #fef2f2;
+  background: var(--error-bg);
 }
 
 /* Removed sections restore area */
@@ -130,5 +130,5 @@
 .dnd-restore-btn:hover {
   border-color: var(--accent-color, #2980b9);
   color: var(--accent-color, #2980b9);
-  background: #eff6ff;
+  background: var(--accent-light);
 }

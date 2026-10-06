@@ -60,7 +60,7 @@
 
 .style-badge-btn:hover {
   background: var(--accent-color);
-  color: #fff;
+  color: var(--accent-contrast);
   border-color: var(--accent-color);
 }
 

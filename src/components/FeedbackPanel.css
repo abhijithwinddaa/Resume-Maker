@@ -67,9 +67,9 @@
 }
 
 .feedback-tab.active {
-  border-color: #2563eb;
+  border-color: var(--accent-color);
   background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+  color: var(--accent-dark);
 }
 
 .feedback-section {
@@ -109,8 +109,8 @@
 .feedback-submit {
   border: none;
   border-radius: 8px;
-  background: #2563eb;
-  color: white;
+  background: var(--accent-color);
+  color: var(--accent-contrast);
   padding: 9px 12px;
   font-weight: 600;
   display: inline-flex;
@@ -121,7 +121,7 @@
 }
 
 .feedback-submit:hover {
-  background: #1d4ed8;
+  background: var(--accent-hover);
 }
 
 .feedback-stars {
@@ -273,7 +273,7 @@
   padding: 2px 8px;
   border-radius: 999px;
   background: #e2e8f0;
-  color: #334155;
+  color: var(--text-primary);
 }
 
 .feedback-status.pending {
@@ -347,7 +347,7 @@
 }
 
 .feedback-error {
-  color: #b91c1c;
+  color: var(--error-text);
 }
 
 .feedback-success {
@@ -371,7 +371,7 @@
 
 .feedback-reply-card strong {
   font-size: 12px;
-  color: #1d4ed8;
+  color: var(--accent-dark);
 }
 
 .feedback-reply-card p,

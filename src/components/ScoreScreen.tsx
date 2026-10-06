@@ -25,6 +25,8 @@ import { getKeywordPlacements, type KeywordSuggestion, type OptimizeProgress } f
 import { type ResumeFeedbackSignal } from "../utils/resumeFeedback";
 import { formatCooldown } from "../utils/rateLimiter";
 import ResumeTemplate from "./ResumeTemplate";
+import { OptimizeReview } from "./OptimizeReview";
+import type { ResumeChange } from "../utils/resumeDiff";
 import ErrorBoundary from "./ErrorBoundary";
 import { PreviewSkeleton } from "./Skeleton";
 
@@ -43,6 +45,15 @@ interface ScoreScreenProps {
   setShowMobileResumePreview: (show: boolean) => void;
   isExporting: boolean;
   handleBack?: () => void;
+  /** AI changes waiting for the user's keep/discard decision. */
+  reviewChanges?: ResumeChange[] | null;
+  onApplyReview?: (accepted: Set<string>) => void;
+  onDiscardReview?: () => void;
+  /** Some AI changes were kept, so the score above predates the resume. */
+  scoreIsStale?: boolean;
+  onRescore?: () => void;
+  /** One-line outcome of the last optimize run, e.g. nothing to change. */
+  optimizeNotice?: string | null;
 }
 
 function clampPercent(value: number): number {
@@ -301,6 +312,9 @@ const KeywordGapDrawer = memo(function KeywordGapDrawer({
 
 /* ─── Main ScoreScreen ──────────────────────────────── */
 
+/** Missing keywords shown before "Show more". */
+const VISIBLE_KEYWORD_LIMIT = 10;
+
 export const ScoreScreen: React.FC<ScoreScreenProps> = ({
   handleOptimize,
   handleSelfOptimize,
@@ -316,6 +330,12 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
   setShowMobileResumePreview,
   isExporting,
   handleBack,
+  reviewChanges,
+  onApplyReview,
+  onDiscardReview,
+  scoreIsStale,
+  onRescore,
+  optimizeNotice,
 }) => {
   const {
     step,
@@ -376,6 +396,13 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
       ...(atsResult.breakdown.skillsAlignment.missingSkills || []),
     ]);
   }, [atsResult]);
+
+  // A wall of 20+ chips reads as "add all of these"; show the strongest few.
+  const [showAllKeywords, setShowAllKeywords] = useState(false);
+  const visibleKeywords = showAllKeywords
+    ? missingKeywords
+    : missingKeywords.slice(0, VISIBLE_KEYWORD_LIMIT);
+  const hiddenKeywordCount = missingKeywords.length - visibleKeywords.length;
 
   const handleAnalyzeGaps = useCallback(async () => {
     if (!resumeData || missingKeywords.length === 0) return;
@@ -447,10 +474,21 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
               </small>
             )}
             <p>{atsResult.summaryVerdict}</p>
-            {optimizeDone && previousScore !== null && (
+            {optimizeDone && previousScore !== null && !scoreIsStale && (
               <div className="improvement-badge">
                 <Trophy size={16} />
                 Improved: {previousScore} &rarr; {atsResult.overallScore}
+              </div>
+            )}
+            {scoreIsStale && (
+              <div className="score-stale-note" role="status">
+                You kept some of the AI's changes, so this score is from before
+                them.
+                {onRescore && (
+                  <button type="button" onClick={onRescore}>
+                    Re-score
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -473,8 +511,8 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
           <div className="keyword-gap-header">
             <h4>
               {jdText.trim()
-                ? "Missing Keywords"
-                : "Suggested Keywords to Add"}
+                ? "Missing from the job description"
+                : "Common in your field"}
             </h4>
             {missingKeywords.length > 0 && !hasSuggestions && (
               <button
@@ -496,8 +534,13 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
               </button>
             )}
           </div>
+          {missingKeywords.length > 0 && (
+            <p className="keyword-honesty-note">
+              Only add the ones you've actually used.
+            </p>
+          )}
           <div className="keyword-tags" data-tour="missing-keywords">
-            {missingKeywords.map((k) => (
+            {visibleKeywords.map((k) => (
               <button
                 key={k}
                 className={`tag tag-missing tag-missing-interactive ${activeKeyword === k ? "tag-missing-active" : ""}`}
@@ -513,6 +556,17 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
                 )}
               </button>
             ))}
+            {(hiddenKeywordCount > 0 || showAllKeywords) &&
+              missingKeywords.length > VISIBLE_KEYWORD_LIMIT && (
+                <button
+                  type="button"
+                  className="tag keyword-show-more"
+                  onClick={() => setShowAllKeywords((v) => !v)}
+                  aria-expanded={showAllKeywords}
+                >
+                  {showAllKeywords ? "Show fewer" : `Show ${hiddenKeywordCount} more`}
+                </button>
+              )}
           </div>
           {missingKeywords.length > 0 && hasSuggestions && (
             <div className="keyword-gap-summary">
@@ -640,7 +694,21 @@ export const ScoreScreen: React.FC<ScoreScreenProps> = ({
           </div>
         )}
 
-        {!isOptimizing && (
+        {!isOptimizing && reviewChanges && reviewChanges.length > 0 && onApplyReview && onDiscardReview && (
+          <OptimizeReview
+            changes={reviewChanges}
+            onApply={onApplyReview}
+            onDiscard={onDiscardReview}
+          />
+        )}
+
+        {!isOptimizing && !reviewChanges && optimizeNotice && (
+          <p className="optimize-notice" role="status">
+            {optimizeNotice}
+          </p>
+        )}
+
+        {!isOptimizing && !reviewChanges && (
           <div
             className={`score-actions ${useStickyMobileActions ? "score-actions-sticky" : ""}`}
           >
