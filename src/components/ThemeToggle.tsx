@@ -8,9 +8,10 @@ const ThemeToggle: React.FC = () => {
   const theme = useAppStore((s) => s.theme);
   const setTheme = useAppStore((s) => s.setTheme);
 
+  // A plain light/dark switch. "system" is only kept for people who chose
+  // it before; their next click lands on an explicit choice.
   const cycleTheme = () => {
-    const next: ThemeMode =
-      theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+    const next: ThemeMode = theme === "dark" ? "light" : "dark";
     setTheme(next);
   };
 

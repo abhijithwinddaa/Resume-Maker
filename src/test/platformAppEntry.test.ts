@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  isFromLanding,
   parseModeParam,
   stripModeParam,
-  syncSignedInHint,
 } from "../utils/appEntry";
 
 describe("parseModeParam", () => {
@@ -31,15 +31,13 @@ describe("stripModeParam", () => {
   });
 });
 
-describe("syncSignedInHint", () => {
-  beforeEach(() => localStorage.clear());
-  it("sets 1 for a user id and clears when signed out", () => {
-    syncSignedInHint("user_1");
-    expect(localStorage.getItem("rm_signed_in")).toBe("1");
-    syncSignedInHint(null);
-    expect(localStorage.getItem("rm_signed_in")).toBeNull();
-    syncSignedInHint("user_1");
-    syncSignedInHint(undefined);
-    expect(localStorage.getItem("rm_signed_in")).toBeNull();
+describe("isFromLanding", () => {
+  it("recognises visits that came through a landing page button", () => {
+    expect(isFromLanding("?utm_source=whatsapp&from=landing&cta=hero")).toBe(true);
+  });
+  it("is false for direct visits and other sources", () => {
+    expect(isFromLanding("")).toBe(false);
+    expect(isFromLanding("?from=email")).toBe(false);
+    expect(isFromLanding("?utm_source=landing")).toBe(false);
   });
 });

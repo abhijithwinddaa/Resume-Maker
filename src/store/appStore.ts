@@ -181,7 +181,8 @@ function loadTheme(): ThemeMode {
   } catch {
     /* ignore */
   }
-  return "system";
+  // Light unless the user picked otherwise (dark is one click away).
+  return "light";
 }
 
 function loadTemplateId(): TemplateId {

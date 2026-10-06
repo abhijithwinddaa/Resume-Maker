@@ -3044,8 +3044,7 @@
   outline-offset: 2px;
 }
 
-/* The logo/title links back to the landing page (/?landing=1 skips the
-   signed-in redirect so it actually shows). */
+/* The logo/title links back to the landing page at "/". */
 .app-home-link {
   display: flex;
   align-items: center;
