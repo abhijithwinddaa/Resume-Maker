@@ -19,6 +19,8 @@ interface LandingScreenProps {
   isAuthStarting: boolean;
   handleSelectMode: (mode: AppMode) => void;
   startSignInFlow: (mode: AppMode) => void;
+  /** Opens the share card; the link is quiet and always available. */
+  onShare?: () => void;
 }
 
 const getModeTitle = (selectedMode: AppMode): string => {
@@ -40,6 +42,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   isAuthStarting,
   handleSelectMode,
   startSignInFlow,
+  onShare,
 }) => {
   const {
     hasBackup,
@@ -219,6 +222,15 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
           </button>
         </div>
       </SignedOut>
+
+      {onShare && (
+        <p className="landing-share">
+          Know someone who's job hunting?{" "}
+          <button type="button" className="landing-share-btn" onClick={onShare}>
+            Share Resume Maker
+          </button>
+        </p>
+      )}
 
       {/* Restore backup hint */}
       {hasBackup && privacySettings.saveLocalBackups && (

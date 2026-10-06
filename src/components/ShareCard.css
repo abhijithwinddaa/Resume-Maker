@@ -1,0 +1,157 @@
+/* ─── Share card ─────────────────────────────────────────
+   Bottom-right card on desktop, bottom sheet on phones. Calm by design:
+   it should read as an offer, not an interruption. */
+
+.share-card {
+  position: fixed;
+  right: 20px;
+  bottom: calc(20px + var(--vk-offset, 0px));
+  z-index: 1300;
+  width: min(340px, calc(100vw - 24px));
+  padding: 18px 18px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
+  font-family: "Inter", sans-serif;
+  animation: share-card-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes share-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.share-card-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  padding: 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.share-card-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.share-card-title {
+  margin: 0 28px 6px 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.share-card-body {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.share-native {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  margin-bottom: 10px;
+  border: 1px solid var(--accent-color);
+  border-radius: 10px;
+  background: var(--accent-color);
+  color: var(--accent-contrast);
+  font: 600 14px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.share-native:hover {
+  background: var(--accent-hover);
+}
+
+.share-targets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.share-target {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.share-target:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+}
+
+.share-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: 600 13px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.share-copy:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.share-native:focus-visible,
+.share-target:focus-visible,
+.share-copy:focus-visible,
+.share-card-close:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .share-card {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px) + var(--vk-offset, 0px));
+  }
+
+  .share-targets {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-card {
+    animation: none;
+  }
+}

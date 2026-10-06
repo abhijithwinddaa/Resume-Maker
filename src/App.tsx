@@ -95,6 +95,7 @@ import {
   ArrowLeft,
   HelpCircle,
   MoreHorizontal,
+  Share2,
 } from "lucide-react";
 import { useDebounce } from "./hooks/useDebounce";
 import { useExport } from "./hooks/useExport";
@@ -108,6 +109,8 @@ import { ScoreScreen } from "./components/ScoreScreen";
 import { EditorScreen } from "./components/EditorScreen";
 import { ExportControls } from "./components/ExportControls";
 import { LiveScoreBadge } from "./components/LiveScoreBadge";
+import type { SharePlacement } from "./components/ShareCard";
+import { shouldAutoPromptShare } from "./utils/sharePrompt";
 import {
   applyResumeChanges,
   diffResumes,
@@ -123,6 +126,7 @@ const CoverLetterPanel = lazy(() => import("./components/CoverLetter"));
 const ResumeManagerPanel = lazy(() => import("./components/ResumeManager"));
 const PdfPreviewPanel = lazy(() => import("./components/PdfPreview"));
 const GuidedTour = lazy(() => import("./components/tour/GuidedTour"));
+const ShareCard = lazy(() => import("./components/ShareCard"));
 
 const CLERK_SUPABASE_TEMPLATE =
   import.meta.env.VITE_CLERK_SUPABASE_TEMPLATE || "supabase";
@@ -204,6 +208,12 @@ function App() {
   const [showCoverLetter, setShowCoverLetter] = useState(false);
   const [showResumeManager, setShowResumeManager] = useState(false);
   const [activeTour, setActiveTour] = useState<TourId | null>(null);
+  const [shareCard, setShareCard] = useState<{
+    placement: SharePlacement;
+    improvement?: { from: number; to: number };
+  } | null>(null);
+  // Set after the export hook exists (it needs showFeedbackPanel).
+  const handleExportFinishedRef = useRef<() => void>(() => {});
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [settingsMenuPosition, setSettingsMenuPosition] = useState({
     top: 0,
@@ -256,7 +266,9 @@ function App() {
     setFeedbackInitialTab,
     handleFeedbackCompleted,
     hasExported,
-  } = useExport(resumeRef);
+  } = useExport(resumeRef, {
+    onExportFinished: () => handleExportFinishedRef.current(),
+  });
   const abortRef = useRef<AbortController | null>(null);
   const authStartTimeoutRef = useRef<number | null>(null);
   const activeResumeIdRef = useRef<string | null>(activeResumeId);
@@ -856,6 +868,13 @@ function App() {
     }
     setPendingReview(null);
     setPreviousScore(null);
+  };
+
+  /* ── Share prompt: offered once a download has finished ── */
+  handleExportFinishedRef.current = () => {
+    // One prompt at a time, and only when the rules allow asking again.
+    if (showFeedbackPanel || activeTour || !shouldAutoPromptShare(Date.now())) return;
+    setShareCard({ placement: "after-export" });
   };
 
   /* ── First-run guide: one tour per screen ───────────── */
@@ -2134,6 +2153,17 @@ function App() {
 
                   <div className="settings-menu-group">
                     <button
+                      className="settings-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsSettingsMenuOpen(false);
+                        setShareCard({ placement: "menu" });
+                      }}
+                    >
+                      <Share2 size={14} />
+                      <span>Share Resume Maker</span>
+                    </button>
+                    <button
                       className="settings-menu-item settings-menu-item-danger"
                       role="menuitem"
                       onClick={() => {
@@ -2334,6 +2364,7 @@ function App() {
             isAuthStarting={isAuthStarting}
             handleSelectMode={handleSelectMode}
             startSignInFlow={startSignInFlow}
+            onShare={() => setShareCard({ placement: "landing" })}
           />
         )}
 
@@ -2426,6 +2457,9 @@ function App() {
             scoreIsStale={scoreIsStale}
             onRescore={handleReAnalyze}
             optimizeNotice={optimizeNotice}
+            onShareImprovement={(from, to) =>
+              setShareCard({ placement: "after-improvement", improvement: { from, to } })
+            }
           />
         )}
 
@@ -2469,7 +2503,7 @@ function App() {
       )}
 
       <SignedIn>
-        {hasExported && !showFeedbackPanel && step !== "analyzing" && (
+        {hasExported && !showFeedbackPanel && !shareCard && step !== "analyzing" && (
           <button
             className="floating-feedback-cta"
             onClick={() => {
@@ -2517,6 +2551,16 @@ function App() {
         feedbackInitialTab={feedbackInitialTab}
         handleFeedbackCompleted={handleFeedbackCompleted}
       />
+
+      {shareCard && (
+        <Suspense fallback={null}>
+          <ShareCard
+            placement={shareCard.placement}
+            improvement={shareCard.improvement}
+            onClose={() => setShareCard(null)}
+          />
+        </Suspense>
+      )}
 
       {activeTour && (
         <Suspense fallback={null}>
