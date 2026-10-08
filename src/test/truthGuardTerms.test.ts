@@ -310,3 +310,31 @@ describe("invented bullet guard", () => {
     expect(result.experience[0].bullets[1]).toBe("Resolved layout bugs in the site header");
   });
 });
+
+describe("job keywords the resume can't back", () => {
+  const withProjectBullet = (bullet: string) => {
+    const r = resume();
+    r.experience[0] = { ...r.experience[0], bullets: [bullet, "Fixed layout bugs in the header"] };
+    return r;
+  };
+
+  it("reverts a bullet that slips in a job keyword the resume never mentions", () => {
+    const rewritten = withProjectBullet("Contributed to testing of the cart with a responsive UI");
+    const result = revertInventedMetrics(rewritten, resume(), ["responsive UI", "Docker"]);
+    expect(result.experience[0].bullets[0]).toBe("Helped with testing of the cart");
+  });
+
+  it("allows a job keyword the resume already supports", () => {
+    const original = resume();
+    original.experience[0].bullets = ["Helped with testing of the cart", "Fixed layout bugs in the header"];
+    const rewritten = withProjectBullet("Contributed to testing of the cart and fixed layout bugs");
+    const result = revertInventedMetrics(rewritten, original, ["layout bugs"]);
+    expect(result.experience[0].bullets[0]).toBe("Contributed to testing of the cart and fixed layout bugs");
+  });
+
+  it("matches whole words only", () => {
+    const rewritten = withProjectBullet("Contributed to testing of the cart");
+    const result = revertInventedMetrics(rewritten, resume(), ["art"]);
+    expect(result.experience[0].bullets[0]).toBe("Contributed to testing of the cart");
+  });
+});

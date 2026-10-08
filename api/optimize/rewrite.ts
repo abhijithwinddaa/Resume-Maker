@@ -166,6 +166,11 @@ async function handleRequestUnsafe(request: Request): Promise<Response> {
           rawResponse,
           resumeData,
           mode === "jd" ? "resume optimization" : "self resume optimization",
+          // Keywords the job wants; the guard reverts any the resume can't back.
+          [
+            ...(atsResult?.breakdown?.keywordMatch?.missingKeywords ?? []),
+            ...(atsResult?.breakdown?.skillsAlignment?.missingSkills ?? []),
+          ],
         );
 
         if (cacheAllowed) {

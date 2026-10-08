@@ -50,6 +50,9 @@ describe("AI bullet results arriving late", () => {
     fireEvent.change(screen.getByDisplayValue("Developer"), { target: { value: "Senior Developer" } });
 
     await act(async () => pending.resolve({ optimizedText: "Rebuilt the checkout page, cutting load time" }));
+    // The rewrite waits for review; it only lands on "Use this".
+    expect(bullets()[0]).toBe(A);
+    fireEvent.click(await screen.findByRole("button", { name: "Use this" }));
 
     const exp = (useAppStore.getState().resumeData as ResumeData).experience[0];
     expect(exp.role).toBe("Senior Developer");
@@ -86,8 +89,28 @@ describe("AI bullet results arriving late", () => {
       useAppStore.getState().setResumeData({ ...latest, experience: [exp] });
     });
     await act(async () => pending.resolve({ optimizedText: "Resolved 200 support tickets a week" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use this" }));
 
     expect(bullets()).toEqual(["Resolved 200 support tickets a week"]);
+  });
+
+  it("leaves the bullet alone when the user keeps their own text", async () => {
+    postMock.mockResolvedValue({ optimizedText: "Rebuilt the checkout page in React" });
+    render(<Harness />);
+
+    fireEvent.click(screen.getAllByTitle("Enhance bullet point with AI")[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Keep mine" }));
+
+    expect(bullets()).toEqual([A, B]);
+    expect(screen.queryByText("AI suggestion:")).not.toBeInTheDocument();
+  });
+
+  it("flags vague claims in the suggestion before it is used", async () => {
+    postMock.mockResolvedValue({ optimizedText: "Rebuilt the checkout page for the store, improving overall stability" });
+    render(<Harness />);
+
+    fireEvent.click(screen.getAllByTitle("Enhance bullet point with AI")[0]);
+    expect(await screen.findByText(/improving overall stability/, { selector: ".review-claim-note *, .review-claim-note" })).toBeInTheDocument();
   });
 
   it("shows request errors inline instead of an alert", async () => {
