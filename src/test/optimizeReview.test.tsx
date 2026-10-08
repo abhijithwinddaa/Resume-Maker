@@ -88,4 +88,22 @@ describe("OptimizeReview", () => {
     fireEvent.click(within(item).getByRole("button", { name: /discard/i }));
     expect(keep).toHaveAttribute("aria-pressed", "false");
   });
+
+  it("warns about a new claim and stays quiet on a plain rewrite", () => {
+    render(
+      <OptimizeReview
+        changes={[
+          { id: "a", section: "experience", location: "A", kind: "modified", before: "Added reminders", after: "Added reminders to improve user engagement" },
+          { id: "b", section: "experience", location: "B", kind: "modified", before: "Worked on checkout", after: "Built the checkout flow" },
+        ]}
+        onApply={vi.fn()}
+        onDiscard={vi.fn()}
+      />,
+    );
+    const items = screen.getAllByRole("listitem");
+    expect(within(items[0]).getByRole("note")).toHaveTextContent(
+      "New claim: “to improve user engagement”. Keep it only if it's true.",
+    );
+    expect(within(items[1]).queryByRole("note")).toBeNull();
+  });
 });

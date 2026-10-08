@@ -1,7 +1,7 @@
 import type { ATSResult } from "../server/aiParsing.js";
 import type { ResumeFeedbackSignal } from "./resumeFeedback.js";
 
-export const OPTIMIZE_PROMPT_VERSION = "v4-honesty-audit";
+export const OPTIMIZE_PROMPT_VERSION = "v5-no-padded-outcomes";
 
 const WEAK_OPENINGS = [
   "worked on",
@@ -58,7 +58,7 @@ export function buildQualitySignalsBlock(atsReport: ATSResult): string {
 
 export function buildOptimizationWritingContract(): string {
   return [
-    "1. Rewrite bullets in this order when evidence exists: strong action verb -> what changed -> tool/context -> outcome. Include an outcome or measurable result only if the original states one.",
+    "1. Rewrite bullets in this order when evidence exists: strong action verb -> what changed -> tool/context -> outcome. Include an outcome or measurable result only if the original states one. Never pad a bullet with an unstated benefit clause such as \"improving stability\", \"enhancing consistency\", \"enabling personalized experiences\" or \"delivering core functionality\"; end the bullet at what was done and how.",
     "2. Prefer natural keyword placement inside summary, bullets, and tech stack before dumping terms into skills.",
     `3. Never open bullets with weak phrases like: ${WEAK_OPENINGS.join(", ")}.`,
     `4. Avoid filler phrases like: ${FILLER_PHRASES.join(", ")} unless the resume proves them with evidence.`,

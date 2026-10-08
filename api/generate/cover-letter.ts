@@ -22,13 +22,15 @@ import {
   sendNodeResponse,
   toWebRequest,
 } from "../../src/server/httpAdapter.js";
-import type {
-  GenerateCoverLetterRequest,
-  GenerateCoverLetterResponse,
-} from "../../src/types/serverAI.js";
+import type { GenerateCoverLetterResponse } from "../../src/types/serverAI.js";
 
 export const COVER_LETTER_NUMBER_WARNING =
   "Check the numbers in this letter — they may not be from your resume.";
+
+import {
+  readJsonObject,
+  safeErrorResponse,
+} from "../../src/server/requestValidation.js";
 
 const MAX_REQUEST_BYTES = 768_000;
 const MAX_RESUME_TEXT_LENGTH = 80_000;
@@ -45,9 +47,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function validateRequest(
-  body: Partial<GenerateCoverLetterRequest>,
-): string | null {
+function validateRequest(body: Record<string, unknown>): string | null {
   if (typeof body.resumeText !== "string" || !body.resumeText.trim()) {
     return "resumeText is required.";
   }
@@ -59,7 +59,7 @@ function validateRequest(
     return "jobDescription is required.";
   }
   if (body.jobDescription.length > MAX_JD_LENGTH) {
-    return `jobDescription exceeds ${MAX_JD_LENGTH} characters.`;
+    return `Job description is too long — please paste up to ${MAX_JD_LENGTH.toLocaleString("en-US")} characters.`;
   }
 
   if (typeof body.companyName !== "string" || !body.companyName.trim()) {
@@ -139,7 +139,7 @@ INSTRUCTIONS:
 Return ONLY the cover letter text, no JSON, no markdown formatting.`;
 }
 
-async function handleRequest(request: Request): Promise<Response> {
+async function handleRequestUnsafe(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
@@ -156,28 +156,25 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
-  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  const rateLimit = await checkAIRateLimit(authResult.user.userId);
   if (!rateLimit.allowed) {
     return rateLimitedResponse(rateLimit.retryAfterSeconds);
   }
 
-  let body: GenerateCoverLetterRequest;
-  try {
-    body = (await request.json()) as GenerateCoverLetterRequest;
-  } catch {
-    return jsonResponse({ error: "Invalid JSON request body." }, 400);
-  }
+  const parsedBody = await readJsonObject(request, MAX_REQUEST_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
   const validationError = validateRequest(body);
   if (validationError) {
     return jsonResponse({ error: validationError }, 400);
   }
 
-  const resumeText = body.resumeText.trim();
-  const jobDescription = body.jobDescription.trim();
-  const companyName = body.companyName.trim();
-  const position = body.position.trim();
-  const cacheAllowed = body.cacheAllowed;
+  const resumeText = (body.resumeText as string).trim();
+  const jobDescription = (body.jobDescription as string).trim();
+  const companyName = (body.companyName as string).trim();
+  const position = (body.position as string).trim();
+  const cacheAllowed = body.cacheAllowed === true;
   const operation = "cover-letter-generate";
   const cacheKey = buildCoverLetterCacheKey(
     resumeText,
@@ -255,14 +252,22 @@ async function handleRequest(request: Request): Promise<Response> {
 
     return jsonResponse(response);
   } catch (error) {
-    return jsonResponse(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Cover letter generation failed on the server.",
-      },
-      500,
+    return safeErrorResponse(
+      error,
+      "Couldn't generate the cover letter right now. Please try again.",
+      "cover-letter",
+    );
+  }
+}
+
+async function handleRequest(request: Request): Promise<Response> {
+  try {
+    return await handleRequestUnsafe(request);
+  } catch (error) {
+    return safeErrorResponse(
+      error,
+      "Couldn't generate the cover letter right now. Please try again.",
+      "cover-letter",
     );
   }
 }

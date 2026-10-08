@@ -23,6 +23,17 @@ import {
   toWebRequest,
 } from "../../src/server/httpAdapter.js";
 
+import {
+  readJsonObject,
+  safeErrorResponse,
+  optionalString,
+  stringArray,
+  readResumeData,
+  MAX_JOB_DESCRIPTION_CHARS,
+  MAX_KEYWORD_ITEMS,
+  MAX_KEYWORD_CHARS,
+} from "../../src/server/requestValidation.js";
+
 const MAX_REQUEST_BYTES = 256_000;
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -152,7 +163,7 @@ export function validateKeywordSuggestions(
   return result;
 }
 
-async function handleRequest(request: Request): Promise<Response> {
+async function handleRequestUnsafe(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
@@ -166,31 +177,46 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
-  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  const rateLimit = await checkAIRateLimit(authResult.user.userId);
   if (!rateLimit.allowed) {
     return rateLimitedResponse(rateLimit.retryAfterSeconds);
   }
 
-  let body: { resumeData?: unknown; missingKeywords?: string[]; jobDescription?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return jsonResponse({ error: "Invalid JSON request body." }, 400);
-  }
+  const parsedBody = await readJsonObject(request, MAX_REQUEST_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
-  if (!body.resumeData || !body.missingKeywords || body.missingKeywords.length === 0) {
+  if (!body.resumeData || !Array.isArray(body.missingKeywords)) {
     return jsonResponse(
       { error: "resumeData and missingKeywords are required." },
       400,
     );
   }
-
-  const resumeData = body.resumeData;
-  const missingKeywords = body.missingKeywords;
-  const jobDescription = body.jobDescription?.trim();
+  const resumeData = readResumeData<ResumeData>(body);
+  const missingKeywords = stringArray(
+    body,
+    "missingKeywords",
+    MAX_KEYWORD_ITEMS,
+    MAX_KEYWORD_CHARS,
+  );
+  if (missingKeywords.length === 0) {
+    return jsonResponse(
+      { error: "resumeData and missingKeywords are required." },
+      400,
+    );
+  }
+  const jobDescription = optionalString(
+    body,
+    "jobDescription",
+    MAX_JOB_DESCRIPTION_CHARS,
+    {
+      label: "jobDescription",
+      tooLongMessage: `Job description is too long — please paste up to ${MAX_JOB_DESCRIPTION_CHARS.toLocaleString("en-US")} characters.`,
+    },
+  );
 
   try {
-    let userContent = `Resume Data (JSON):\n${JSON.stringify(redactContactForAI(resumeData as ResumeData), null, 2)}\n\nMissing Keywords to Place:\n${missingKeywords.map((k) => `  - ${k}`).join("\n")}`;
+    let userContent = `Resume Data (JSON):\n${JSON.stringify(redactContactForAI(resumeData), null, 2)}\n\nMissing Keywords to Place:\n${missingKeywords.map((k) => `  - ${k}`).join("\n")}`;
 
     if (jobDescription) {
       userContent += `\n\nTarget Job Description:\n${jobDescription}`;
@@ -215,18 +241,26 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({
       suggestions: validateKeywordSuggestions(
         parsed.suggestions,
-        resumeData as ResumeData,
+        resumeData,
       ),
     });
   } catch (error) {
-    return jsonResponse(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Keyword placement analysis failed.",
-      },
-      500,
+    return safeErrorResponse(
+      error,
+      "Couldn't suggest keyword placements right now. Please try again.",
+      "keyword-placement",
+    );
+  }
+}
+
+async function handleRequest(request: Request): Promise<Response> {
+  try {
+    return await handleRequestUnsafe(request);
+  } catch (error) {
+    return safeErrorResponse(
+      error,
+      "Couldn't suggest keyword placements right now. Please try again.",
+      "keyword-placement",
     );
   }
 }

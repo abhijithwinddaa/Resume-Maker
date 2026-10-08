@@ -20,10 +20,7 @@ import {
   normalizeExtractedResumeText,
   normalizeResumeDataSpacing,
 } from "../../src/utils/resumeTextCleanup.js";
-import type {
-  ParseResumeRequest,
-  ParseResumeResponse,
-} from "../../src/types/serverAI.js";
+import type { ParseResumeResponse } from "../../src/types/serverAI.js";
 import { isRequestTooLarge } from "../../src/server/requestUtils.js";
 import {
   isNodeResponse,
@@ -31,9 +28,16 @@ import {
   toWebRequest,
 } from "../../src/server/httpAdapter.js";
 
+import {
+  RequestValidationError,
+  readJsonObject,
+  safeErrorResponse,
+  MAX_RESUME_TEXT_CHARS,
+} from "../../src/server/requestValidation.js";
+
 const MAX_REQUEST_BYTES = 512_000;
 const MIN_RESUME_TEXT_LENGTH = 100;
-const MAX_RESUME_TEXT_LENGTH = 50_000;
+const MAX_RESUME_TEXT_LENGTH = MAX_RESUME_TEXT_CHARS;
 const MAX_LINK_COUNT = 200;
 const MAX_LINK_LENGTH = 2_048;
 
@@ -46,7 +50,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function validateRequest(body: Partial<ParseResumeRequest>): string | null {
+function validateRequest(body: Record<string, unknown>): string | null {
   if (typeof body.resumeText !== "string") {
     return "resumeText is required.";
   }
@@ -143,15 +147,16 @@ export function normalizeParsedResume(resumeData: ResumeData): ResumeData {
   }
 
   if (!hasResumeContent(resumeData)) {
-    throw new Error(
+    throw new RequestValidationError(
       "Could not find any resume content in that text. Check that it's your resume and try again.",
+      500,
     );
   }
 
   return normalizeResumeDataSpacing(resumeData).normalized;
 }
 
-async function handleRequest(request: Request): Promise<Response> {
+async function handleRequestUnsafe(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
@@ -168,26 +173,25 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
-  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  const rateLimit = await checkAIRateLimit(authResult.user.userId);
   if (!rateLimit.allowed) {
     return rateLimitedResponse(rateLimit.retryAfterSeconds);
   }
 
-  let body: ParseResumeRequest;
-  try {
-    body = (await request.json()) as ParseResumeRequest;
-  } catch {
-    return jsonResponse({ error: "Invalid JSON request body." }, 400);
-  }
+  const parsedBody = await readJsonObject(request, MAX_REQUEST_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
   const validationError = validateRequest(body);
   if (validationError) {
     return jsonResponse({ error: validationError }, 400);
   }
 
-  const resumeText = normalizeExtractedResumeText(body.resumeText.trim());
-  const extractedLinks = body.extractedLinks || [];
-  const cacheAllowed = body.cacheAllowed;
+  const resumeText = normalizeExtractedResumeText(
+    (body.resumeText as string).trim(),
+  );
+  const extractedLinks = (body.extractedLinks as string[] | undefined) || [];
+  const cacheAllowed = body.cacheAllowed === true;
   const operation = "resume-parse";
   const cacheKey = buildParseCacheKey(resumeText, extractedLinks);
 
@@ -239,14 +243,22 @@ async function handleRequest(request: Request): Promise<Response> {
 
     return jsonResponse(response);
   } catch (error) {
-    return jsonResponse(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Resume parse failed on the server.",
-      },
-      500,
+    return safeErrorResponse(
+      error,
+      "Couldn't read that resume right now. Please try again.",
+      "parse-resume",
+    );
+  }
+}
+
+async function handleRequest(request: Request): Promise<Response> {
+  try {
+    return await handleRequestUnsafe(request);
+  } catch (error) {
+    return safeErrorResponse(
+      error,
+      "Couldn't read that resume right now. Please try again.",
+      "parse-resume",
     );
   }
 }

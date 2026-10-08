@@ -272,3 +272,14 @@
 .optimize-review-notice + .optimize-review-actions {
   border-top: none;
 }
+
+/* New-claim warning under the After text (text + icon, never color-only) */
+.review-claim-note {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 12px;
+  line-height: 1.5;
+}

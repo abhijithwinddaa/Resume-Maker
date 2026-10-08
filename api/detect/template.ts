@@ -21,19 +21,22 @@ import {
   DEFAULT_CUSTOMIZATION,
   FONT_OPTIONS,
 } from "../../src/types/templates.js";
-import type {
-  DetectTemplateRequest,
-  DetectTemplateResponse,
-} from "../../src/types/serverAI.js";
+import type { DetectTemplateResponse } from "../../src/types/serverAI.js";
 import type {
   TemplateCustomization,
   TemplateId,
 } from "../../src/types/templates.js";
 import type { DetectedStyle } from "../../src/utils/templateDetector.js";
 
+import {
+  readJsonObject,
+  safeErrorResponse,
+  MAX_RESUME_TEXT_CHARS,
+} from "../../src/server/requestValidation.js";
+
 const MAX_REQUEST_BYTES = 256_000;
 const MIN_RESUME_TEXT_LENGTH = 100;
-const MAX_RESUME_TEXT_LENGTH = 50_000;
+const MAX_RESUME_TEXT_LENGTH = MAX_RESUME_TEXT_CHARS;
 
 interface DetectorRawResponse {
   templateId?: string;
@@ -69,7 +72,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function validateRequest(body: Partial<DetectTemplateRequest>): string | null {
+function validateRequest(body: Record<string, unknown>): string | null {
   if (typeof body.resumeText !== "string") {
     return "resumeText is required.";
   }
@@ -186,7 +189,7 @@ function getFallbackStyle(): DetectedStyle {
   };
 }
 
-async function handleRequest(request: Request): Promise<Response> {
+async function handleRequestUnsafe(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
@@ -203,25 +206,22 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
-  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  const rateLimit = await checkAIRateLimit(authResult.user.userId);
   if (!rateLimit.allowed) {
     return rateLimitedResponse(rateLimit.retryAfterSeconds);
   }
 
-  let body: DetectTemplateRequest;
-  try {
-    body = (await request.json()) as DetectTemplateRequest;
-  } catch {
-    return jsonResponse({ error: "Invalid JSON request body." }, 400);
-  }
+  const parsedBody = await readJsonObject(request, MAX_REQUEST_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
   const validationError = validateRequest(body);
   if (validationError) {
     return jsonResponse({ error: validationError }, 400);
   }
 
-  const resumeText = body.resumeText.trim();
-  const cacheAllowed = body.cacheAllowed;
+  const resumeText = (body.resumeText as string).trim();
+  const cacheAllowed = body.cacheAllowed === true;
   const operation = "template-detect";
   const cacheKey = buildTemplateDetectCacheKey(resumeText);
 
@@ -278,6 +278,18 @@ async function handleRequest(request: Request): Promise<Response> {
       cached: false,
     };
     return jsonResponse(response);
+  }
+}
+
+async function handleRequest(request: Request): Promise<Response> {
+  try {
+    return await handleRequestUnsafe(request);
+  } catch (error) {
+    return safeErrorResponse(
+      error,
+      "Couldn't detect the template right now. Please try again.",
+      "detect-template",
+    );
   }
 }
 

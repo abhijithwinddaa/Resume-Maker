@@ -92,3 +92,26 @@ describe("AI notice", () => {
     expect(await screen.findByText(/AI can make mistakes/)).toBeInTheDocument();
   });
 });
+
+describe("Add a result claim note", () => {
+  it("doesn't flag the clause that carries the user's own number", async () => {
+    postMock.mockResolvedValue({ optimizedText: "Rebuilt the checkout page in React, reducing page load time by ~40%." });
+    render(<BulletCoach text={WEAK} roleFamily="engineering" onApply={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /add a result/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Made it faster" }));
+    fireEvent.change(screen.getByLabelText("How much faster?"), { target: { value: "~40%" } });
+    fireEvent.click(screen.getByRole("button", { name: /rewrite my bullet/i }));
+    await screen.findByText(/reducing page load time by ~40%/, { selector: ".quantify-preview" });
+    expect(screen.queryByText(/New claim/)).not.toBeInTheDocument();
+  });
+
+  it("still flags an extra benefit the user never mentioned", async () => {
+    postMock.mockResolvedValue({ optimizedText: "Rebuilt the checkout page in React, reducing load time by ~40%, improving customer satisfaction." });
+    render(<BulletCoach text={WEAK} roleFamily="engineering" onApply={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /add a result/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Made it faster" }));
+    fireEvent.change(screen.getByLabelText("How much faster?"), { target: { value: "~40%" } });
+    fireEvent.click(screen.getByRole("button", { name: /rewrite my bullet/i }));
+    expect(await screen.findByText(/improving customer satisfaction/, { selector: ".review-claim-note *, .review-claim-note" })).toBeInTheDocument();
+  });
+});

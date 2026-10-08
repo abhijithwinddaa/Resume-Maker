@@ -23,10 +23,16 @@ import {
   sendNodeResponse,
   toWebRequest,
 } from "../../src/server/httpAdapter.js";
-import type {
-  AnalyzeATSRequest,
-  AnalyzeATSResponse,
-} from "../../src/types/serverAI.js";
+import type { AnalyzeATSResponse } from "../../src/types/serverAI.js";
+import type { ResumeData } from "../../src/types/resume.js";
+
+import {
+  readJsonObject,
+  safeErrorResponse,
+  optionalString,
+  readResumeData,
+  MAX_JOB_DESCRIPTION_CHARS,
+} from "../../src/server/requestValidation.js";
 
 const MAX_REQUEST_BYTES = 512_000;
 
@@ -39,20 +45,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function validateRequest(body: Partial<AnalyzeATSRequest>): string | null {
-  if (!body.resumeData || typeof body.resumeData !== "object") {
-    return "resumeData is required.";
-  }
-  if (body.mode !== "jd" && body.mode !== "self") {
-    return 'mode must be "jd" or "self".';
-  }
-  if (body.mode === "jd" && !body.jobDescription?.trim()) {
-    return "jobDescription is required for JD mode.";
-  }
-  return null;
-}
-
-async function handleRequest(request: Request): Promise<Response> {
+async function handleRequestUnsafe(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
@@ -69,24 +62,36 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
-  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  const rateLimit = await checkAIRateLimit(authResult.user.userId);
   if (!rateLimit.allowed) {
     return rateLimitedResponse(rateLimit.retryAfterSeconds);
   }
 
-  let body: AnalyzeATSRequest;
-  try {
-    body = (await request.json()) as AnalyzeATSRequest;
-  } catch {
-    return jsonResponse({ error: "Invalid JSON request body." }, 400);
-  }
+  const parsedBody = await readJsonObject(request, MAX_REQUEST_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
-  const validationError = validateRequest(body);
-  if (validationError) {
-    return jsonResponse({ error: validationError }, 400);
+  const resumeData = readResumeData<ResumeData>(body);
+  const mode = body.mode;
+  if (mode !== "jd" && mode !== "self") {
+    return jsonResponse({ error: 'mode must be "jd" or "self".' }, 400);
   }
-
-  const { resumeData, jobDescription, mode, cacheAllowed } = body;
+  const jobDescription = optionalString(
+    body,
+    "jobDescription",
+    MAX_JOB_DESCRIPTION_CHARS,
+    {
+      label: "jobDescription",
+      tooLongMessage: `Job description is too long — please paste up to ${MAX_JOB_DESCRIPTION_CHARS.toLocaleString("en-US")} characters.`,
+    },
+  );
+  if (mode === "jd" && !jobDescription) {
+    return jsonResponse(
+      { error: "jobDescription is required for JD mode." },
+      400,
+    );
+  }
+  const cacheAllowed = body.cacheAllowed === true;
   const cacheKey = buildAnalyzeCacheKey(mode, resumeData, jobDescription);
   const operation = mode === "jd" ? "ats-analyze" : "self-ats-analyze";
 
@@ -142,14 +147,22 @@ async function handleRequest(request: Request): Promise<Response> {
 
     return jsonResponse(response);
   } catch (error) {
-    return jsonResponse(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "ATS analysis failed on the server.",
-      },
-      500,
+    return safeErrorResponse(
+      error,
+      "Couldn't analyze the resume right now. Please try again.",
+      "ats-analyze",
+    );
+  }
+}
+
+async function handleRequest(request: Request): Promise<Response> {
+  try {
+    return await handleRequestUnsafe(request);
+  } catch (error) {
+    return safeErrorResponse(
+      error,
+      "Couldn't analyze the resume right now. Please try again.",
+      "ats-analyze",
     );
   }
 }

@@ -24,11 +24,17 @@ import {
   sendNodeResponse,
   toWebRequest,
 } from "../../src/server/httpAdapter.js";
-import type {
-  RewriteResumeRequest,
-  RewriteResumeResponse,
-} from "../../src/types/serverAI.js";
+import type { RewriteResumeResponse } from "../../src/types/serverAI.js";
 import type { ResumeData } from "../../src/types/resume.js";
+
+import {
+  readJsonObject,
+  safeErrorResponse,
+  optionalString,
+  readResumeData,
+  readATSResult,
+  MAX_JOB_DESCRIPTION_CHARS,
+} from "../../src/server/requestValidation.js";
 
 const MAX_REQUEST_BYTES = 512_000;
 
@@ -41,26 +47,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function validateRequest(body: Partial<RewriteResumeRequest>): string | null {
-  if (!body.resumeData || typeof body.resumeData !== "object") {
-    return "resumeData is required.";
-  }
-  if (!body.atsResult || typeof body.atsResult !== "object") {
-    return "atsResult is required.";
-  }
-  if (body.mode !== "jd" && body.mode !== "self") {
-    return 'mode must be "jd" or "self".';
-  }
-  if (typeof body.iteration !== "number" || body.iteration < 1) {
-    return "iteration must be a positive number.";
-  }
-  if (body.mode === "jd" && !body.jobDescription?.trim()) {
-    return "jobDescription is required for JD mode.";
-  }
-  return null;
-}
-
-async function handleRequest(request: Request): Promise<Response> {
+async function handleRequestUnsafe(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
@@ -77,31 +64,49 @@ async function handleRequest(request: Request): Promise<Response> {
     return jsonResponse({ error: authResult.message }, authResult.status);
   }
 
-  const rateLimit = checkAIRateLimit(authResult.user.userId);
+  const rateLimit = await checkAIRateLimit(authResult.user.userId);
   if (!rateLimit.allowed) {
     return rateLimitedResponse(rateLimit.retryAfterSeconds);
   }
 
-  let body: RewriteResumeRequest;
-  try {
-    body = (await request.json()) as RewriteResumeRequest;
-  } catch {
-    return jsonResponse({ error: "Invalid JSON request body." }, 400);
-  }
+  const parsedBody = await readJsonObject(request, MAX_REQUEST_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
-  const validationError = validateRequest(body);
-  if (validationError) {
-    return jsonResponse({ error: validationError }, 400);
+  const resumeData = readResumeData<ResumeData>(body);
+  const atsResult = readATSResult<ATSResult>(body);
+  const mode = body.mode;
+  if (mode !== "jd" && mode !== "self") {
+    return jsonResponse({ error: 'mode must be "jd" or "self".' }, 400);
   }
-
-  const {
-    resumeData,
-    jobDescription,
-    atsResult,
-    iteration,
-    mode,
-    cacheAllowed,
-  } = body;
+  const iteration = body.iteration;
+  if (
+    typeof iteration !== "number" ||
+    !Number.isFinite(iteration) ||
+    iteration < 1 ||
+    iteration > 100
+  ) {
+    return jsonResponse(
+      { error: "iteration must be a positive number." },
+      400,
+    );
+  }
+  const jobDescription = optionalString(
+    body,
+    "jobDescription",
+    MAX_JOB_DESCRIPTION_CHARS,
+    {
+      label: "jobDescription",
+      tooLongMessage: `Job description is too long — please paste up to ${MAX_JOB_DESCRIPTION_CHARS.toLocaleString("en-US")} characters.`,
+    },
+  );
+  if (mode === "jd" && !jobDescription) {
+    return jsonResponse(
+      { error: "jobDescription is required for JD mode." },
+      400,
+    );
+  }
+  const cacheAllowed = body.cacheAllowed === true;
   const cacheKey = buildRewriteCacheKey(
     mode,
     resumeData,
@@ -129,12 +134,12 @@ async function handleRequest(request: Request): Promise<Response> {
             ? buildOptimizePrompt(
                 redactContactForAI(resumeData),
                 jobDescription || "",
-                atsResult as ATSResult,
+                atsResult,
                 iteration,
               )
             : buildSelfOptimizePrompt(
                 redactContactForAI(resumeData),
-                atsResult as ATSResult,
+                atsResult,
                 iteration,
               );
 
@@ -178,14 +183,22 @@ async function handleRequest(request: Request): Promise<Response> {
 
     return jsonResponse(response);
   } catch (error) {
-    return jsonResponse(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Resume rewrite failed on the server.",
-      },
-      500,
+    return safeErrorResponse(
+      error,
+      "Couldn't rewrite the resume right now. Please try again.",
+      "optimize-rewrite",
+    );
+  }
+}
+
+async function handleRequest(request: Request): Promise<Response> {
+  try {
+    return await handleRequestUnsafe(request);
+  } catch (error) {
+    return safeErrorResponse(
+      error,
+      "Couldn't rewrite the resume right now. Please try again.",
+      "optimize-rewrite",
     );
   }
 }

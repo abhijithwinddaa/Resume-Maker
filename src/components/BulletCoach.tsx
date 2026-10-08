@@ -9,7 +9,9 @@ import {
 } from "../utils/quantify";
 import { postServerAIRequest } from "../utils/aiService";
 import { useAppStore } from "../store/appStore";
+import { findNewClaims } from "../utils/claimCheck";
 import AINotice from "./AINotice";
+import { ClaimNote } from "./OptimizeReview";
 import "./BulletCoach.css";
 
 interface BulletCoachProps {
@@ -42,6 +44,18 @@ function Chip({ name, check }: { name: keyof typeof CHECK_LABELS; check: BulletC
       <span aria-hidden="true">{ICONS[check.status]}</span> {CHECK_LABELS[name]}
       <span className="sr-only">: {check.status === "pass" ? "looks good" : check.tip}</span>
     </span>
+  );
+}
+
+/**
+ * New claims in an "Add a result" rewrite, minus the clause that carries the
+ * user's own number: "reducing page load time by ~40%" is their answer, not
+ * something the AI made up.
+ */
+function resultClaims(base: string, amount: string, detail: string, rewrite: string): string[] {
+  const userNumbers = amount.match(/\d+(?:[.,]\d+)?/g) ?? [];
+  return findNewClaims(`${base} ${amount} ${detail}`, rewrite).filter(
+    (claim) => !userNumbers.some((n) => claim.includes(n)),
   );
 }
 
@@ -225,6 +239,7 @@ const BulletCoach: React.FC<BulletCoachProps> = ({ text, roleFamily, onApply, di
             <>
               <p className="quantify-question">Your new bullet:</p>
               <p className="quantify-preview">{step.text}</p>
+              <ClaimNote claims={resultClaims(step.base, amount, detail, step.text)} />
               <AINotice />
               <div className="quantify-actions">
                 <button type="button" className="quantify-primary" onClick={() => keep(step.text, step.base, step.idea)}>
