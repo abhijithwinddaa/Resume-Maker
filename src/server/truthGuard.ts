@@ -70,6 +70,18 @@ function similarity(a: string, b: string): number {
 
 const SIMILAR_THRESHOLD = 0.34;
 
+// A bullet that says the candidate helped must not come back claiming they
+// did it themselves ("Helped with testing" -> "Implemented unit tests"):
+// models break the prompt's role rule often enough to need a hard check.
+const SUPPORTING_ROLE = /^\s*(?:helped|assisted|supported|contributed|participated|collaborated|worked with|was part of|involved in)\b/i;
+const KEEPS_SUPPORTING_ROLE = /\b(?:help|assist|support|contribut|partner|collaborat|participat|as part of|alongside|together with)/i;
+
+function inflatesRole(bullet: string, original: string[]): string | null {
+  const source = mostSimilar(bullet, original);
+  if (!source || !SUPPORTING_ROLE.test(source)) return null;
+  return KEEPS_SUPPORTING_ROLE.test(bullet) ? null : source;
+}
+
 function mostSimilar(text: string, candidates: string[]): string | null {
   let best: string | null = null;
   let bestScore = SIMILAR_THRESHOLD;
@@ -139,7 +151,10 @@ function guardBullets(
   for (const bullet of rewritten) {
     if (typeof bullet !== "string") continue;
     if (!isInvented(bullet, known)) {
-      push(bullet);
+      // A bullet that matches none of the entry's originals is new work the
+      // candidate never described ("Designed responsive UI for…"): drop it.
+      if (original.length > 0 && !mostSimilar(bullet, original)) continue;
+      push(inflatesRole(bullet, original) ?? bullet);
       continue;
     }
     const fallback = mostSimilar(bullet, original);

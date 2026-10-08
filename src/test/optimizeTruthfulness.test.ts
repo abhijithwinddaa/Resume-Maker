@@ -129,15 +129,16 @@ describe("finalizeOptimizedResume guards against invented metrics", () => {
     expect(result.summary).toBe("Engineer with 3 years of Node.js experience.");
   });
 
-  it("keeps an extra bullet with no numbers in it", () => {
+  it("drops an extra bullet describing work the resume never mentions", () => {
     const rewritten = resume();
     rewritten.experience[0].bullets.push("Documented the deployment runbook");
 
     const result = finalizeOptimizedResume(rewritten, resume());
 
-    expect(result.experience[0].bullets).toContain(
+    expect(result.experience[0].bullets).not.toContain(
       "Documented the deployment runbook",
     );
+    expect(result.experience[0].bullets).toHaveLength(2);
   });
 });
 

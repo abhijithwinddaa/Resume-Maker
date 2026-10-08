@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, X, Sparkles } from "lucide-react";
 import type { ResumeChange } from "../utils/resumeDiff";
 import { diffWords, type DiffSegment } from "../utils/wordDiff";
+import { findNewClaims } from "../utils/claimCheck";
 import AINotice from "./AINotice";
 import "./OptimizeReview.css";
 
@@ -35,6 +36,20 @@ function Segments({ segments, tone }: { segments: DiffSegment[]; tone: "del" | "
   );
 }
 
+const MAX_CLAIMS = 3;
+
+/** Warns about claims the AI added that the user's own text never made. */
+export function ClaimNote({ claims }: { claims: string[] }) {
+  if (claims.length === 0) return null;
+  const shown = claims.slice(0, MAX_CLAIMS).map((c) => `“${c}”`).join(", ");
+  return (
+    <p className="review-claim-note" role="note">
+      <span aria-hidden="true">{"⚠"} </span>
+      New claim{claims.length === 1 ? "" : "s"}: {shown}. Keep it only if it&apos;s true.
+    </p>
+  );
+}
+
 function ChangeCard({
   change,
   kept,
@@ -47,6 +62,10 @@ function ChangeCard({
   onDiscard: () => void;
 }) {
   const diff = useMemo(() => diffWords(change.before, change.after), [change]);
+  const claims = useMemo(
+    () => (change.kind === "removed" ? [] : findNewClaims(change.before, change.after)),
+    [change],
+  );
 
   return (
     <li className={`review-card ${kept ? "is-kept" : "is-discarded"}`}>
@@ -69,6 +88,7 @@ function ChangeCard({
           <Segments segments={diff.after} tone="ins" />
         </p>
       )}
+      <ClaimNote claims={claims} />
 
       <div className="review-choice" role="group" aria-label={`Change in ${change.location}`}>
         <button

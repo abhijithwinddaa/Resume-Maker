@@ -255,3 +255,58 @@ describe("bullet endpoint guard", () => {
     expect(msgs[0].content).not.toMatch(/~40%/);
   });
 });
+
+describe("role inflation guard", () => {
+  const withBullets = (bullets: string[]) => {
+    const r = resume();
+    r.experience[0] = { ...r.experience[0], bullets };
+    return r;
+  };
+
+  it("reverts a 'helped' bullet rewritten as the candidate's own work", () => {
+    const rewritten = withBullets(["Implemented tests for the cart", "Fixed layout bugs in the header"]);
+    const result = revertInventedMetrics(rewritten, resume());
+    expect(result.experience[0].bullets[0]).toBe("Helped with testing of the cart");
+  });
+
+  it("keeps a rewrite that still says the candidate contributed", () => {
+    const rewritten = withBullets(["Contributed to testing of the cart", "Fixed layout bugs in the header"]);
+    const result = revertInventedMetrics(rewritten, resume());
+    expect(result.experience[0].bullets[0]).toBe("Contributed to testing of the cart");
+  });
+
+  it("leaves bullets that never claimed a supporting role alone", () => {
+    const rewritten = withBullets(["Helped with testing of the cart", "Resolved layout bugs in the header"]);
+    const result = revertInventedMetrics(rewritten, resume());
+    expect(result.experience[0].bullets[1]).toBe("Resolved layout bugs in the header");
+  });
+});
+
+describe("invented bullet guard", () => {
+  it("drops a bullet the candidate never wrote", () => {
+    const rewritten = resume();
+    rewritten.experience[0] = {
+      ...rewritten.experience[0],
+      bullets: [
+        "Contributed to testing of the cart",
+        "Fixed layout bugs in the header",
+        "Designed responsive UI for desktop and mobile devices",
+      ],
+    };
+    const result = revertInventedMetrics(rewritten, resume());
+    expect(result.experience[0].bullets).toEqual([
+      "Contributed to testing of the cart",
+      "Fixed layout bugs in the header",
+    ]);
+  });
+
+  it("keeps a heavy but faithful rewrite of an original bullet", () => {
+    const rewritten = resume();
+    rewritten.experience[0] = {
+      ...rewritten.experience[0],
+      bullets: ["Contributed to testing of the cart", "Resolved layout bugs in the site header"],
+    };
+    const result = revertInventedMetrics(rewritten, resume());
+    expect(result.experience[0].bullets[1]).toBe("Resolved layout bugs in the site header");
+  });
+});

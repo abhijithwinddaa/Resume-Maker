@@ -174,7 +174,7 @@ describe("api/optimize/bullet", () => {
 
     expect(response.status).toBe(500);
     const body = await response.json();
-    expect(body.error).toBe("AI connection error");
+    expect(body.error).toBe("Couldn't improve that bullet right now. Please try again.");
   });
   it("rejects a rewrite that invents a number", async () => {
     callServerAIMock.mockResolvedValue("Led a team of 5 to ship features 30% faster.");
