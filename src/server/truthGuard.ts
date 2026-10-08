@@ -151,6 +151,9 @@ function guardBullets(
   for (const bullet of rewritten) {
     if (typeof bullet !== "string") continue;
     if (!isInvented(bullet, known)) {
+      // A bullet that matches none of the entry's originals is new work the
+      // candidate never described ("Designed responsive UI for…"): drop it.
+      if (original.length > 0 && !mostSimilar(bullet, original)) continue;
       push(inflatesRole(bullet, original) ?? bullet);
       continue;
     }
