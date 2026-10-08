@@ -42,6 +42,7 @@ import { CSS } from "@dnd-kit/utilities";
 import "./ResumeEditor.css";
 import CompletenessBar from "./CompletenessBar";
 import BulletCoach from "./BulletCoach";
+import EnhancePreview from "./EnhancePreview";
 import AINotice from "./AINotice";
 import { detectRoleFamily } from "../utils/quantify";
 
@@ -62,6 +63,20 @@ function newId(prefix: string): string {
 }
 
 type BulletKind = "exp" | "proj";
+
+/**
+ * Pending ✨ rewrites are keyed by entry and the bullet's text, not its
+ * position, so they stay with their bullet when others are removed.
+ */
+const enhanceKey = (kind: BulletKind, entryIndex: number, base: string) =>
+  `${kind}-${entryIndex}::${base}`;
+
+/** A ✨ rewrite waiting for the user's Use this / Keep mine. */
+interface EnhanceSuggestion {
+  base: string;
+  text: string;
+  entryId?: string;
+}
 
 /**
  * Applies an async bullet result to the LATEST resume (not the render that
@@ -116,6 +131,8 @@ interface SortableExperienceItemProps {
   removeExpBullet: (expIndex: number, bulletIndex: number) => void;
   addExpBullet: (expIndex: number) => void;
   onEnhanceBullet: (bulletIndex: number, currentText: string) => Promise<void>;
+  enhancePreviews: Record<string, EnhanceSuggestion>;
+  onResolveEnhance: (bulletIndex: number, base: string, use: boolean) => void;
   onApplyBullet: (bulletIndex: number, baseText: string, newText: string) => void;
   optimizingBullets: Record<string, boolean>;
   bulletNotices: Record<string, string>;
@@ -130,6 +147,8 @@ const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
   removeExpBullet,
   addExpBullet,
   onEnhanceBullet,
+  enhancePreviews,
+  onResolveEnhance,
   onApplyBullet,
   optimizingBullets,
   bulletNotices,
@@ -252,6 +271,14 @@ const SortableExperienceItem: React.FC<SortableExperienceItemProps> = ({
                 onApply={(newText) => onApplyBullet(j, bullet, newText)}
                 disabled={isOptimizing}
               />
+              {enhancePreviews[enhanceKey("exp", index, bullet)] && (
+                <EnhancePreview
+                  base={enhancePreviews[enhanceKey("exp", index, bullet)].base}
+                  text={enhancePreviews[enhanceKey("exp", index, bullet)].text}
+                  onUse={() => onResolveEnhance(j, bullet, true)}
+                  onKeepMine={() => onResolveEnhance(j, bullet, false)}
+                />
+              )}
               {bulletNotices[bulletKey] && (
                 <p className="quantify-error" role="alert">
                   {bulletNotices[bulletKey]}
@@ -367,6 +394,8 @@ interface SortableProjectItemProps {
   removeBullet: (projectIndex: number, bulletIndex: number) => void;
   addBullet: (projectIndex: number) => void;
   onEnhanceBullet: (bulletIndex: number, currentText: string) => Promise<void>;
+  enhancePreviews: Record<string, EnhanceSuggestion>;
+  onResolveEnhance: (bulletIndex: number, base: string, use: boolean) => void;
   onApplyBullet: (bulletIndex: number, baseText: string, newText: string) => void;
   optimizingBullets: Record<string, boolean>;
   bulletNotices: Record<string, string>;
@@ -381,6 +410,8 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   removeBullet,
   addBullet,
   onEnhanceBullet,
+  enhancePreviews,
+  onResolveEnhance,
   onApplyBullet,
   optimizingBullets,
   bulletNotices,
@@ -493,6 +524,14 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                 onApply={(newText) => onApplyBullet(j, bullet, newText)}
                 disabled={isOptimizing}
               />
+              {enhancePreviews[enhanceKey("proj", index, bullet)] && (
+                <EnhancePreview
+                  base={enhancePreviews[enhanceKey("proj", index, bullet)].base}
+                  text={enhancePreviews[enhanceKey("proj", index, bullet)].text}
+                  onUse={() => onResolveEnhance(j, bullet, true)}
+                  onKeepMine={() => onResolveEnhance(j, bullet, false)}
+                />
+              )}
               {bulletNotices[bulletKey] && (
                 <p className="quantify-error" role="alert">
                   {bulletNotices[bulletKey]}
@@ -586,6 +625,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
   const [optimizingBullets, setOptimizingBullets] = useState<Record<string, boolean>>({});
   const [bulletNotices, setBulletNotices] = useState<Record<string, string>>({});
+  const [enhancePreviews, setEnhancePreviews] = useState<Record<string, EnhanceSuggestion>>({});
   const jdText = useAppStore((s) => s.jdText);
 
   const setNotice = (key: string, message: string | null) =>
@@ -648,7 +688,22 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
         }
       );
       if (response && response.optimizedText) {
-        applyToBullet(kind, entryId, entryIndex, bulletIndex, currentText, response.optimizedText);
+        const latest = useAppStore.getState().resumeData ?? data;
+        const entries = (kind === "exp" ? latest.experience : latest.projects) ?? [];
+        const entry = entries.find((e) => entryId && e.id === entryId) ?? entries[entryIndex];
+        if (!entry?.bullets?.includes(currentText)) {
+          setNotice(key, BULLET_CHANGED_NOTICE);
+          return;
+        }
+        // Show the rewrite for review; nothing changes until "Use this".
+        setEnhancePreviews((prev) => ({
+          ...prev,
+          [enhanceKey(kind, entryIndex, currentText)]: {
+            base: currentText,
+            text: response.optimizedText,
+            entryId,
+          },
+        }));
       }
     } catch (error) {
       console.error("Failed to enhance bullet:", error);
@@ -658,6 +713,25 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       );
     } finally {
       setOptimizingBullets((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const resolveEnhance = (
+    kind: BulletKind,
+    entryIndex: number,
+    bulletIndex: number,
+    base: string,
+    use: boolean,
+  ) => {
+    const key = enhanceKey(kind, entryIndex, base);
+    const pending = enhancePreviews[key];
+    setEnhancePreviews((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    if (use && pending) {
+      applyToBullet(kind, pending.entryId, entryIndex, bulletIndex, pending.base, pending.text);
     }
   };
 
@@ -1227,6 +1301,10 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                       onEnhanceBullet={(bulletIndex, currentText) =>
                         handleEnhanceBullet("exp", i, bulletIndex, currentText)
                       }
+                      enhancePreviews={enhancePreviews}
+                      onResolveEnhance={(bulletIndex, base, use) =>
+                        resolveEnhance("exp", i, bulletIndex, base, use)
+                      }
                       onApplyBullet={(bulletIndex, baseText, newText) =>
                         applyToBullet("exp", exp.id, i, bulletIndex, baseText, newText)
                       }
@@ -1270,6 +1348,10 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                       addBullet={addBullet}
                       onEnhanceBullet={(bulletIndex, currentText) =>
                         handleEnhanceBullet("proj", i, bulletIndex, currentText)
+                      }
+                      enhancePreviews={enhancePreviews}
+                      onResolveEnhance={(bulletIndex, base, use) =>
+                        resolveEnhance("proj", i, bulletIndex, base, use)
                       }
                       onApplyBullet={(bulletIndex, baseText, newText) =>
                         applyToBullet("proj", project.id, i, bulletIndex, baseText, newText)

@@ -256,6 +256,7 @@ function restoreLinks(parsed: ResumeData, original: ResumeData): void {
 export function finalizeOptimizedResume(
   parsed: ResumeData,
   originalResume: ResumeData,
+  jobKeywords: string[] = [],
 ): ResumeData {
   parsed.contact = originalResume.contact;
   parsed.education = originalResume.education;
@@ -267,13 +268,14 @@ export function finalizeOptimizedResume(
   }
   parsed.showExperience = originalResume.showExperience;
   restoreLinks(parsed, originalResume);
-  return revertInventedMetrics(parsed, originalResume);
+  return revertInventedMetrics(parsed, originalResume, jobKeywords);
 }
 
 export function parseOptimizedResumeResponse(
   rawResponse: string,
   originalResume: ResumeData,
   errorLabel: string,
+  jobKeywords: string[] = [],
 ): ResumeData {
   const jsonStr = extractJSON(rawResponse);
 
@@ -298,5 +300,5 @@ export function parseOptimizedResumeResponse(
     );
   }
 
-  return finalizeOptimizedResume(parsed, originalResume);
+  return finalizeOptimizedResume(parsed, originalResume, jobKeywords);
 }

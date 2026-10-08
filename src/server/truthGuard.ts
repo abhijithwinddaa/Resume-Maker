@@ -27,6 +27,8 @@ export function numbersIn(text: string): string[] {
 interface Known {
   numbers: Set<string>;
   terms: Set<string>;
+  /** Job-description keywords the original resume never mentions. */
+  missingPhrases: RegExp[];
 }
 
 /** True when `text` adds a number or a tool the original resume never had. */
@@ -34,6 +36,7 @@ function isInvented(text: string, known: Known): boolean {
   // A scrub placeholder echoed back by the model must never reach the resume.
   if (REDACTION_PLACEHOLDER.test(text)) return true;
   if (numbersIn(text).some((n) => !known.numbers.has(n))) return true;
+  if (known.missingPhrases.some((re) => re.test(text))) return true;
   return ungroundedTerms(text, known.terms).length > 0;
 }
 
@@ -188,13 +191,30 @@ function guardAchievements(
   });
 }
 
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Lowercase job keywords ("responsive UI", "unit tests") slip past the term
+ * check, which only sees tech-shaped tokens. A keyword the original resume
+ * never mentions has no evidence behind it, so a rewrite may not add it.
+ */
+function missingPhrasePatterns(jobKeywords: string[], original: ResumeData): RegExp[] {
+  const source = resumeContentText(original).join("\n").toLowerCase();
+  return jobKeywords
+    .map((k) => (typeof k === "string" ? k.trim().toLowerCase() : ""))
+    .filter((k) => k.length >= 2 && !source.includes(k))
+    .map((k) => new RegExp(`(^|[^a-z0-9])${escapeRegExp(k)}($|[^a-z0-9])`, "i"));
+}
+
 export function revertInventedMetrics(
   rewritten: ResumeData,
   original: ResumeData,
+  jobKeywords: string[] = [],
 ): ResumeData {
   const known: Known = {
     numbers: new Set(numbersIn(resumeContentText(original).join("\n"))),
     terms: knownTerms(original),
+    missingPhrases: missingPhrasePatterns(jobKeywords, original),
   };
 
   const rewrittenExp = rewritten.experience || [];
