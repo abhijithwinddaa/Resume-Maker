@@ -1,3 +1,4 @@
+import { flushServerErrors, reportServerError } from "../../src/server/errorReporting.js";
 import {
   isNodeResponse,
   sendNodeResponse,
@@ -68,6 +69,7 @@ async function handleRequest(request: Request): Promise<Response> {
     return htmlResponse("You're unsubscribed from Resume Maker reminders.");
   } catch (error) {
     console.error("Unsubscribe failed:", error);
+    reportServerError(error, "notifications-unsubscribe");
     return htmlResponse("Something went wrong. Please try again.", 500);
   }
 }
@@ -78,6 +80,7 @@ export default async function handler(
 ): Promise<Response | void> {
   const request = toWebRequest(requestOrNodeReq);
   const response = await handleRequest(request);
+  await flushServerErrors();
 
   if (isNodeResponse(maybeNodeRes)) {
     await sendNodeResponse(maybeNodeRes, response);

@@ -1,3 +1,4 @@
+import { flushServerErrors, reportServerError } from "../../src/server/errorReporting.js";
 import { timingSafeEqual } from "node:crypto";
 import {
   isNodeResponse,
@@ -199,6 +200,7 @@ async function handleRequest(request: Request): Promise<Response> {
         }
       } catch (sendError) {
         console.error("Reminder send failed:", sendError);
+        reportServerError(sendError, "cron-reminder-send");
         failedCount += 1;
       }
 
@@ -216,6 +218,7 @@ async function handleRequest(request: Request): Promise<Response> {
     });
   } catch (error) {
     console.error("Daily reminder cron failed:", error);
+    reportServerError(error, "cron-daily-reminders");
     return jsonResponse({ error: "Daily reminder cron failed." }, 500);
   }
 }
@@ -226,6 +229,7 @@ export default async function handler(
 ): Promise<Response | void> {
   const request = toWebRequest(requestOrNodeReq);
   const response = await handleRequest(request);
+  await flushServerErrors();
 
   if (isNodeResponse(maybeNodeRes)) {
     await sendNodeResponse(maybeNodeRes, response);

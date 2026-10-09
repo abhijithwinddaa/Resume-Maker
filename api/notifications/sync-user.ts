@@ -1,3 +1,4 @@
+import { flushServerErrors, reportServerError } from "../../src/server/errorReporting.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
 import {
   isNodeResponse,
@@ -172,6 +173,7 @@ async function handleRequest(request: Request): Promise<Response> {
       return jsonResponse({ synced: true, welcomeSent: true });
     } catch (sendError) {
       console.error("Welcome email failed:", sendError);
+      reportServerError(sendError, "welcome-email");
       // Release the claim so a later page load retries.
       const { error: releaseError } = await supabase
         .from("app_user_notifications")
@@ -184,6 +186,7 @@ async function handleRequest(request: Request): Promise<Response> {
     }
   } catch (error) {
     console.error("Notification sync failed:", error);
+    reportServerError(error, "notifications-sync-user");
     return jsonResponse(
       { error: "Could not sync your notification profile." },
       500,
@@ -197,6 +200,7 @@ export default async function handler(
 ): Promise<Response | void> {
   const request = toWebRequest(requestOrNodeReq);
   const response = await handleRequest(request);
+  await flushServerErrors();
 
   if (isNodeResponse(maybeNodeRes)) {
     await sendNodeResponse(maybeNodeRes, response);

@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { initAnalytics, trackPageView } from "./utils/analytics";
 import { registerServiceWorker } from "./utils/swRegister";
 import { initPerformanceMonitoring } from "./utils/performanceMonitor";
+import { initErrorMonitoring } from "./utils/errorMonitoring";
 import "./i18n";
 import "./index.css";
 
@@ -55,6 +56,9 @@ try {
 } catch {
   // ignore storage restrictions
 }
+
+// Error reports (no-op without VITE_SENTRY_DSN); the SDK itself loads when idle.
+initErrorMonitoring();
 
 // Defer performance monitoring to idle time
 if ("requestIdleCallback" in window) {
