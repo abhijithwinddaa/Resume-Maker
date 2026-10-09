@@ -5,6 +5,7 @@
 
 import React, { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
+import { reportError } from "../utils/errorMonitoring";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -33,6 +34,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error("[ErrorBoundary] Caught error:", error, errorInfo);
+    // Component names only — no props or state go into the report.
+    reportError(error, { source: "error-boundary", componentStack: errorInfo.componentStack ?? undefined });
     this.props.onError?.(error, errorInfo);
   }
 

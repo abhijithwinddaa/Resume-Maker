@@ -1,3 +1,4 @@
+import { flushServerErrors } from "../../src/server/errorReporting.js";
 import { callServerAI } from "../../src/server/aiRuntime.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
 import {
@@ -124,6 +125,7 @@ export default async function handler(
 ): Promise<Response | void> {
   const request = toWebRequest(requestOrNodeReq);
   const response = await handleRequest(request);
+  await flushServerErrors();
 
   if (isNodeResponse(maybeNodeRes)) {
     await sendNodeResponse(maybeNodeRes, response);

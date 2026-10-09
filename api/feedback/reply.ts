@@ -1,3 +1,4 @@
+import { flushServerErrors, reportServerError } from "../../src/server/errorReporting.js";
 import { createHash } from "node:crypto";
 import { isAdminEmail } from "../../src/utils/adminAccess.js";
 import { authenticateClerkRequest } from "../../src/server/requestAuth.js";
@@ -163,6 +164,7 @@ async function handleRequest(request: Request): Promise<Response> {
       return jsonResponse({ feedback: updatedRow, emailed: true });
     } catch (sendError) {
       console.error("Feedback reply email failed:", sendError);
+      reportServerError(sendError, "feedback-reply-email");
       return jsonResponse({
         feedback: updatedRow,
         emailed: false,
@@ -171,6 +173,7 @@ async function handleRequest(request: Request): Promise<Response> {
     }
   } catch (error) {
     console.error("Admin reply failed:", error);
+    reportServerError(error, "feedback-reply");
     return jsonResponse({ error: "Could not send the admin reply." }, 500);
   }
 }
@@ -181,6 +184,7 @@ export default async function handler(
 ): Promise<Response | void> {
   const request = toWebRequest(requestOrNodeReq);
   const response = await handleRequest(request);
+  await flushServerErrors();
 
   if (isNodeResponse(maybeNodeRes)) {
     await sendNodeResponse(maybeNodeRes, response);

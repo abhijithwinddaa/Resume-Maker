@@ -1,3 +1,4 @@
+import { reportServerError } from "./errorReporting.js";
 /**
  * Shared request validation for the AI routes: safe body parsing, string
  * caps, resume-shape checks and a user-safe error mapper. Deliberately has no
@@ -316,5 +317,6 @@ export function safeErrorResponse(
     return errorResponse(error.message, 500);
   }
   console.error(`[${context}]`, error);
+  reportServerError(error, context);
   return errorResponse(fallbackMessage, 500);
 }

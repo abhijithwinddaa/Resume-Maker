@@ -1,3 +1,4 @@
+import { flushServerErrors } from "../../src/server/errorReporting.js";
 import { buildTemplateDetectorPrompt } from "../../src/utils/templateDetectorPrompt.js";
 import {
   buildTemplateDetectCacheKey,
@@ -299,6 +300,7 @@ export default async function handler(
 ): Promise<Response | void> {
   const request = toWebRequest(requestOrNodeReq);
   const response = await handleRequest(request);
+  await flushServerErrors();
 
   if (isNodeResponse(maybeNodeRes)) {
     await sendNodeResponse(maybeNodeRes, response);

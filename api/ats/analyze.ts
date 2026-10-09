@@ -1,3 +1,4 @@
+import { flushServerErrors } from "../../src/server/errorReporting.js";
 import { buildATSPrompt } from "../../src/utils/atsPrompt.js";
 import {
   parseATSResultResponse,
@@ -173,6 +174,7 @@ export default async function handler(
 ): Promise<Response | void> {
   const request = toWebRequest(requestOrNodeReq);
   const response = await handleRequest(request);
+  await flushServerErrors();
 
   if (isNodeResponse(maybeNodeRes)) {
     await sendNodeResponse(maybeNodeRes, response);

@@ -1,3 +1,4 @@
+import { flushServerErrors } from "../../src/server/errorReporting.js";
 import { buildOptimizePrompt } from "../../src/utils/optimizePrompt.js";
 import {
   parseOptimizedResumeResponse,
@@ -209,6 +210,7 @@ export default async function handler(
 ): Promise<Response | void> {
   const request = toWebRequest(requestOrNodeReq);
   const response = await handleRequest(request);
+  await flushServerErrors();
 
   if (isNodeResponse(maybeNodeRes)) {
     await sendNodeResponse(maybeNodeRes, response);

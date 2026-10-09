@@ -12,6 +12,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), apiDevServer()],
+    define: {
+      // Tags error reports with the deployed commit (Vercel sets this at build).
+      "import.meta.env.VITE_RELEASE": JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? ""),
+    },
     build: {
       /* ── Production optimizations ─────────────────── */
       sourcemap: false,
@@ -44,6 +48,8 @@ export default defineConfig(({ mode }) => {
               return "vendor-core";
             if (id.includes("node_modules/@dnd-kit")) return "vendor-dnd";
             if (id.includes("node_modules/docx")) return "vendor-docx";
+            // Loaded lazily by utils/errorMonitoring, never on first paint.
+            if (id.includes("node_modules/@sentry")) return "vendor-sentry";
             // App code splits — heavy modules only loaded when needed
             if (id.includes("src/utils/aiService")) return "app-ai";
             if (
