@@ -1,24 +1,51 @@
-Resume Maker
+# Resume Maker
+
+> Resume Maker is a free web app that scores a resume against a job description, shows matched and missing keywords, and rewrites bullets with AI that is built not to invent experience or numbers. The user approves every AI change before it is applied. Built for students, fresh graduates and early-career job seekers, with a focus on India.
+
 Primary URL: https://resume.batturaj.in/
+App: https://resume.batturaj.in/app/
+Price: free, no paid plan. Sign-in is required to use the app.
 
-Resume Maker is a web app for creating, editing, scoring, and optimizing resumes.
+## What it does
 
-Key capabilities:
-- AI resume parsing from pasted text or PDF uploads
-- ATS score analysis against a job description
-- AI-assisted resume optimization
-- Live resume editing and preview
-- PDF and DOCX export
-- Cover letter generation
+- Reads a resume from a PDF (scanned PDFs work through OCR) or pasted text and turns it into an editable form with a live preview.
+- Scores the resume against a pasted job description: a score out of 100 with matched and missing keywords. A self score works without a job description.
+- Live check: an on-device score that updates while typing and uses no AI.
+- Bullet coach: three on-device checks under every bullet (action verb, what and how, result).
+- AI Optimize: rewrites bullets to bring out keywords the resume already supports. Every change is shown as before and after with Keep or Discard. Nothing is applied until the user chooses.
+- Cover letter generation from the same resume and job description.
+- A saved version of the resume per role.
+- Six templates with custom colours and fonts. Export as PDF or Word (.docx).
 
-Audience:
-- Students
-- Fresh graduates
-- Job seekers
-- Professionals improving ATS compatibility
+## What makes it different
 
-Preferred landing page:
-https://resume.batturaj.in/
+- It does not invent content. Prompts forbid adding experience, skills or numbers the resume does not show, and a code check reverts any rewritten bullet that adds a metric the user did not have.
+- When a result number is unknown, the app inserts a blank and blocks download until the user fills in their own figure. Rough estimates are fine. Made-up numbers are not written by the AI.
+- Missing keywords are shown as "add only if you have really used this".
+- Phone, email and other contact details are removed before resume text is sent to AI providers.
 
-App (free to use, sign in required to save):
-https://resume.batturaj.in/app/
+## Limits, stated plainly
+
+- The score is an estimate of how well a resume matches a job description. Employers use different systems, so it is guidance, not a guarantee of passing a screen or getting an interview.
+- The rest of the resume text (other than contact details) is processed by third-party AI services.
+- Import is PDF or pasted text. Export is PDF or Word.
+
+## Who it is for
+
+- Students preparing for campus placements and internships
+- Fresh graduates applying off-campus
+- Early-career professionals tailoring a resume to a specific role
+
+## Pages
+
+- [Home](https://resume.batturaj.in/): overview, how it works, reviews, FAQ
+- [ATS resume checker](https://resume.batturaj.in/ats-resume-checker/): score a resume against a job description
+- [AI resume builder](https://resume.batturaj.in/ai-resume-builder/): build or import and edit a resume
+- [Resume optimizer](https://resume.batturaj.in/resume-optimizer/): review AI rewrites and export
+
+## Common questions
+
+- Is it free? Yes. There is no paid plan.
+- Will the AI make things up? It is designed not to, and the user reviews every change. The user should still read the resume before sending it.
+- Does it work with scanned PDFs? Yes, through OCR.
+- Is a job description required? No. A self score and the on-device Live check work without one.
