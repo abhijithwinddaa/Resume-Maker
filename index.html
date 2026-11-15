@@ -17,7 +17,8 @@
     />
     <meta name="robots" content="index,follow,max-image-preview:large" />
     <link rel="canonical" href="https://resume.batturaj.in/" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Resume Maker" />
     <meta property="og:url" content="https://resume.batturaj.in/" />
@@ -29,7 +30,10 @@
       property="og:description"
       content="See your ATS score against any job description and review every AI suggestion before it touches your resume. Free."
     />
-    <meta property="og:image" content="https://resume.batturaj.in/vite.svg" />
+    <meta property="og:image" content="https://resume.batturaj.in/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Resume Maker: tailor your resume to the job, without making things up." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
@@ -39,7 +43,7 @@
       name="twitter:description"
       content="See your ATS score against any job description and review every AI suggestion before it touches your resume. Free."
     />
-    <meta name="twitter:image" content="https://resume.batturaj.in/vite.svg" />
+    <meta name="twitter:image" content="https://resume.batturaj.in/og-image.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -57,6 +61,71 @@
         "url": "https://resume.batturaj.in/",
         "description": "Check your resume against a job description with an ATS score, then review every AI suggestion before it touches your resume.",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <!-- Mirrors the visible FAQ below word for word. Edit both together. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is it really free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. There is no paid plan. You do need to sign in to use the tool."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why do I need to sign in?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Sign-in keeps your saved resumes tied to your account so you can come back to them."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Will the AI make things up?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "It is designed not to. The prompts forbid inventing experience or numbers, and a check reverts bullets that add metrics you did not have. You also review every change before it is applied. Still read your resume before you send it; you are the final check."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What happens to my personal details?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Phone, email, and other contact details are removed before your text is sent to AI providers for scoring and rewriting. The rest of your resume is processed by those services, so avoid including anything you would not want processed. If something breaks, we get an error report with technical details only; resume text, contact details and form inputs are removed first."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What does the ATS score mean?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "It is an estimate of how well your resume matches a job description: a score out of 100 with matched and missing keywords. Different employers use different systems, so treat it as guidance, not a guarantee of passing or getting an interview."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does it work with scanned PDFs or Word?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Scanned PDFs work through OCR. You can also paste text. Export is PDF or Word (.docx)."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need a job description?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Run a self score without one, or use the on-device Live check as you type."
+            }
+          }
+        ]
       }
     </script>
   </head>
